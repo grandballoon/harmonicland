@@ -6,8 +6,35 @@ The point of the project is pedagogical: make the **mapping from pitch to staff
 position** visible, by projecting one note stream three ways — a linear 88-key
 view, a conventional grand staff, and a falling-notes piano roll.
 
-Current state: single self-contained file, `notation-animator.html`. No build
-step, no dependencies, no network. Open it in Chrome and it runs.
+Current state: a **Vite + TypeScript** project (`src/`), tested with Vitest.
+`npm run dev` to run, `npm run build` to bundle, `npm test` for the suite.
+
+> **History:** this began as a single self-contained `notation-animator.html`
+> with no build step and no dependencies. As of 2026-06-16 it was transpiled to
+> TypeScript on branch `ts-transpile`; the old HTML is gone. The module *seams*
+> below are unchanged — TypeScript only made them compiler-checked — but the
+> "single file / no build / no deps" rule has been **intentionally retired**.
+> See *Project layout* and *Constraints to preserve* below.
+
+## Project layout
+
+```
+src/
+  types.ts          the contract: Note, Score, Spelling, RawNote, View, Sink, Parser, Clock
+  core.ts           makeScore, activeAt, defaultSpelling
+  clock.ts          makeClock → Clock
+  inputs/   midi.ts  musicxml.ts  lily.ts
+  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  audio.ts
+  live-keys.ts      held-pitch set; press/release; the live-input seam
+  main.ts           the loop + DOM wiring + VIEWS
+  *.test.ts         core, clock, parsers (incl. the real sample files)
+index.html          the shell; loads /src/main.ts as a module
+```
+
+`types.ts` imports nothing and is imported by everyone — that dependency shape
+*is* "inputs ignorant of outputs." The `readonly` `Note`/`Score` make "outputs
+never mutate the model" a compile error; `Letter`/`Accidental` are literal
+unions so the grand-staff math stays exhaustive.
 
 ---
 
@@ -62,24 +89,30 @@ ticks, or beats — those are parser-internal concerns. A parser resolves tempo
 once and freezes seconds into the value.
 
 `Core` exposes: `makeScore(rawNotes)`, `activeAt(score, t)`,
-`defaultSpelling(pitch)`.
+`defaultSpelling(pitch)`. The authoritative definitions now live in
+`src/types.ts` (`Note`, `Score`, `Spelling`, `RawNote`); this block is the
+conceptual view.
 
 ---
 
 ## The modules (each a closed box)
 
-| Module | Signature | Role |
+| Module (file) | Signature | Role |
 |---|---|---|
-| `Core` | — | the model + `activeAt` query + default speller |
-| `makeClock(getDuration)` | → `{now, play, pause, seek, isPlaying, onFrame}` | the one timer |
-| `MidiIn` | `bytes → score` | SMF parser (pitch only → default sharps) |
-| `MusicxmlIn` | `text → score` | partwise MusicXML; carries real spellings |
-| `LilyIn` | `text → score` | LilyPond source (common subset); real spellings |
-| `StaffFull` | `(svg, score, t) → void` | linear y = f(pitch), all 88 keys |
-| `StaffStd` | `(svg, score, t) → void` | grand staff, y = f(diatonic step) |
-| `PianoRoll` | `(svg, score, t) → void` | "Synthesia": x = f(pitch), notes fall onto a keyboard |
-| `AudioOut` | `(score, t, playing) → void` | WebAudio, edge-triggered voices |
-| LOOP | — | ~12 lines wiring score + view fn + clock |
+| `Core` (`core.ts`) | — | the model + `activeAt` query + default speller |
+| `makeClock` (`clock.ts`) | `getDuration → Clock` | the one timer |
+| `MidiIn` (`inputs/midi.ts`) | `bytes → score` | SMF parser (pitch only → default sharps) |
+| `MusicxmlIn` (`inputs/musicxml.ts`) | `text → score` | partwise MusicXML; carries real spellings |
+| `LilyIn` (`inputs/lily.ts`) | `text → score` | LilyPond source (common subset); real spellings |
+| `StaffFull` (`outputs/staff-full.ts`) | `View` | linear y = f(pitch), all 88 keys |
+| `StaffStd` (`outputs/staff-std.ts`) | `View` | grand staff, y = f(diatonic step) |
+| `PianoRoll` (`outputs/piano-roll.ts`) | `View` (+ `pitchAt`) | "Synthesia": x = f(pitch), notes fall onto a keyboard |
+| `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
+| `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam |
+| LOOP (`main.ts`) | — | ~12 lines wiring score + view fn + clock |
+
+`View`, `Sink`, `Parser`, and `Clock` are type aliases in `types.ts` — the
+prose seams above, now compiler-checked. `VIEWS` is just `Record<string, View>`.
 
 ### Clock
 One `requestAnimationFrame` loop. Everything reads `now()`. **`seek()` *is*
@@ -195,8 +228,44 @@ output stay as-is. Beware: this introduces an audio-thread clock, so make sure
 notes keyboard view; see the module section above. It slotted into the existing
 output seam with no cross-module changes, exactly as this section promised.
 
-**Add a MidiOut output** — new `(score, t) → void` module that emits Web MIDI
-note-on/off instead of drawing. Same edge-triggered shape as `AudioOut`.
+**Live MIDI input** — *next up, designed, not yet built.* A MIDI controller is a
+second driver of the **existing `LiveKeys` seam** — the pointer keyboard in
+`main.ts` already proved it: an input surface that calls `LiveKeys.press(pitch)`
+/ `LiveKeys.release(pitch)` and touches nothing else. `AudioOut` already sounds
+live voices and `PianoRoll` already glows `held()` keys, so neither changes. And
+because MIDI isn't tied to drawn geometry (unlike the pointer hit-test), it
+works in *every* view.
+
+Scope it tightly to **performance feedback only** (sound + key glow). Recording
+played notes *into* the immutable `score` is the deferred mutable-model step
+(`Live_in.stream : midi_event → score → score`, append-only) — do **not**
+conflate the two; live feedback must never mutate `score`.
+
+Plan:
+- New `src/live-midi.ts` owning a pure `decode(data: Uint8Array): MidiNoteEvent
+  | null` (note-on / note-off, with note-on-vel-0 ⇒ off; everything else ⇒
+  `null`) and a small `{ enable(): Promise<MIDIInput[]>; disable(): void }`
+  surface. `enable()` does `navigator.requestMIDIAccess({sysex:false})`, attaches
+  `onmidimessage` to every input (re-attaching on `statechange` for hotplug),
+  and routes decoded events to `LiveKeys`. `disable()` detaches and calls
+  `LiveKeys.releaseAll()` (panic / stuck-note guard).
+- `MidiNoteEvent` stays **private to `live-midi.ts`** (like `MidiEvent` in
+  `midi.ts`); it is an input detail, not part of the `types.ts` model contract.
+- Wiring: one `Enable MIDI` button in `index.html` (behind a user gesture —
+  `requestMIDIAccess` prompts for permission and needs a secure context), whose
+  handler calls `AudioOut.ensure()` then `LiveMidi.enable()`.
+- **Types/deps:** Web MIDI is not in `lib.dom.d.ts`, so add `@types/webmidi`
+  (types only, zero runtime) and list it in `tsconfig` `types`. Prefer the raw
+  Web MIDI API over the `webmidi`/WEBMIDI.js runtime dependency — decoding a
+  3-byte live message is simpler than the SMF reader (no var-length deltas, no
+  running status), and that matches the from-scratch-parser spirit.
+- **Velocity → loudness** is deliberately dropped at first; it's a later,
+  isolated change inside `AudioOut.liveOn(pitch, velocity)` with no decoder or
+  `LiveKeys` change.
+
+**Add a MidiOut output** — new `Sink` (`(score, t, playing) → void`) module that
+emits Web MIDI note-on/off instead of drawing. Same edge-triggered shape as
+`AudioOut`.
 
 ---
 
@@ -220,8 +289,12 @@ note-on/off instead of drawing. Same edge-triggered shape as `AudioOut`.
 - `PianoRoll` keyboard band is a fixed 96px; on very short viewports it eats
   the fall area. Ignores `spelling` by design (it's the physical-key view), so
   enharmonics share a key — that's correct, not a gap.
-- Web MIDI *live input* is not wired yet; the architecture has a slot for it
-  (`Live_in.stream : midi_event → score → score`, append-only) but it's unbuilt.
+- Web MIDI *live input* is not wired yet — but the seam is built and proven: a
+  pointer-driven playable keyboard already routes through `LiveKeys` (sound +
+  key glow). Web MIDI just needs to feed the same `press/release` calls; see
+  *Live MIDI input* under "How to extend." Recording into the `score`
+  (`Live_in.stream : midi_event → score → score`, append-only) remains a
+  separate, deferred step.
 - Browser support: built/tested for Chrome. Web MIDI and the audio path are
   weakest on Safari/Firefox.
 
@@ -229,9 +302,11 @@ note-on/off instead of drawing. Same edge-triggered shape as `AudioOut`.
 
 ## Constraints to preserve
 
-- Single file, no build step, no dependencies, no network. Keep it that way
-  unless there's a strong reason; if a library becomes necessary, isolate it
-  behind one module's interface.
+- *(Retired 2026-06-16: the original "single file, no build, no deps" rule.
+  Now a Vite + TS project.)* The surviving spirit: **stay lean.** Reach for a
+  dependency only with a strong reason, and when you do, isolate it behind one
+  module's interface (e.g. `@types/webmidi` for live MIDI, a sampler inside
+  `AudioOut`, Tone.Transport behind `Clock`). No network at runtime.
 - One timer. One source-of-truth clock. Derive everything from `now()`.
 - Inputs ignorant of outputs, outputs ignorant of inputs, both ignorant of the
   clock. The moment two modules need to know about each other, the design has

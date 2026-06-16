@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC
+  "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<!--
+  sample-flats.musicxml — a hand-written test piece for Notation Animator.
+  Deliberately flat-heavy: every accidental is an explicit <alter>-1</alter>,
+  so it parses correctly without relying on a key signature (which the grand
+  staff doesn't render). Exercises flats, a chord, a tie, and a low note that
+  lands in the bass clef. Load it with "Load file" and switch to "Grand staff"
+  to see real flats instead of MIDI's forced sharps.
+-->
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Flats</part-name></score-part>
+  </part-list>
+  <part id="P1">
+
+    <!-- M1: ascending flat run, four quarter notes -->
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type><words>Slow</words></direction-type>
+        <sound tempo="96"/>
+      </direction>
+      <note><pitch><step>D</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>4</duration><type>quarter</type><accidental>flat</accidental></note>
+      <note><pitch><step>E</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>4</duration><type>quarter</type><accidental>flat</accidental></note>
+      <note><pitch><step>G</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>4</duration><type>quarter</type><accidental>flat</accidental></note>
+      <note><pitch><step>A</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>4</duration><type>quarter</type><accidental>flat</accidental></note>
+    </measure>
+
+    <!-- M2: a Db-major chord (half), then Bb4 half note tied into M3 -->
+    <measure number="2">
+      <note><pitch><step>D</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type><accidental>flat</accidental></note>
+      <note><chord/><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type></note>
+      <note><chord/><pitch><step>A</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type><accidental>flat</accidental></note>
+      <note><pitch><step>B</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type><accidental>flat</accidental>
+        <tie type="start"/></note>
+    </measure>
+
+    <!-- M3: Bb4 tie stop (half), then a low Db3 down in the bass clef -->
+    <measure number="3">
+      <note><pitch><step>B</step><alter>-1</alter><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type><tie type="stop"/></note>
+      <note><pitch><step>D</step><alter>-1</alter><octave>3</octave></pitch>
+        <duration>8</duration><type>half</type><accidental>flat</accidental></note>
+    </measure>
+
+  </part>
+</score-partwise>

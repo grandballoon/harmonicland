@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notation Animator</title>
+
+<style>
+  /* ---- design tokens -------------------------------------------------
+     Subject: a precision instrument for *reading the pitch axis*.
+     Not a music-app skin. Closer to an oscilloscope / plotting tool:
+     dark field, a luminous active line, hairline grid, monospace data.
+     Boldness spent in one place: the moving playhead + lit notes glow. */
+  :root {
+    --bg:        #0e1116;   /* near-black instrument field            */
+    --panel:     #161b22;   /* raised surfaces                        */
+    --grid:      #232a33;   /* hairline staff lines                   */
+    --grid-oct:  #38404c;   /* octave / C lines, slightly brighter    */
+    --ink:       #c9d4e0;   /* primary text                           */
+    --ink-dim:   #6b7785;   /* labels, captions                       */
+    --note:      #5b7fff;   /* resting noteheads (cool)               */
+    --note-lit:  #ffd24a;   /* sounding note (warm, the one accent)   */
+    --playhead:  #ff5a3c;   /* the moving line                        */
+    --line-acc:  #2b3340;
+    --key-white: #cdd7e2;   /* piano-roll white keys (cool off-white)  */
+    --key-black: #11161d;   /* piano-roll black keys                   */
+    --key-press: #46d39a;   /* a key you're playing live (cool green)  */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+    display: flex; flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-acc);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .02em;
+  }
+  header .sub { color: var(--ink-dim); font-size: 12px; }
+
+  /* controls ---------------------------------------------------------- */
+  .controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line-acc);
+    background: var(--panel);
+  }
+  button, label.file, select {
+    font: inherit; color: var(--ink);
+    background: #1d242e; border: 1px solid var(--line-acc);
+    padding: 7px 13px; border-radius: 6px; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  button:hover, label.file:hover, select:hover { border-color: #46566a; }
+  button:focus-visible, label.file:focus-within, select:focus-visible {
+    outline: 2px solid var(--note); outline-offset: 1px;
+  }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--note); border-color: var(--note); color: #0b1020; font-weight: 600; }
+  button.primary:hover { background: #6f8fff; }
+  label.file input { display: none; }
+
+  .scrub-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; border-radius: 4px; background: var(--grid);
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
+  }
+  .time { color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 92px; text-align: right; }
+
+  /* stage ------------------------------------------------------------- */
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  #staff { width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .toggle { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 12px; }
+
+  .empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--ink-dim); text-align: center; padding: 24px; pointer-events: none;
+  }
+  .empty span { max-width: 380px; line-height: 1.7; }
+  .empty b { color: var(--ink); font-weight: 600; }
+  .status { color: var(--ink-dim); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Notation Animator</h1>
+  <span class="sub">data-first · one model, projected three ways</span>
+</header>
+
+<div class="controls">
+  <label class="file" tabindex="0">
+    Load file<input id="file" type="file" accept=".mid,.midi,.xml,.musicxml,.ly,audio/midi,application/xml">
+  </label>
+  <button id="demo">Load demo</button>
+  <button id="play" class="primary" disabled>Play</button>
+  <button id="stop" disabled>Stop</button>
+
+  <div class="scrub-wrap">
+    <input id="scrub" type="range" min="0" max="1000" value="0" disabled>
+    <span class="time" id="time">0.00 / 0.00s</span>
+  </div>
+
+  <label class="toggle">
+    <select id="view">
+      <option value="full">Full range (88-key)</option>
+      <option value="std">Grand staff</option>
+      <option value="roll">Piano roll</option>
+    </select>
+  </label>
+  <span class="status" id="status"></span>
+</div>
+
+<div id="stage">
+  <svg id="staff" preserveAspectRatio="none"></svg>
+  <div class="empty" id="empty">
+    <span>Load a <b>MIDI</b> or <b>MusicXML</b> file, or hit <b>Load demo</b>.
+    Notes scroll right-to-left past a fixed playhead; the one that's
+    sounding lights up. Vertical position is a straight linear function
+    of pitch across all 88 keys — the mapping is the point.
+    MusicXML carries real spellings, so the grand staff shows true
+    flats and naturals (MIDI can only guess sharps).</span>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

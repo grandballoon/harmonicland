@@ -24,7 +24,7 @@ src/
   core.ts           makeScore, activeAt, defaultSpelling
   clock.ts          makeClock → Clock
   inputs/   midi.ts  musicxml.ts  lily.ts
-  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  audio.ts
+  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  tonnetz.ts  audio.ts  midi-out.ts
   live-keys.ts      held-pitch set; press/release; the live-input seam
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
@@ -55,7 +55,7 @@ Keep the middle dumb.
  MusicXML  ──parse──┼──▶  score = note[] ──────┼──▶ StaffStd   (grand staff)
  LilyPond  ──parse──┘     (sorted by onset)    ├──▶ PianoRoll  (falling notes)
                                                ├──▶ AudioOut   (WebAudio)
-                                               └──▶ (MidiOut, later)
+                                               └──▶ MidiOut    (Web MIDI out)
                               ▲
                               │ reads now()
                         ┌─────────────┐
@@ -108,6 +108,7 @@ conceptual view.
 | `StaffStd` (`outputs/staff-std.ts`) | `View` | grand staff, y = f(diatonic step) |
 | `PianoRoll` (`outputs/piano-roll.ts`) | `View` (+ `pitchAt`) | "Synthesia": x = f(pitch), notes fall onto a keyboard |
 | `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
+| `MidiOut` (`outputs/midi-out.ts`) | `Sink` (+ `enable/disable`) | Web MIDI out, edge-triggered note-on/off |
 | `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam |
 | LOOP (`main.ts`) | — | ~12 lines wiring score + view fn + clock |
 
@@ -263,9 +264,17 @@ Plan:
   isolated change inside `AudioOut.liveOn(pitch, velocity)` with no decoder or
   `LiveKeys` change.
 
-**Add a MidiOut output** — new `Sink` (`(score, t, playing) → void`) module that
-emits Web MIDI note-on/off instead of drawing. Same edge-triggered shape as
-`AudioOut`.
+**MidiOut output** (done) — `outputs/midi-out.ts`, a `Sink` that emits Web MIDI
+note-on/off instead of drawing, edge-triggered exactly like `AudioOut`. It opens
+its own `MIDIAccess` (outputs stay ignorant of inputs, so it never reaches into
+`live-midi.ts`), picks the first output port, and re-picks on `statechange`
+(hotplug). The frame loop calls `MidiOut.at` every frame; the `Enable MIDI out`
+button just opens the port. The pure `encode(kind, pitch, vel)` helper is the
+mirror of live-midi's `decode()` and is what's unit-tested. Known gaps, both
+deliberate and isolated: fixed velocity 100 (the velocity→loudness note above
+applies here too — a one-line change in `encode`'s default), emits on channel 1
+only, and per-`Note` tracking means two same-pitch notes overlapping can cut each
+other's tail (one MIDI pitch per channel can't sound twice anyway).
 
 ---
 

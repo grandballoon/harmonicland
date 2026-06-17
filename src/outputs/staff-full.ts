@@ -4,6 +4,7 @@
    88-key range (A0=21 .. C8=108). No clefs, no ledger lines, no
    spelling. Notes scroll past a fixed playhead; active notes light up.
    ==================================================================== */
+import { LiveKeys } from "../live-keys";
 import type { View } from "../types";
 
 const LOW = 21;
@@ -54,6 +55,13 @@ export const render: View = (svg, score, t) => {
     const op = lit ? 1 : 0.82;
     const glow = lit ? ` filter="url(#glow)"` : "";
     out += `<rect x="${x}" y="${y - 4}" width="${w}" height="8" rx="3" fill="${fill}" opacity="${op}"${glow}/>`;
+  }
+
+  // live held keys (MIDI / pointer): a green glowing dot rides the playhead
+  // at that pitch's row, so what YOU play reads apart from the playback notes.
+  for (const pitch of LiveKeys.held()) {
+    if (pitch < LOW || pitch > HIGH) continue;
+    out += `<circle cx="${playX}" cy="${yOf(pitch)}" r="6" fill="var(--key-press)" filter="url(#glow)"/>`;
   }
 
   svg.innerHTML =

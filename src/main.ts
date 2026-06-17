@@ -12,8 +12,12 @@ import { LilyIn } from "./inputs/lily";
 import { StaffFull } from "./outputs/staff-full";
 import { StaffStd } from "./outputs/staff-std";
 import { PianoRoll } from "./outputs/piano-roll";
+import { Tonnetz } from "./outputs/tonnetz";
 import { AudioOut } from "./outputs/audio";
+import { MidiOut } from "./outputs/midi-out";
 import { LiveKeys } from "./live-keys";
+import { LiveMidi } from "./live-midi";
+import { LiveGamepad } from "./live-gamepad";
 import type { Score, View } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
@@ -32,6 +36,7 @@ const fmt = (s: number) => s.toFixed(2);
 clock.onFrame((t) => {
   view(svg, score, t);
   AudioOut.at(score, t, clock.isPlaying());
+  MidiOut.at(score, t, clock.isPlaying());
   if (!scrubbing && score.duration > 0) {
     $<HTMLInputElement>("scrub").value = String((t / score.duration) * 1000);
   }
@@ -43,7 +48,7 @@ function loadScore(s: Score, label?: string): void {
   clock.seek(0);
   clock.pause();
   AudioOut.silence();
-  $("empty").style.display = "none";
+  MidiOut.silence();
   for (const id of ["play", "stop", "scrub"]) ($<HTMLButtonElement>(id)).disabled = false;
   $("play").textContent = "Play";
   $("status").textContent = label ? `${label} · ${score.notes.length} notes · ${fmt(score.duration)}s` : "";
@@ -80,6 +85,84 @@ $("demo").addEventListener("click", () => {
   loadScore(demoScore(), "demo");
 });
 
+// --- live MIDI input (hardware keyboard -> LiveKeys) ----------------
+// Behind a user gesture: requestMIDIAccess prompts for permission and
+// needs a secure context. Toggles on/off; AudioOut.ensure() unlocks the
+// AudioContext so the first played note sounds.
+let midiOn = false;
+const midiBtn = $<HTMLButtonElement>("midi");
+midiBtn.addEventListener("click", async () => {
+  if (midiOn) {
+    LiveMidi.disable();
+    midiOn = false;
+    midiBtn.textContent = "Enable MIDI";
+    $("status").textContent = "MIDI input off.";
+    return;
+  }
+  try {
+    AudioOut.ensure();
+    const inputs = await LiveMidi.enable();
+    midiOn = true;
+    midiBtn.textContent = "Disable MIDI";
+    $("status").textContent = inputs.length
+      ? `MIDI on · ${inputs.length} input${inputs.length > 1 ? "s" : ""} (${inputs.map((i) => i.name ?? "device").join(", ")})`
+      : "MIDI on · no devices found — plug one in.";
+  } catch (err) {
+    $("status").textContent = "MIDI unavailable: " + (err as Error).message;
+  }
+});
+
+// --- live gamepad input (controller -> LiveKeys) -------------------
+// No permission prompt (unlike MIDI), but the API hides pads until the
+// user presses a button, so "no devices found" clears once they do.
+// Toggles on/off; AudioOut.ensure() unlocks the AudioContext.
+let gamepadOn = false;
+const gamepadBtn = $<HTMLButtonElement>("gamepad");
+gamepadBtn.addEventListener("click", () => {
+  if (gamepadOn) {
+    LiveGamepad.disable();
+    gamepadOn = false;
+    gamepadBtn.textContent = "Enable gamepad";
+    $("status").textContent = "Gamepad input off.";
+    return;
+  }
+  try {
+    AudioOut.ensure();
+    LiveGamepad.enable();
+    gamepadOn = true;
+    gamepadBtn.textContent = "Disable gamepad";
+    $("status").textContent = "Gamepad on · press a button on your controller to begin.";
+  } catch (err) {
+    $("status").textContent = "Gamepad unavailable: " + (err as Error).message;
+  }
+});
+
+// --- MIDI output (score sink -> hardware synth) --------------------
+// A Sink, not an input: the frame loop already calls MidiOut.at every
+// frame; enabling just opens an output port for it to send to. Behind a
+// user gesture in a secure context, same as MIDI input.
+let midiOutOn = false;
+const midiOutBtn = $<HTMLButtonElement>("midiout");
+midiOutBtn.addEventListener("click", async () => {
+  if (midiOutOn) {
+    MidiOut.disable();
+    midiOutOn = false;
+    midiOutBtn.textContent = "Enable MIDI out";
+    $("status").textContent = "MIDI output off.";
+    return;
+  }
+  try {
+    const outputs = await MidiOut.enable();
+    midiOutOn = true;
+    midiOutBtn.textContent = "Disable MIDI out";
+    $("status").textContent = outputs.length
+      ? `MIDI out · ${outputs.length} output${outputs.length > 1 ? "s" : ""} (${outputs.map((o) => o.name ?? "device").join(", ")})`
+      : "MIDI out on · no devices found — connect a synth.";
+  } catch (err) {
+    $("status").textContent = "MIDI out unavailable: " + (err as Error).message;
+  }
+});
+
 // --- transport controls -------------------------------------------
 $("play").addEventListener("click", () => {
   AudioOut.ensure();
@@ -95,6 +178,7 @@ $("stop").addEventListener("click", () => {
   clock.pause();
   clock.seek(0);
   AudioOut.silence();
+  MidiOut.silence();
   $("play").textContent = "Play";
 });
 
@@ -116,6 +200,7 @@ const VIEWS: Record<string, View> = {
   full: StaffFull.render,
   std: StaffStd.render,
   roll: PianoRoll.render,
+  tonnetz: Tonnetz.render,
 };
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   view = VIEWS[(e.target as HTMLSelectElement).value] ?? StaffFull.render;

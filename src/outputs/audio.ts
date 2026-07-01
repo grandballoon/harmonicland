@@ -13,6 +13,7 @@ interface Voice {
 }
 
 let ctx: AudioContext | null = null;
+let muted = false; // silenced while an external synth (MIDI out) is driving sound
 const voices = new Map<Note, Voice>(); // score note(object) -> voice
 const live = new Map<number, Voice>(); // pitch -> voice  (user-played keys)
 
@@ -59,10 +60,25 @@ function stopVoice(n: Note): void {
 export function silence(): void {
   for (const n of [...voices.keys()]) stopVoice(n);
 }
+function liveSilence(): void {
+  for (const p of [...live.keys()]) liveOff(p);
+}
+
+// Hand sound off to (or back from) a hardware synth. While muted, both the
+// score and live paths go quiet so the app's own WebAudio voices don't
+// double the external synth driven by MIDI out. Cuts any sounding voices
+// immediately; new ones are suppressed at the top of at()/liveOn().
+export function setMuted(on: boolean): void {
+  muted = on;
+  if (on) {
+    silence();
+    liveSilence();
+  }
+}
 
 // called every frame with current active set; diff against playing voices
 export function at(score: Score, t: number, playing: boolean): void {
-  if (!ctx) return;
+  if (!ctx || muted) return;
   if (!playing) {
     silence();
     return;
@@ -76,6 +92,7 @@ export function at(score: Score, t: number, playing: boolean): void {
 // voice per held pitch, started/stopped by user input rather than activeAt.
 // This is the "playable keyboard" seam: sound without touching the model.
 export function liveOn(pitch: number): void {
+  if (muted) return;
   ensure();
   if (live.has(pitch)) return;
   live.set(pitch, spawn(pitch));
@@ -87,4 +104,4 @@ export function liveOff(pitch: number): void {
   live.delete(pitch);
 }
 
-export const AudioOut = { ensure, at, silence, liveOn, liveOff };
+export const AudioOut = { ensure, at, silence, setMuted, liveOn, liveOff };

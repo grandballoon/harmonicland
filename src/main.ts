@@ -11,13 +11,18 @@ import { MusicxmlIn } from "./inputs/musicxml";
 import { LilyIn } from "./inputs/lily";
 import { StaffFull } from "./outputs/staff-full";
 import { StaffStd } from "./outputs/staff-std";
-import { PianoRoll } from "./outputs/piano-roll";
+import { PianoRoll, type Region as PianoRollRegion } from "./outputs/piano-roll";
 import { Tonnetz } from "./outputs/tonnetz";
+import { Combo } from "./outputs/combo";
+import { Nashville } from "./outputs/nashville";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
 import { LiveKeys } from "./live-keys";
 import { LiveMidi } from "./live-midi";
-import { LiveGamepad } from "./live-gamepad";
+import { LiveGamepad, keysMapping } from "./live-gamepad";
+import { perfectoMapping } from "./gamepad-perfecto";
+import { PerfState } from "./perf-state";
+import { chordName, DEGREE_NUMERAL, type Degree, type JoystickDirection } from "./harmony/perfecto";
 import type { Score, View } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
@@ -146,6 +151,7 @@ const midiOutBtn = $<HTMLButtonElement>("midiout");
 midiOutBtn.addEventListener("click", async () => {
   if (midiOutOn) {
     MidiOut.disable();
+    AudioOut.setMuted(false); // hand sound back to the built-in synth
     midiOutOn = false;
     midiOutBtn.textContent = "Enable MIDI out";
     $("status").textContent = "MIDI output off.";
@@ -153,6 +159,7 @@ midiOutBtn.addEventListener("click", async () => {
   }
   try {
     const outputs = await MidiOut.enable();
+    AudioOut.setMuted(true); // external synth drives sound now — mute our own
     midiOutOn = true;
     midiOutBtn.textContent = "Disable MIDI out";
     $("status").textContent = outputs.length
@@ -201,10 +208,16 @@ const VIEWS: Record<string, View> = {
   std: StaffStd.render,
   roll: PianoRoll.render,
   tonnetz: Tonnetz.render,
+  both: Combo.render,
+  nashville: Nashville.render,
 };
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
-  view = VIEWS[(e.target as HTMLSelectElement).value] ?? StaffFull.render;
+  const val = (e.target as HTMLSelectElement).value;
+  view = VIEWS[val] ?? StaffFull.render;
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
+  // the controller means different things per view: Nashville turns it into
+  // the Perfecto instrument, everything else into the chromatic keyboard.
+  LiveGamepad.setMapping(val === "nashville" ? perfectoMapping : keysMapping);
 });
 
 // --- playable keyboard (piano-roll view only) ----------------------
@@ -213,11 +226,18 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
 // and glissando all work. The hit-test is pure coordinate math
 // (PianoRoll.pitchAt), so the per-frame innerHTML rebuild can't break it.
 const pointerPitch = new Map<number, number>(); // pointerId -> currently-pressed pitch
-const isRoll = () => view === PianoRoll.render;
+// where the playable keyboard lives in `svg` right now, or null if the current
+// view has none. The roll view IS the keyboard (whole svg); the combo view
+// confines it to a bottom band; everything else has no keyboard to hit-test.
+const rollRegion = (): PianoRollRegion | null | undefined =>
+  view === PianoRoll.render ? undefined // undefined = the whole svg
+  : view === Combo.render ? Combo.rollRegion(svg)
+  : null; // null = no keyboard here
 svg.addEventListener("pointerdown", (e) => {
-  if (!isRoll()) return;
+  const region = rollRegion();
+  if (region === null) return;
   AudioOut.ensure(); // first gesture unlocks the AudioContext
-  const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY);
+  const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY, region);
   if (p == null) return;
   svg.setPointerCapture(e.pointerId);
   pointerPitch.set(e.pointerId, p);
@@ -226,8 +246,10 @@ svg.addEventListener("pointerdown", (e) => {
 });
 svg.addEventListener("pointermove", (e) => {
   if (!pointerPitch.has(e.pointerId)) return;
+  const region = rollRegion();
+  if (region === null) return;
   const prev = pointerPitch.get(e.pointerId)!;
-  const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY);
+  const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY, region);
   if (p === prev) return;
   LiveKeys.release(prev); // slid off this key...
   if (p == null) pointerPitch.delete(e.pointerId); // ...and off the keyboard
@@ -243,6 +265,71 @@ const endPointer = (e: PointerEvent) => {
 };
 svg.addEventListener("pointerup", endPointer);
 svg.addEventListener("pointercancel", endPointer);
+
+// --- TEMPORARY: Perfecto keyboard harness ---------------------------
+// Proves the generative chain (computeVoicing -> PerfState -> LiveKeys ->
+// audio/MIDI-out + Tonnetz glow) before the gamepad mapping and the
+// Nashville view exist. Switch the view to Tonnetz or Piano roll to SEE
+// the chords light up while you play them here.
+//   1–7            select degree (hold to sustain the chord)
+//   Q W E / A S D / Z X C   joystick direction (S = center)
+//   m              cycle coloration mode (default→extended→chromatic)
+//   i              cycle inversion      v  toggle voice-leading
+//   - / =          octave down / up
+// Directions/mode/inversion/octave re-sound only while a chord is held.
+const DIR_KEYS: Record<string, JoystickDirection> = {
+  q: "upLeft", w: "up", e: "upRight",
+  a: "left", s: "center", d: "right",
+  z: "downLeft", x: "down", c: "downRight",
+};
+const heldDegrees: Degree[] = []; // stack of held number keys, latest last
+
+function perfStatus(): void {
+  const s = PerfState.snapshot();
+  const name = chordName(s.key, s.degree, s.joystickMode, s.joystickDirection);
+  $("status").textContent =
+    `Perfecto · ${DEGREE_NUMERAL[s.degree]} ${name} · ${s.joystickMode}/${s.joystickDirection}` +
+    ` · ${s.inversion} · oct ${s.octave}${s.voiceLeading ? " · VL" : ""}`;
+}
+// re-sound the current selection if (and only if) a chord is being held
+const resoundIfHeld = (): void => { if (PerfState.isSounding()) PerfState.trigger(); };
+
+const isTyping = (el: EventTarget | null): boolean => {
+  const t = el as HTMLElement | null;
+  return !!t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+};
+
+window.addEventListener("keydown", (e) => {
+  if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+
+  if (k >= "1" && k <= "7") {
+    const d = Number(k) as Degree;
+    AudioOut.ensure(); // first gesture unlocks the AudioContext
+    if (!heldDegrees.includes(d)) heldDegrees.push(d);
+    PerfState.setDegree(d);
+    PerfState.trigger();
+    perfStatus();
+    return;
+  }
+  if (k in DIR_KEYS) { PerfState.setDirection(DIR_KEYS[k]); resoundIfHeld(); perfStatus(); return; }
+  if (e.repeat) return; // the rest are single-shot toggles, ignore auto-repeat
+  if (k === "m") { PerfState.cycleMode(); resoundIfHeld(); perfStatus(); return; }
+  if (k === "i") { PerfState.cycleInversion(); resoundIfHeld(); perfStatus(); return; }
+  if (k === "v") { PerfState.setVoiceLeading(!PerfState.snapshot().voiceLeading); resoundIfHeld(); perfStatus(); return; }
+  if (k === "-") { PerfState.setOctave(PerfState.snapshot().octave - 1); resoundIfHeld(); perfStatus(); return; }
+  if (k === "=") { PerfState.setOctave(PerfState.snapshot().octave + 1); resoundIfHeld(); perfStatus(); return; }
+});
+
+window.addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  if (k < "1" || k > "7") return;
+  const d = Number(k) as Degree;
+  const i = heldDegrees.indexOf(d);
+  if (i >= 0) heldDegrees.splice(i, 1);
+  if (heldDegrees.length === 0) { PerfState.release(); perfStatus(); }
+  else { PerfState.setDegree(heldDegrees[heldDegrees.length - 1]); PerfState.trigger(); perfStatus(); }
+});
 
 // redraw on resize so the SVG tracks the viewport
 window.addEventListener("resize", () => view(svg, score, clock.now()));

@@ -1,25 +1,43 @@
 /* ====================================================================
-   LIVE_GAMEPAD — a game controller becomes an input surface, the same
-   way LIVE_MIDI turns a hardware keyboard into one. Both feed the one
-   seam, LiveKeys.press/release; nothing else is touched and the
-   immutable score is left alone.
+   LIVE_GAMEPAD — a game controller becomes an input surface. The poll
+   engine is the same as before (the Gamepad API has no events, so we diff
+   last frame's held buttons against this frame's inside rAF), but WHAT a
+   button or stick means is now a swappable GamepadMapping:
 
-   The difference is shape: Web MIDI pushes events (onmidimessage), the
-   Gamepad API does not — there is no "button pressed" event, you poll
-   navigator.getGamepads() each frame. So the pure core here is a state
-   DIFF: last frame's held buttons vs this frame's, emitting the down/up
-   transitions that MIDI would have handed us as discrete messages. We
-   poll inside requestAnimationFrame to stay on the render clock.
+     - keysMapping (default): face/d-pad buttons -> a C-major-ish run of
+       pitches, straight into LiveKeys. The original behavior.
+     - perfectoMapping (gamepad-perfecto.ts): buttons -> Nashville degrees,
+       left stick -> chord coloration, driving PerfState. The hiChord shape.
 
-   Buttons map to pitches through PITCH_MAP (face/d-pad of a standard
-   controller -> a C-major-ish run); analog sticks/triggers are ignored
-   for now — like CC and pitch-bend are ignored in live-midi.ts.
+   main.ts swaps the mapping with the view (Nashville -> perfecto, else
+   keys), the same "swap a reference" move the view toggle already is. The
+   engine stays ignorant of both; it just hands each mapping a per-frame
+   GamepadFrame (button down/up transitions + the held set + raw axes).
+   Axes used to be ignored — the perfecto mapping needs them for the stick.
    ==================================================================== */
 import { LiveKeys } from "./live-keys";
 
 interface GamepadButtonEvent {
   kind: "down" | "up";
   index: number; // button index within Gamepad.buttons
+}
+
+/** What the engine hands a mapping each frame: the button transitions (the
+ *  stand-in for MIDI's discrete note-on/off), the currently-held set, and
+ *  the raw analog axes for sticks/triggers. */
+export interface GamepadFrame {
+  downs: number[];
+  ups: number[];
+  held: ReadonlySet<number>;
+  axes: readonly number[];
+}
+
+/** A controller "meaning" — pluggable so the same poll engine drives the
+ *  chromatic keyboard or the Perfecto instrument. reset() is the panic /
+ *  stuck-state guard, called on disable and when switching mappings. */
+export interface GamepadMapping {
+  onFrame(f: GamepadFrame): void;
+  reset(): void;
 }
 
 // Standard-mapping button index -> MIDI pitch. Indices follow the W3C
@@ -37,6 +55,23 @@ const PITCH_MAP: Record<number, number> = {
   13: 72, // d-pad down  -> C5
   14: 74, // d-pad left  -> D5
   15: 76, // d-pad right -> E5
+};
+
+// the default mapping: buttons straight to LiveKeys, the original behavior.
+export const keysMapping: GamepadMapping = {
+  onFrame(f) {
+    for (const i of f.downs) {
+      const p = PITCH_MAP[i];
+      if (p !== undefined) LiveKeys.press(p);
+    }
+    for (const i of f.ups) {
+      const p = PITCH_MAP[i];
+      if (p !== undefined) LiveKeys.release(p);
+    }
+  },
+  reset() {
+    LiveKeys.releaseAll();
+  },
 };
 
 // pure: which button indices are pressed in this snapshot. A button's
@@ -58,8 +93,17 @@ export function diff(prev: Set<number>, curr: Set<number>): GamepadButtonEvent[]
   return events;
 }
 
+let mapping: GamepadMapping = keysMapping;
 let raf = 0;
 const held = new Map<number, Set<number>>(); // gamepad index -> pressed buttons
+
+// swap the controller's meaning. Resets the outgoing mapping so no note or
+// chord is left stuck across the switch.
+function setMapping(next: GamepadMapping): void {
+  if (next === mapping) return;
+  mapping.reset();
+  mapping = next;
+}
 
 function step(): void {
   // getGamepads() returns a fresh, sparse snapshot each call (nulls for
@@ -71,12 +115,13 @@ function step(): void {
     live.add(pad.index);
     const prev = held.get(pad.index) ?? new Set<number>();
     const curr = pressedButtons(pad);
-    for (const ev of diff(prev, curr)) {
-      const pitch = PITCH_MAP[ev.index];
-      if (pitch === undefined) continue; // unmapped button -> no note
-      if (ev.kind === "down") LiveKeys.press(pitch);
-      else LiveKeys.release(pitch);
-    }
+    const events = diff(prev, curr);
+    mapping.onFrame({
+      downs: events.filter((e) => e.kind === "down").map((e) => e.index),
+      ups: events.filter((e) => e.kind === "up").map((e) => e.index),
+      held: curr,
+      axes: pad.axes,
+    });
     held.set(pad.index, curr);
   }
   // drop state for pads that vanished mid-frame so a reconnect starts clean
@@ -99,7 +144,7 @@ function disable(): void {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   held.clear();
-  LiveKeys.releaseAll(); // panic / stuck-note guard, same as live-midi
+  mapping.reset(); // panic / stuck-note guard, same as live-midi
 }
 
-export const LiveGamepad = { enable, disable };
+export const LiveGamepad = { enable, disable, setMapping };

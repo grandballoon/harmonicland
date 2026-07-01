@@ -10,7 +10,7 @@
    ==================================================================== */
 import { Core } from "../core";
 import { LiveKeys } from "../live-keys";
-import type { View, Note } from "../types";
+import type { View, Note, Score } from "../types";
 
 const LOW = 21;
 const HIGH = 108; // A0 .. C8, the 88 keys (match StaffFull)
@@ -31,11 +31,27 @@ interface Layout {
   lane: (p: number) => { x: number; w: number };
 }
 
+const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter></defs>`;
+
+// the full-screen view measures the (outer) svg itself and sets innerHTML; the
+// combo view instead asks for markup() at an exact W×H so it can place the roll
+// inside a translated, clipped <g> in its own single svg — no nested <svg>,
+// whose clipping and getBoundingClientRect both misbehave.
 export const render: View = (svg, score, t) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = GLOW + markup(W, H, score, t);
+};
+
+// the roll as a markup string for a W×H region (origin at 0,0); no <defs> —
+// the caller supplies one shared glow filter.
+export const markup = (W: number, H: number, score: Score, t: number): string => {
+  if (!W || !H) return "";
 
   // keyboard layout + its inverse hit-test both come from one place.
   const { whites, ww, whiteIdx, strikeY, blackH, lane } = layout(W, H);
@@ -93,11 +109,7 @@ export const render: View = (svg, score, t) => {
     out += `<rect x="${x}" y="${strikeY}" width="${w}" height="${blackH}" rx="2" fill="${keyFill(p, "var(--key-black)")}" stroke="#0b0e13" stroke-width="0.8"${keyGlow(p)}/>`;
   }
 
-  svg.innerHTML =
-    `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur stdDeviation="3" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter></defs>` + out;
+  return out;
 };
 
 // keyboard geometry, shared by render (draw) and pitchAt (inverse hit-test)
@@ -123,19 +135,23 @@ function layout(W: number, H: number): Layout {
   return { whites, ww, whiteIdx, bw, strikeY, blackH, lane };
 }
 
+// the region the roll occupies within an svg, in its local px space. The
+// full-screen view fills the svg; the combo view confines it to a sub-rect.
+export interface Region { x: number; y: number; w: number; h: number; }
+
 // the inverse of lane(): which key sits under a client-space point? Black
 // keys are drawn on top in the upper band, so test them first. Returns a
 // MIDI pitch, or null when the point isn't on the keyboard. The svg's
-// viewBox tracks its pixel size 1:1, so client offset == user units.
-function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number): number | null {
-  const W = svg.clientWidth;
-  const H = svg.clientHeight;
-  if (!W || !H) return null;
+// viewBox tracks its pixel size 1:1, so client offset == user units; `region`
+// then locates the roll within that svg (the combo view offsets it).
+function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number, region?: Region): number | null {
   const r = svg.getBoundingClientRect();
-  const x = clientX - r.left;
-  const y = clientY - r.top;
-  const L = layout(W, H);
-  if (y < L.strikeY || y > H) return null; // above keyboard / off-canvas
+  const reg = region ?? { x: 0, y: 0, w: svg.clientWidth, h: svg.clientHeight };
+  if (!reg.w || !reg.h) return null;
+  const x = clientX - r.left - reg.x; // into the roll's local space
+  const y = clientY - r.top - reg.y;
+  const L = layout(reg.w, reg.h);
+  if (y < L.strikeY || y > reg.h) return null; // above keyboard / off-canvas
   if (y <= L.strikeY + L.blackH) {
     // black-key band: blacks win
     for (let p = LOW; p <= HIGH; p++) {
@@ -148,4 +164,4 @@ function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number): number |
   return L.whites[i];
 }
 
-export const PianoRoll = { render, pitchAt };
+export const PianoRoll = { render, markup, pitchAt };

@@ -21,7 +21,7 @@
    ==================================================================== */
 import { Core } from "../core";
 import { LiveKeys } from "../live-keys";
-import type { View } from "../types";
+import type { View, Score } from "../types";
 
 type Cell = readonly [number, number]; // lattice coords (col, row)
 type Role = "root" | "third" | "fifth";
@@ -56,11 +56,22 @@ const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter></defs>`;
 
+// the full-screen view measures the (outer) svg itself and sets innerHTML;
+// the combo view instead asks for markup() at an exact W×H so it can place
+// the lattice inside a clipped <g> in its own single svg — no nested <svg>,
+// whose clipping and getBoundingClientRect both misbehave.
 export const render: View = (svg, score, t) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = GLOW + markup(W, H, score, t);
+};
+
+// the lattice as a markup string for a W×H region (origin at 0,0); no <defs>
+// — the caller supplies one shared glow filter.
+export const markup = (W: number, H: number, score: Score, t: number): string => {
+  if (!W || !H) return "";
   const cx = W / 2;
   const cy = H / 2;
   const X = (c: Cell) => cx + c[0] * DX + c[1] * (DX / 2);
@@ -137,7 +148,7 @@ export const render: View = (svg, score, t) => {
     }
   }
 
-  svg.innerHTML = GLOW + fills + edges + nodes + labels;
+  return fills + edges + nodes + labels;
 };
 
-export const Tonnetz = { render, pitchClassAt, triadName, neoTransform };
+export const Tonnetz = { render, markup, pitchClassAt, triadName, neoTransform };

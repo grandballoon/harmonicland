@@ -27,6 +27,7 @@ export function encode(kind: "on" | "off", pitch: number, vel = VELOCITY): numbe
 
 let port: MIDIOutput | null = null;
 const sounding = new Set<Note>(); // score notes currently held note-on
+const livePitches = new Set<number>(); // user-played pitches (LiveKeys path)
 
 function send(kind: "on" | "off", pitch: number): void {
   port?.send(encode(kind, pitch));
@@ -51,6 +52,7 @@ async function enable(): Promise<MIDIOutput[]> {
 
 function disable(): void {
   silence();
+  liveSilence();
   port = null;
 }
 
@@ -77,10 +79,30 @@ function at(score: Score, t: number, playing: boolean): void {
   }
 }
 
-// panic / all-notes-off — release everything we're holding.
+// panic / all-notes-off for the SCORE path. Called every idle frame from
+// at(), so it deliberately leaves the live path alone — a Perfecto chord
+// triggered while the transport is paused must keep sounding.
 function silence(): void {
   for (const n of sounding) send("off", n.pitch);
   sounding.clear();
 }
 
-export const MidiOut = { enable, disable, at, silence };
+// live path — the exact mirror of AudioOut.liveOn/liveOff, driven by
+// LiveKeys.press/release. One note-on per held pitch, independent of the
+// score and the clock; guards against duplicate on/off like the audio side.
+function liveOn(pitch: number): void {
+  if (livePitches.has(pitch)) return;
+  livePitches.add(pitch);
+  send("on", pitch);
+}
+function liveOff(pitch: number): void {
+  if (!livePitches.has(pitch)) return;
+  livePitches.delete(pitch);
+  send("off", pitch);
+}
+function liveSilence(): void {
+  for (const p of livePitches) send("off", p);
+  livePitches.clear();
+}
+
+export const MidiOut = { enable, disable, at, silence, liveOn, liveOff };

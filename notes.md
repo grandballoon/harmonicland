@@ -16,6 +16,8 @@ We can just take either side at leisure: implement new view, implement new input
 
 We have a set of inputs and a set of outputs.
 
+Current focus: make this PLAYABLE and useful to practice with.
+
 Changes to list of inputs:
 - We should build in a more robust sound engine or simply punt and make it possible to pull MIDI sounds from any other program (GarageBand, for instance).
 - Eventually it'd be good to expand to include uploads for PDFs of Sheet Music in addition to MusicXML. Maybe that needs to be done elsewhere in the application. Need more research on OCR for music, but I'm willing to bet it's a solved or solvable problem.
@@ -32,3 +34,5 @@ Changes to list of outputs:
 
 - We should implement Circle of Fifth and Chromatic Circle views
 - We should implement Nashville Number system alongside the chord coloration option—but I'm betting that the space of chord coloring/mode-augmentation options is A) much larger than what was built for Perfecto, and B) possible to concretize in a more precise way based on the Geometrical approach described in A Geometry of Music. (I wonder if any of that overlaps with tonnetz view. Might be nice.)
+
+- We need a mapping of chords to modes and colorations—each chord, let's say, is a collection of notes, and connects in some data structure to the mode/notes K-V pair of each of its modes. Plus, modulations in the form of Nashville number system-style colorations, for which we need a comprehensive list. 

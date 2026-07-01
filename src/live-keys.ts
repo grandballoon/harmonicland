@@ -13,6 +13,7 @@
    touched.
    ==================================================================== */
 import { AudioOut } from "./outputs/audio";
+import { MidiOut } from "./outputs/midi-out";
 
 const held = new Set<number>(); // MIDI pitches currently pressed
 
@@ -20,11 +21,13 @@ function press(pitch: number): void {
   if (held.has(pitch)) return;
   held.add(pitch);
   AudioOut.liveOn(pitch);
+  MidiOut.liveOn(pitch); // no-op until a MIDI-out port is enabled
 }
 function release(pitch: number): void {
   if (!held.has(pitch)) return;
   held.delete(pitch);
   AudioOut.liveOff(pitch);
+  MidiOut.liveOff(pitch);
 }
 function releaseAll(): void {
   for (const p of [...held]) release(p);

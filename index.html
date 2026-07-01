@@ -53,16 +53,43 @@
     border-bottom: 1px solid var(--line-acc);
     background: var(--panel);
   }
-  button, label.file, select {
+  button, label.file, select, #gamepad-help > summary {
     font: inherit; color: var(--ink);
     background: #1d242e; border: 1px solid var(--line-acc);
     padding: 7px 13px; border-radius: 6px; cursor: pointer;
     transition: border-color .12s, background .12s;
   }
-  button:hover, label.file:hover, select:hover { border-color: #46566a; }
-  button:focus-visible, label.file:focus-within, select:focus-visible {
+  button:hover, label.file:hover, select:hover, #gamepad-help > summary:hover { border-color: #46566a; }
+  button:focus-visible, label.file:focus-within, select:focus-visible, #gamepad-help > summary:focus-visible {
     outline: 2px solid var(--note); outline-offset: 1px;
   }
+
+  /* gamepad help dropdown ---------------------------------------------- */
+  #gamepad-help { position: relative; }
+  #gamepad-help > summary { list-style: none; user-select: none; white-space: nowrap; }
+  #gamepad-help > summary::-webkit-details-marker { display: none; }
+  #gamepad-help > summary::before { content: "▸ "; color: var(--ink-dim); }
+  #gamepad-help[open] > summary::before { content: "▾ "; }
+
+  .gamepad-panel {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+    background: var(--panel); border: 1px solid var(--line-acc);
+    border-radius: 8px; padding: 10px 14px; min-width: 300px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.55);
+  }
+  .gamepad-panel table { border-collapse: collapse; width: 100%; }
+  .gamepad-panel tr + tr > td { border-top: 1px solid var(--grid); }
+  .gamepad-panel td { padding: 4px 8px; font-size: 12px; vertical-align: middle; }
+  .gamepad-panel .btn {
+    color: var(--note-lit); font-weight: 700; white-space: nowrap;
+    min-width: 36px; letter-spacing: .03em;
+  }
+  .gamepad-panel .desc { color: var(--ink); }
+  .gamepad-panel .section-head td {
+    color: var(--ink-dim); font-size: 11px; letter-spacing: .06em;
+    text-transform: uppercase; padding-top: 10px; border-top: none;
+  }
+  .gamepad-panel tr:first-child.section-head td { padding-top: 2px; }
   button:disabled { opacity: .4; cursor: default; }
   button.primary { background: var(--note); border-color: var(--note); color: #0b1020; font-weight: 600; }
   button.primary:hover { background: #6f8fff; }
@@ -110,6 +137,28 @@
   <button id="midi">Enable MIDI</button>
   <button id="gamepad">Enable gamepad</button>
   <button id="midiout">Enable MIDI out</button>
+
+  <details id="gamepad-help" style="display:none">
+    <summary>Gamepad map</summary>
+    <div class="gamepad-panel">
+      <table>
+        <tbody>
+          <tr class="section-head"><td colspan="2">Sound</td></tr>
+          <tr><td class="btn">RT</td><td class="desc">Hold to trigger &amp; sustain cursor triad</td></tr>
+          <tr class="section-head"><td colspan="2">Neo-Riemannian transforms</td></tr>
+          <tr><td class="btn">A</td><td class="desc">P — Parallel (swap major ↔ minor, keep root+fifth)</td></tr>
+          <tr><td class="btn">B</td><td class="desc">R — Relative (keep root+third, move fifth)</td></tr>
+          <tr><td class="btn">X</td><td class="desc">L — Leading-tone exchange (keep third+fifth)</td></tr>
+          <tr class="section-head"><td colspan="2">Navigate lattice</td></tr>
+          <tr><td class="btn">↑ / ↓</td><td class="desc">Step major third up / down</td></tr>
+          <tr><td class="btn">→ / ←</td><td class="desc">Step fifth up / down</td></tr>
+          <tr class="section-head"><td colspan="2">Octave &amp; home</td></tr>
+          <tr><td class="btn">RB / LB</td><td class="desc">Octave up / down</td></tr>
+          <tr><td class="btn">Y</td><td class="desc">Home — return cursor to C major</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
 
   <div class="scrub-wrap">
     <input id="scrub" type="range" min="0" max="1000" value="0" disabled>

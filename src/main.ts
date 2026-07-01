@@ -212,6 +212,7 @@ const VIEWS: Record<string, View> = {
   both: Combo.render,
   nashville: Nashville.render,
 };
+const gamepadHelp = $<HTMLDetailsElement>("gamepad-help");
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   const val = (e.target as HTMLSelectElement).value;
   view = VIEWS[val] ?? StaffFull.render;
@@ -223,6 +224,9 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
     val === "tonnetz" || val === "both" ? tonnetzMapping :
     keysMapping
   );
+  const isTonnetz = val === "tonnetz" || val === "both";
+  gamepadHelp.style.display = isTonnetz ? "" : "none";
+  if (!isTonnetz) gamepadHelp.removeAttribute("open");
 });
 
 // --- playable keyboard (piano-roll view only) ----------------------

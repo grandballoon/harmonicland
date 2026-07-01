@@ -21,6 +21,7 @@ import { LiveKeys } from "./live-keys";
 import { LiveMidi } from "./live-midi";
 import { LiveGamepad, keysMapping } from "./live-gamepad";
 import { perfectoMapping } from "./gamepad-perfecto";
+import { tonnetzMapping } from "./gamepad-tonnetz";
 import { PerfState } from "./perf-state";
 import { chordName, DEGREE_NUMERAL, type Degree, type JoystickDirection } from "./harmony/perfecto";
 import type { Score, View } from "./types";
@@ -215,9 +216,13 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   const val = (e.target as HTMLSelectElement).value;
   view = VIEWS[val] ?? StaffFull.render;
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
-  // the controller means different things per view: Nashville turns it into
-  // the Perfecto instrument, everything else into the chromatic keyboard.
-  LiveGamepad.setMapping(val === "nashville" ? perfectoMapping : keysMapping);
+  // the controller means different things per view: Nashville → Perfecto,
+  // Tonnetz/Combo → lattice instrument, everything else → chromatic keyboard.
+  LiveGamepad.setMapping(
+    val === "nashville"              ? perfectoMapping :
+    val === "tonnetz" || val === "both" ? tonnetzMapping :
+    keysMapping
+  );
 });
 
 // --- playable keyboard (piano-roll view only) ----------------------

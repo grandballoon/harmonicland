@@ -18,9 +18,15 @@
    Pitch-class only: reads pitch%12, ignores octave AND spelling (the
    physical/harmonic view, not the notation view). Same (svg, score, t)
    signature as the staves, so the view toggle stays a single swap.
+
+   TonnetzState dependency: markup() reads TonnetzState.snapshot() once
+   to draw the cursor triangle (the player's current position) as a
+   stroked overlay, distinct from sounding fills. This is a deliberate
+   one-way read — TonnetzState never imports back into this file.
    ==================================================================== */
 import { Core } from "../core";
 import { LiveKeys } from "../live-keys";
+import { TonnetzState } from "../tonnetz-state";
 import type { View, Score } from "../types";
 
 type Cell = readonly [number, number]; // lattice coords (col, row)
@@ -148,7 +154,17 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
     }
   }
 
-  return fills + edges + nodes + labels;
+  // cursor overlay: the player's current position, as a stroked outline
+  // distinct from sounding fills. Single read of snapshot() — see header.
+  const { cursor } = TonnetzState.snapshot();
+  const cv = (c: number, r: number): Cell => [c, r] as Cell;
+  const cursorVerts = cursor.orient === "up"
+    ? [cv(cursor.col, cursor.row), cv(cursor.col, cursor.row + 1), cv(cursor.col + 1, cursor.row)]
+    : [cv(cursor.col + 1, cursor.row), cv(cursor.col, cursor.row + 1), cv(cursor.col + 1, cursor.row + 1)];
+  const cursorPts = cursorVerts.map(c => `${X(c)},${Y(c)}`).join(" ");
+  const cursorOverlay = `<polygon points="${cursorPts}" fill="none" stroke="var(--note-lit)" stroke-width="2.5" opacity="0.9"/>`;
+
+  return fills + edges + nodes + labels + cursorOverlay;
 };
 
 export const Tonnetz = { render, markup, pitchClassAt, triadName, neoTransform };

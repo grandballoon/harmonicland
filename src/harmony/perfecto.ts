@@ -274,4 +274,31 @@ export function chordName(
   return `${rootName} ${quality}`;
 }
 
-export const Perfecto = { computeVoicing, degreeQuality, chordName, degreeIndex };
+// ---------- Coloration descriptors: the FEEL of a joystick cell ----------
+// A one-word mood for each coloration, the qualitative twin of the technical
+// ZONE_LABEL ("Dom 7" -> "bluesy"). The player thinks in colors, not chord
+// symbols, so this is what the readout leads with. One word per cell, keyed
+// the same (mode × direction) as every other joystick table; center is the
+// uncolored base. Subjective by design — tweak freely, the shape is stable.
+export const COLORATION_DESCRIPTOR: Record<JoystickMode, Record<JoystickDirection, string>> = {
+  default: {
+    center: "plain",
+    up: "bittersweet", upRight: "bluesy", right: "dreamy", downRight: "shimmery",
+    down: "floating", downLeft: "wistful", left: "dark", upLeft: "eerie",
+  },
+  extended: {
+    center: "plain",
+    up: "bittersweet", upRight: "funky", right: "airy", downRight: "moody",
+    down: "gritty", downLeft: "shimmery", left: "yearning", upLeft: "melancholy",
+  },
+  chromatic: {
+    center: "plain",
+    up: "noir", upRight: "swanky", right: "sunny", downRight: "biting",
+    down: "cinematic", downLeft: "sinister", left: "melancholy", upLeft: "ethereal",
+  },
+};
+
+export const colorationDescriptor = (mode: JoystickMode, direction: JoystickDirection): string =>
+  COLORATION_DESCRIPTOR[mode][direction];
+
+export const Perfecto = { computeVoicing, degreeQuality, chordName, colorationDescriptor, degreeIndex };

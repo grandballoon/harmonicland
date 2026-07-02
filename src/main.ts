@@ -212,7 +212,8 @@ const VIEWS: Record<string, View> = {
   both: Combo.render,
   nashville: Nashville.render,
 };
-const gamepadHelp = $<HTMLDetailsElement>("gamepad-help");
+const gamepadHelpTonnetz = $<HTMLDetailsElement>("gamepad-help-tonnetz");
+const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   const val = (e.target as HTMLSelectElement).value;
   view = VIEWS[val] ?? StaffFull.render;
@@ -220,13 +221,16 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   // the controller means different things per view: Nashville → Perfecto,
   // Tonnetz/Combo → lattice instrument, everything else → chromatic keyboard.
   LiveGamepad.setMapping(
-    val === "nashville"              ? perfectoMapping :
+    val === "nashville"                 ? perfectoMapping :
     val === "tonnetz" || val === "both" ? tonnetzMapping :
     keysMapping
   );
   const isTonnetz = val === "tonnetz" || val === "both";
-  gamepadHelp.style.display = isTonnetz ? "" : "none";
-  if (!isTonnetz) gamepadHelp.removeAttribute("open");
+  const isNashville = val === "nashville";
+  gamepadHelpTonnetz.style.display = isTonnetz ? "" : "none";
+  gamepadHelpNashville.style.display = isNashville ? "" : "none";
+  if (!isTonnetz) gamepadHelpTonnetz.removeAttribute("open");
+  if (!isNashville) gamepadHelpNashville.removeAttribute("open");
 });
 
 // --- playable keyboard (piano-roll view only) ----------------------

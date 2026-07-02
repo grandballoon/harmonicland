@@ -24,6 +24,7 @@ import {
   computeVoicing,
   degreeQuality,
   chordName,
+  colorationDescriptor,
   PITCH_NAMES,
   DEGREE_NUMERAL,
   DIRECTION_SYMBOL,
@@ -129,16 +130,20 @@ export const render: View = (svg) => {
     const zx = cx + vx * R;
     const zy = cy + vy * R;
     const lit = dir === s.joystickDirection;
-    const w = dir === "center" ? 70 : 78;
-    out += cell(zx, zy, w, 38, lit ? "var(--note-lit)" : "var(--panel)",
+    const w = dir === "center" ? 70 : 90;
+    out += cell(zx, zy, w, 48, lit ? "var(--note-lit)" : "var(--panel)",
       lit ? "var(--note-lit)" : "var(--grid-oct)", lit && sounding);
     const ink = lit ? "#0b1020" : "var(--ink)";
-    out += text(zx, zy - 3, DIRECTION_SYMBOL[dir], { size: 14, weight: 700, fill: ink });
-    out += text(zx, zy + 12, zoneTable[dir], { size: 10, weight: 600, fill: lit ? "#0b1020" : "var(--ink-dim)" });
+    const inkDim = lit ? "#0b1020" : "var(--ink-dim)";
+    out += text(zx, zy - 10, DIRECTION_SYMBOL[dir], { size: 13, weight: 700, fill: ink });
+    out += text(zx, zy + 4, colorationDescriptor(s.joystickMode, dir),
+      { size: 10, weight: 700, fill: ink });
+    out += text(zx, zy + 17, zoneTable[dir], { size: 9, weight: 500, fill: inkDim });
   }
 
   // --- now-playing readout -----------------------------------------
   const name = chordName(s.key, s.degree, s.joystickMode, s.joystickDirection);
+  const descriptor = colorationDescriptor(s.joystickMode, s.joystickDirection);
   // actual sounding notes, or a root-position preview so it's informative when silent
   const notes = sounding
     ? s.sounding
@@ -149,6 +154,11 @@ export const render: View = (svg) => {
     { size: 26, weight: 800, anchor: "start", fill: QCOLOR[degreeQuality(s.key, s.degree)] });
   out += text(64, ry, name,
     { size: 22, weight: 700, anchor: "start", fill: sounding ? "var(--note-lit)" : "var(--ink-dim)" });
+  // descriptor sits just below the chord name, dimmed when the direction is center/plain
+  if (s.joystickDirection !== "center") {
+    out += text(64, ry + 18, descriptor,
+      { size: 11, weight: 600, anchor: "start", fill: sounding ? "var(--note-lit)" : "var(--ink-dim)" });
+  }
   out += text(W - 24, ry, spelling,
     { size: 16, weight: 600, anchor: "end", fill: sounding ? "var(--ink)" : "var(--ink-dim)" });
   out += text(W - 24, ry - 22, `${s.inversion} · oct ${s.octave}${s.voiceLeading ? " · voice-led" : ""}`,

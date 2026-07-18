@@ -19,6 +19,7 @@ import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
 import { LiveKeys } from "./live-keys";
 import { LiveMidi } from "./live-midi";
+import { LivePerfecto, describeFrame } from "./live-perfecto";
 import { LiveGamepad, keysMapping } from "./live-gamepad";
 import { perfectoMapping } from "./gamepad-perfecto";
 import { tonnetzMapping } from "./gamepad-tonnetz";
@@ -168,6 +169,36 @@ midiOutBtn.addEventListener("click", async () => {
       : "MIDI out on · no devices found — connect a synth.";
   } catch (err) {
     $("status").textContent = "MIDI out unavailable: " + (err as Error).message;
+  }
+});
+
+// --- Perfecto link (semantic chord plane) -------------------------
+// The iOS app broadcasts ChordLink SysEx alongside its notes (chordlink.md).
+// This toggle wires the semantic plane only; enable plain MIDI in as well to
+// hear/see the notes — live-perfecto never presses LiveKeys itself.
+let perfectoLinkOn = false;
+const perfectoLinkBtn = $<HTMLButtonElement>("perfecto-link");
+perfectoLinkBtn.addEventListener("click", async () => {
+  if (perfectoLinkOn) {
+    LivePerfecto.disable();
+    LivePerfecto.onFrame(null);
+    perfectoLinkOn = false;
+    perfectoLinkBtn.textContent = "Enable Perfecto link";
+    $("status").textContent = "Perfecto link off.";
+    return;
+  }
+  try {
+    const inputs = await LivePerfecto.enable();
+    LivePerfecto.onFrame((f) => {
+      $("status").textContent = "Perfecto · " + describeFrame(f);
+    });
+    perfectoLinkOn = true;
+    perfectoLinkBtn.textContent = "Disable Perfecto link";
+    $("status").textContent = inputs.length
+      ? "Perfecto link on · waiting for chords."
+      : "Perfecto link on · no MIDI inputs — connect the phone (USB or network session).";
+  } catch (err) {
+    $("status").textContent = "Perfecto link unavailable: " + (err as Error).message;
   }
 });
 

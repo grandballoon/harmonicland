@@ -15,7 +15,7 @@ import type { View, Note, Score } from "../types";
 const LOW = 21;
 const HIGH = 108; // A0 .. C8, the 88 keys (match StaffFull)
 const PPS = 120; // px/sec fall speed — match the staves
-const KEYB = 96; // keyboard band height (px)
+export const KEYB = 96; // keyboard band height (px)
 
 const semi = (p: number) => ((p % 12) + 12) % 12;
 const isWhite = (p: number) => ![1, 3, 6, 8, 10].includes(semi(p));
@@ -49,49 +49,60 @@ export const render: View = (svg, score, t) => {
 };
 
 // the roll as a markup string for a W×H region (origin at 0,0); no <defs> —
-// the caller supplies one shared glow filter.
-export const markup = (W: number, H: number, score: Score, t: number): string => {
+// the caller supplies one shared glow filter. With `fall` off, the falling-
+// note field (C guides + bars) is skipped: keys still light from the same
+// activeAt query, so a keyboard-height region becomes a "keys only" band.
+// With `hands` on, bars and lit keys are hued by staff/hand (upper =
+// --hand-r, rest = --hand-l); sounding is then carried by glow + opacity.
+export const markup = (W: number, H: number, score: Score, t: number, fall = true, hands = false): string => {
   if (!W || !H) return "";
 
   // keyboard layout + its inverse hit-test both come from one place.
   const { whites, ww, whiteIdx, strikeY, blackH, lane } = layout(W, H);
 
+  const upper = Core.upperStaff(score);
+  const handHue = (n: Note): string | null =>
+    hands && n.staff !== undefined ? (n.staff === upper ? "var(--hand-r)" : "var(--hand-l)") : null;
+
   const active = new Set(Core.activeAt(score, t)); // note-object identity
-  const activePitch = new Set([...active].map((n) => n.pitch));
+  const activeHue = new Map<number, string>(); // pitch -> lit-key color
+  for (const n of active) activeHue.set(n.pitch, handHue(n) ?? "var(--note-lit)");
   const held = LiveKeys.held(); // keys the user is holding
   // a key glows for a sounding score note OR a live key-press; a live press
   // wins the color so you can tell what YOU played from what's playing back.
   const keyFill = (p: number, base: string) =>
-    held.has(p) ? "var(--key-press)" : activePitch.has(p) ? "var(--note-lit)" : base;
-  const keyGlow = (p: number) => (held.has(p) || activePitch.has(p) ? ` filter="url(#glow)"` : "");
+    held.has(p) ? "var(--key-press)" : activeHue.get(p) ?? base;
+  const keyGlow = (p: number) => (held.has(p) || activeHue.has(p) ? ` filter="url(#glow)"` : "");
 
   let out = "";
 
-  // --- background: faint vertical guide at each C, for orientation ---
-  for (const p of whites)
-    if (isC(p)) {
-      const x = whiteIdx.get(p)! * ww;
-      out += `<line x1="${x}" y1="0" x2="${x}" y2="${strikeY}" stroke="var(--grid)" stroke-width="0.6" opacity="0.5"/>`;
-    }
+  if (fall) {
+    // --- background: faint vertical guide at each C, for orientation ---
+    for (const p of whites)
+      if (isC(p)) {
+        const x = whiteIdx.get(p)! * ww;
+        out += `<line x1="${x}" y1="0" x2="${x}" y2="${strikeY}" stroke="var(--grid)" stroke-width="0.6" opacity="0.5"/>`;
+      }
 
-  // --- falling notes: y from (onset - t); leading edge hits strikeY at
-  // onset, then the bar descends behind the keyboard. White lanes first,
-  // black lanes on top so overlaps read correctly. ---
-  const bar = (n: Note): string => {
-    const { x, w } = lane(n.pitch);
-    const bottom = strikeY - (n.onset - t) * PPS; // leading edge
-    const top = bottom - n.duration * PPS;
-    if (bottom < 0 || top > strikeY) return ""; // future-offscreen / passed
-    const yTop = Math.max(0, top);
-    const yBot = Math.min(strikeY, bottom);
-    const on = active.has(n);
-    const fill = on ? "var(--note-lit)" : "var(--note)";
-    const glow = on ? ` filter="url(#glow)"` : "";
-    const pad = 1.2;
-    return `<rect x="${x + pad}" y="${yTop}" width="${Math.max(2, w - 2 * pad)}" height="${Math.max(2, yBot - yTop)}" rx="2.5" fill="${fill}" opacity="${on ? 1 : 0.85}"${glow}/>`;
-  };
-  for (const n of score.notes) if (isWhite(n.pitch)) out += bar(n);
-  for (const n of score.notes) if (!isWhite(n.pitch)) out += bar(n);
+    // --- falling notes: y from (onset - t); leading edge hits strikeY at
+    // onset, then the bar descends behind the keyboard. White lanes first,
+    // black lanes on top so overlaps read correctly. ---
+    const bar = (n: Note): string => {
+      const { x, w } = lane(n.pitch);
+      const bottom = strikeY - (n.onset - t) * PPS; // leading edge
+      const top = bottom - n.duration * PPS;
+      if (bottom < 0 || top > strikeY) return ""; // future-offscreen / passed
+      const yTop = Math.max(0, top);
+      const yBot = Math.min(strikeY, bottom);
+      const on = active.has(n);
+      const fill = handHue(n) ?? (on ? "var(--note-lit)" : "var(--note)");
+      const glow = on ? ` filter="url(#glow)"` : "";
+      const pad = 1.2;
+      return `<rect x="${x + pad}" y="${yTop}" width="${Math.max(2, w - 2 * pad)}" height="${Math.max(2, yBot - yTop)}" rx="2.5" fill="${fill}" opacity="${on ? 1 : 0.85}"${glow}/>`;
+    };
+    for (const n of score.notes) if (isWhite(n.pitch)) out += bar(n);
+    for (const n of score.notes) if (!isWhite(n.pitch)) out += bar(n);
+  }
 
   // --- strike line ---
   out += `<line x1="0" y1="${strikeY}" x2="${W}" y2="${strikeY}" stroke="var(--playhead)" stroke-width="1.2" opacity="0.85"/>`;
@@ -164,4 +175,4 @@ function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number, region?: 
   return L.whites[i];
 }
 
-export const PianoRoll = { render, markup, pitchAt };
+export const PianoRoll = { render, markup, pitchAt, KEYB };

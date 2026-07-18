@@ -13,6 +13,7 @@ interface MidiEvent {
   pitch?: number;
   vel?: number;
   usPerQ?: number;
+  track?: number; // 1-based; piano exports put the hands on separate tracks
 }
 
 export function parse(bytes: ArrayBuffer): Score {
@@ -89,12 +90,12 @@ export function parse(bytes: ArrayBuffer): Score {
         // note on
         const pitch = u8();
         const vel = u8();
-        events.push({ tick, kind: vel > 0 ? "on" : "off", pitch, vel });
+        events.push({ tick, kind: vel > 0 ? "on" : "off", pitch, vel, track: t + 1 });
       } else if (hi === 0x80) {
         // note off
         const pitch = u8();
         u8();
-        events.push({ tick, kind: "off", pitch });
+        events.push({ tick, kind: "off", pitch, track: t + 1 });
       } else if (hi === 0xa0 || hi === 0xb0 || hi === 0xe0) {
         p += 2; // 2-byte channel msgs we ignore
       } else if (hi === 0xc0 || hi === 0xd0) {
@@ -114,7 +115,9 @@ export function parse(bytes: ArrayBuffer): Score {
 
   // We need monotonic integration, so walk events in tick order once,
   // updating seconds at each tempo change, recording note times.
-  const open = new Map<number, number[]>(); // pitch -> onsets
+  // pair on/off within a track (tracks are independent streams; the same
+  // pitch may sound in both hands at once), keyed track<<7|pitch.
+  const open = new Map<number, number[]>(); // track/pitch key -> onsets
   const notes: RawNote[] = [];
   for (const ev of events) {
     seconds += ((ev.tick - lastTick) * usPerQ) / division / 1e6;
@@ -122,20 +125,21 @@ export function parse(bytes: ArrayBuffer): Score {
     if (ev.kind === "tempo") {
       usPerQ = ev.usPerQ!;
     } else if (ev.kind === "on") {
-      // stack note-ons of same pitch; pair LIFO on next off
-      const pitch = ev.pitch!;
-      if (!open.has(pitch)) open.set(pitch, []);
-      open.get(pitch)!.push(seconds);
+      // stack note-ons of same key; pair LIFO on next off
+      const key = (ev.track! << 7) | ev.pitch!;
+      if (!open.has(key)) open.set(key, []);
+      open.get(key)!.push(seconds);
     } else if (ev.kind === "off") {
-      const stack = open.get(ev.pitch!);
+      const stack = open.get((ev.track! << 7) | ev.pitch!);
       if (stack && stack.length) {
         const onset = stack.shift()!;
-        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset) });
+        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset), staff: ev.track });
       }
     }
   }
   // close any hung notes at end
-  for (const [pitch, stack] of open) for (const onset of stack) notes.push({ pitch, onset, duration: 0.25 });
+  for (const [key, stack] of open)
+    for (const onset of stack) notes.push({ pitch: key & 0x7f, onset, duration: 0.25, staff: key >> 7 });
 
   if (!notes.length) throw new Error("No notes found in file.");
   return Core.makeScore(notes);

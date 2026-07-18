@@ -8,10 +8,12 @@ import { Core } from "./core";
 import { makeClock } from "./clock";
 import { MidiIn } from "./inputs/midi";
 import { MusicxmlIn } from "./inputs/musicxml";
+import { MxlIn } from "./inputs/mxl";
 import { LilyIn } from "./inputs/lily";
 import { StaffFull } from "./outputs/staff-full";
 import { StaffStd } from "./outputs/staff-std";
 import { PianoRoll, type Region as PianoRollRegion } from "./outputs/piano-roll";
+import { StaffPiano } from "./outputs/staff-piano";
 import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
@@ -28,6 +30,18 @@ import type { Score, View } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
+
+// UTF-8 unless a UTF-16 byte-order mark says otherwise (some notation
+// software exports UTF-16; fed to a UTF-8 decoder it reads as garbage
+// and a valid score dies as "Malformed XML").
+const decodeText = (buf: ArrayBuffer): string => {
+  const b = new Uint8Array(buf);
+  const enc =
+    b[0] === 0xff && b[1] === 0xfe ? "utf-16le" :
+    b[0] === 0xfe && b[1] === 0xff ? "utf-16be" :
+    "utf-8";
+  return new TextDecoder(enc).decode(buf);
+};
 
 const svg = document.getElementById("staff") as unknown as SVGSVGElement;
 let score: Score = Core.makeScore([]); // empty until loaded
@@ -67,13 +81,16 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
   try {
     const buf = await f.arrayBuffer();
     // dispatch on content (with a filename tiebreak): SMF starts with
-    // "MThd"; XML-looking text is MusicXML; LilyPond is the text rest.
+    // "MThd"; "PK" is a ZIP, i.e. compressed MusicXML (.mxl); XML-looking
+    // text is MusicXML; LilyPond is the text rest.
     const head = buf.byteLength >= 4 ? String.fromCharCode(...new Uint8Array(buf, 0, 4)) : "";
     let parsed: Score;
     if (head === "MThd") {
       parsed = MidiIn.parse(buf);
+    } else if (head.startsWith("PK")) {
+      parsed = MusicxmlIn.parse(await MxlIn.extract(buf));
     } else {
-      const txt = new TextDecoder().decode(buf);
+      const txt = decodeText(buf);
       const looksXml = /^\s*</.test(txt); // XML decl, comment, or root tag
       const looksLily =
         f.name.toLowerCase().endsWith(".ly") ||
@@ -207,6 +224,8 @@ scrub.addEventListener("change", () => {
 const VIEWS: Record<string, View> = {
   full: StaffFull.render,
   std: StaffStd.render,
+  "std-keys": StaffPiano.renderKeys,
+  "std-roll": StaffPiano.renderRoll,
   roll: PianoRoll.render,
   tonnetz: Tonnetz.render,
   both: Combo.render,
@@ -214,9 +233,14 @@ const VIEWS: Record<string, View> = {
 };
 const gamepadHelpTonnetz = $<HTMLDetailsElement>("gamepad-help-tonnetz");
 const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
+// the hands toggle belongs to the stacked staff+piano views only
+const handsWrap = $<HTMLLabelElement>("hands-wrap");
+const handsBox = $<HTMLInputElement>("hands");
+handsBox.addEventListener("change", () => StaffPiano.setHands(handsBox.checked));
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   const val = (e.target as HTMLSelectElement).value;
   view = VIEWS[val] ?? StaffFull.render;
+  handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
   // the controller means different things per view: Nashville → Perfecto,
   // Tonnetz/Combo → lattice instrument, everything else → chromatic keyboard.
@@ -245,6 +269,8 @@ const pointerPitch = new Map<number, number>(); // pointerId -> currently-presse
 const rollRegion = (): PianoRollRegion | null | undefined =>
   view === PianoRoll.render ? undefined // undefined = the whole svg
   : view === Combo.render ? Combo.rollRegion(svg)
+  : view === StaffPiano.renderKeys ? StaffPiano.keysRegion(svg)
+  : view === StaffPiano.renderRoll ? StaffPiano.rollRegion(svg)
   : null; // null = no keyboard here
 svg.addEventListener("pointerdown", (e) => {
   const region = rollRegion();

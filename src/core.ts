@@ -25,6 +25,7 @@ export function makeScore(rawNotes: readonly RawNote[]): Score {
       spelling: n.spelling ?? defaultSpelling(n.pitch),
       onset: n.onset,
       duration: n.duration,
+      ...(n.staff !== undefined && { staff: n.staff }),
     }))
     .sort((a, b) => a.onset - b.onset);
   const duration = notes.reduce((m, n) => Math.max(m, n.onset + n.duration), 0);
@@ -36,4 +37,13 @@ export function activeAt(score: Score, t: number): Note[] {
   return score.notes.filter((n) => t >= n.onset && t < n.onset + n.duration);
 }
 
-export const Core = { makeScore, activeAt, defaultSpelling };
+// the lowest staff number present = the score's UPPER staff (right hand in
+// piano music). Staff numbering varies by source (MIDI note tracks may start
+// at 2 behind a tempo track), so hand-coloring normalizes against this.
+export function upperStaff(score: Score): number {
+  let lo = Infinity;
+  for (const n of score.notes) if (n.staff !== undefined && n.staff < lo) lo = n.staff;
+  return lo === Infinity ? 1 : lo;
+}
+
+export const Core = { makeScore, activeAt, defaultSpelling, upperStaff };

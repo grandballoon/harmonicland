@@ -23,8 +23,9 @@ src/
   types.ts          the contract: Note, Score, Spelling, RawNote, View, Sink, Parser, Clock
   core.ts           makeScore, activeAt, defaultSpelling
   clock.ts          makeClock → Clock
-  inputs/   midi.ts  musicxml.ts  lily.ts
-  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  tonnetz.ts  audio.ts  midi-out.ts
+  inputs/   midi.ts  musicxml.ts  mxl.ts  lily.ts
+  outputs/  staff-full.ts  staff-std.ts  staff-piano.ts  piano-roll.ts
+            tonnetz.ts  combo.ts  nashville.ts  audio.ts  midi-out.ts
   live-keys.ts      held-pitch set; press/release; the live-input seam
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
@@ -88,6 +89,13 @@ Time is in **seconds everywhere downstream**. The core knows nothing of tempo,
 ticks, or beats — those are parser-internal concerns. A parser resolves tempo
 once and freezes seconds into the value.
 
+A note may also carry an optional `staff` (1-based; MusicXML `<staff>` /
+part ordinal, MIDI track) — which stream it came from. In piano music that is
+the hands: lowest staff present = upper staff = right hand
+(`Core.upperStaff` normalizes, since MIDI note tracks may start at 2 behind a
+tempo track). Advisory, not structural: it drives the optional hand-coloring
+in the stacked views and nothing else; LilyPond leaves it unset.
+
 `Core` exposes: `makeScore(rawNotes)`, `activeAt(score, t)`,
 `defaultSpelling(pitch)`. The authoritative definitions now live in
 `src/types.ts` (`Note`, `Score`, `Spelling`, `RawNote`); this block is the
@@ -103,10 +111,12 @@ conceptual view.
 | `makeClock` (`clock.ts`) | `getDuration → Clock` | the one timer |
 | `MidiIn` (`inputs/midi.ts`) | `bytes → score` | SMF parser (pitch only → default sharps) |
 | `MusicxmlIn` (`inputs/musicxml.ts`) | `text → score` | partwise MusicXML; carries real spellings |
+| `MxlIn` (`inputs/mxl.ts`) | `bytes → xml text` | unzips compressed `.mxl` → feeds `MusicxmlIn` |
 | `LilyIn` (`inputs/lily.ts`) | `text → score` | LilyPond source (common subset); real spellings |
 | `StaffFull` (`outputs/staff-full.ts`) | `View` | linear y = f(pitch), all 88 keys |
 | `StaffStd` (`outputs/staff-std.ts`) | `View` | grand staff, y = f(diatonic step) |
 | `PianoRoll` (`outputs/piano-roll.ts`) | `View` (+ `pitchAt`) | "Synthesia": x = f(pitch), notes fall onto a keyboard |
+| `StaffPiano` (`outputs/staff-piano.ts`) | two `View`s (+ `setHands`) | grand staff stacked over the piano: keys-only band, or the full falling-notes roll; optional hand coloring by `staff` |
 | `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
 | `MidiOut` (`outputs/midi-out.ts`) | `Sink` (+ `enable/disable`) | Web MIDI out, edge-triggered note-on/off |
 | `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam |
@@ -127,6 +137,18 @@ deltas, running status, set-tempo meta → seconds, LIFO note-on/off pairing.
 It only knows `pitch`, so it assigns `defaultSpelling` (sharps). **This is why
 imported MIDI shows only sharps in the grand staff** — it's the MIDI→notation
 spelling ambiguity living correctly in the parser, not a renderer bug.
+
+### MxlIn
+Compressed MusicXML (`.mxl`) is a ZIP archive — and the *default* export of
+MuseScore, Finale, and Sibelius. `MxlIn.extract(bytes) → xml text` is a
+from-scratch minimal ZIP reader (same spirit as the SMF reader): it walks the
+central directory, reads the entry `META-INF/container.xml` names (falling back
+to the first non-META-INF `*.xml`), and inflates deflated entries with the
+browser-native `DecompressionStream("deflate-raw")` — zero dependencies. The
+extracted text then goes through `MusicxmlIn.parse` like any other file.
+Inflation is injectable because Node 18 lacks `deflate-raw`; tests supply
+`node:zlib`. CRCs are not verified — corruption surfaces as a parse error one
+step later.
 
 ### StaffFull
 Simplest output, built first. Vertical position is a straight linear function of
@@ -165,10 +187,17 @@ view toggle (a `VIEWS` lookup map) and two key-color tokens — no `Core`, parse
 audio, or clock change.
 
 ### AudioOut
-WebAudio triangle-wave oscillator pool. **Edge-triggered**: each frame it diffs
-the current `activeAt` set against playing voices and starts/stops on the
-transitions. Reads the same `activeAt` query the staves use. Utilitarian sound
-by design — a sampler/soundfont is a later swap, fully contained here.
+A **sampled piano** (the promised "later swap," landed fully inside this
+module): the Salamander Grand (Alexander Holm, CC BY), 30 mp3 recordings a
+minor third apart A0–C8, bundled under `public/samples/salamander/` — no
+dependency, no third-party host at runtime. A note plays the nearest sample
+rate-shifted by at most one semitone; note-off is a short damper fade; a
+master compressor tames chords. Samples decode lazily on `ensure()` (the
+first user gesture); until each is ready — or if its fetch fails — that range
+falls back to the original triangle oscillator, so sound is never silently
+broken. **Edge-triggered**: each frame it diffs the current `activeAt` set
+against playing voices and starts/stops on the transitions. Reads the same
+`activeAt` query the staves use.
 
 ### The loop
 ```js
@@ -194,9 +223,11 @@ files with the browser's `DOMParser`: a per-part seconds cursor honoring
 (tied notes merge into one). Because MusicXML states each note's spelling
 (`<step>` + `<alter>`), real flats and naturals flow straight through to
 `StaffStd` with zero renderer changes — exactly as the seam promised. The file
-loader sniffs content (`MThd` magic → MIDI, else MusicXML text), so one "Load
-file" button feeds both. Not yet handled (isolated, like every limitation):
-compressed `.mxl` (a zip) and timewise scores — both rejected with a message.
+loader sniffs content (`MThd` magic → MIDI, `PK` → zipped `.mxl` via `MxlIn`,
+else MusicXML text), so one "Load file" button feeds all of them, and a UTF-16
+byte-order mark switches the text decoder (some notation software exports
+UTF-16). Not yet handled (isolated, like every limitation): timewise scores —
+rejected with a message.
 
 **LilyPond input** — *done, but not via the route this doc originally
 suggested.* Routing LilyPond → MusicXML needs the `lilypond` binary, a native
@@ -216,8 +247,10 @@ inherit-previous rule, chords `< >`, rests `r`/`s`, ties `~`, simultaneous
 **Better MIDI spelling** — key-context speller inside `MidiIn` only. Changes
 which `spelling` values get frozen in; renderers untouched.
 
-**Better audio** — swap the oscillator for a sampler/soundfont inside
-`AudioOut` only. Same `at()` signature.
+**Better audio** — *done.* The oscillator became a sampled piano inside
+`AudioOut` only — same `at()` signature, no other module touched, exactly as
+this section promised. The next audio step would be velocity/dynamics, which
+first needs velocity in the model (`Note` has none today).
 
 **Swap the clock for Tone.js** — implement the `{now, play, pause, seek,
 isPlaying, onFrame}` interface backing onto `Tone.Transport`. The loop and every
@@ -282,16 +315,20 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
 
 - Imported MIDI shows only sharps in the grand staff (parser default speller).
   Load the same piece as MusicXML to get correct flats/naturals.
-- MusicXML: compressed `.mxl` and timewise scores are rejected; double
-  accidentals collapse to a single glyph (staff position is by letter anyway);
-  tempo is seeded per part from the first `<sound tempo>`, so a mid-piece tempo
-  change that only appears in one part won't propagate to the others.
+- MusicXML: timewise scores are rejected (`.mxl` is now unwrapped by `MxlIn`);
+  double accidentals collapse to a single glyph (staff position is by letter
+  anyway); tempo is seeded per part from the first `<sound tempo>`, so a
+  mid-piece tempo change that only appears in one part won't propagate to the
+  others.
 - LilyPond: only the subset above. Ignored/unsupported — tuplets (`\times`),
   `\repeat`, grace notes, lyrics, and **named-variable indirection** (the inline
   music definition is what gets parsed; `melody = …` then `\melody` is not
   resolved). Relative octaves across `<< >>` use the block's entry reference per
   voice; brace each voice. Double accidentals collapse to one glyph (as MusicXML).
-- Audio is a plain triangle wave — correct timing, plain sound.
+- Audio plays one flat dynamic: `Note` carries no velocity, so every note
+  sounds at the same level (single-velocity-layer samples, gain 0.5). The
+  first notes after page load may sound as triangle-wave fallback for a
+  moment while samples decode.
 - Scrubbing fast re-triggers voices as the active set churns; can sound busy.
   Lives entirely in `AudioOut`; smooth there if it matters.
 - `StaffStd` has no key-signature rendering and no beaming — noteheads only.

@@ -12,7 +12,7 @@
    The +1/-1 spaces flank the middle-C ledger line in the gap.
    ==================================================================== */
 import { Core } from "../core";
-import type { View, Note, Letter, Accidental, Spelling } from "../types";
+import type { View, Score, Note, Letter, Accidental, Spelling } from "../types";
 
 const LETTER: Record<Letter, number> = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 const PPS = 120; // pixels/sec — match StaffFull's scroll
@@ -51,12 +51,28 @@ function posFromMiddleC(n: Note): number {
   return LETTER[s.letter] + 7 * s.octave - C4_STEP;
 }
 
+// the full-screen view measures the (outer) svg itself and sets innerHTML;
+// stacked views (staff-piano) instead ask for markup() at an exact W×H so
+// they can place the staff inside a clipped <g> of their own single svg.
 export const render: View = (svg, score, t) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML =
+    `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter></defs>` + markup(W, H, score, t);
+};
 
+// the staff as a markup string for a W×H region (origin at 0,0); no <defs> —
+// the caller supplies one shared glow filter. With `hands` on, noteheads are
+// hued by staff/hand (upper = --hand-r, rest = --hand-l) instead of the
+// resting/sounding pair; sounding is then carried by glow + full opacity.
+export const markup = (W: number, H: number, score: Score, t: number, hands = false): string => {
+  if (!W || !H) return "";
+  const upper = Core.upperStaff(score);
   const midY = H / 2; // middle C lives here
   const yOf = (pos: number) => midY - pos * HALF; // higher pos -> smaller y
   const playX = W * PLAYHEAD_X;
@@ -91,7 +107,10 @@ export const render: View = (svg, score, t) => {
     const pos = posFromMiddleC(n);
     const y = yOf(pos);
     const lit = t >= n.onset && t < n.onset + n.duration;
-    const fill = lit ? "var(--note-lit)" : "var(--note)";
+    const handed = hands && n.staff !== undefined;
+    const fill = handed
+      ? n.staff === upper ? "var(--hand-r)" : "var(--hand-l)"
+      : lit ? "var(--note-lit)" : "var(--note)";
     const glow = lit ? ` filter="url(#glow)"` : "";
 
     // ledger lines: any line-position (even) that's outside a staff and
@@ -106,11 +125,7 @@ export const render: View = (svg, score, t) => {
     if (s.acc) out += `<text x="${x - R - 9}" y="${y + 4}" font-size="15" fill="${fill}" font-family="serif">${ACC[s.acc]}</text>`;
   }
 
-  svg.innerHTML =
-    `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur stdDeviation="3" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter></defs>` + out;
+  return out;
 };
 
 // draw short ledger lines through a notehead sitting outside the staves
@@ -129,4 +144,4 @@ function ledgerLines(pos: number, x: number, yOf: (p: number) => number): string
   return s;
 }
 
-export const StaffStd = { render };
+export const StaffStd = { render, markup };

@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { describe, it, expect } from "vitest";
 import { MidiIn } from "./midi";
 import { MusicxmlIn } from "./musicxml";
 import { LilyIn } from "./lily";
+import { MxlIn } from "./mxl";
 
 // sample files live at the project root, where the test runner starts
 const sample = (name: string) => readFileSync(join(process.cwd(), name), "utf8");
@@ -50,6 +52,10 @@ describe("MidiIn", () => {
     const junk = new Uint8Array([1, 2, 3, 4]).buffer;
     expect(() => MidiIn.parse(junk)).toThrow(/MThd/);
   });
+
+  it("records the source track as `staff` (piano exports split hands by track)", () => {
+    expect(MidiIn.parse(tinyMidi()).notes[0].staff).toBe(1);
+  });
 });
 
 /* ---- MusicXML ------------------------------------------------------ */
@@ -79,6 +85,102 @@ describe("MusicxmlIn", () => {
 
   it("rejects timewise scores", () => {
     expect(() => MusicxmlIn.parse("<score-timewise></score-timewise>")).toThrow(/partwise/);
+  });
+
+  it("carries <staff> per note (piano: 1 = right hand, 2 = left)", () => {
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1"><measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><staff>1</staff></note>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><staff>2</staff></note>
+    </measure></part></score-partwise>`);
+    expect(score.notes.map((n) => n.staff)).toEqual([1, 2]);
+  });
+
+  it("falls back to the part ordinal when notes have no <staff>", () => {
+    const part = (id: string, step: string) =>
+      `<part id="${id}"><measure number="1"><attributes><divisions>1</divisions></attributes>
+       <note><pitch><step>${step}</step><octave>4</octave></pitch><duration>1</duration></note></measure></part>`;
+    const score = MusicxmlIn.parse(`<score-partwise>${part("P1", "C")}${part("P2", "E")}</score-partwise>`);
+    expect(new Set(score.notes.map((n) => n.staff))).toEqual(new Set([1, 2]));
+  });
+});
+
+/* ---- compressed MusicXML (.mxl = ZIP) ------------------------------
+   Hand-build minimal archives, so the test doubles as a spec of what the
+   ZIP reader must handle: local headers, central directory, EOCD, stored
+   and deflated entries. Inflation is injected from node:zlib because Node
+   18's DecompressionStream lacks "deflate-raw" (browsers have it). */
+const nodeInflateRaw = async (d: Uint8Array) => new Uint8Array(inflateRawSync(d));
+
+function tinyZip(files: { name: string; text: string; deflate?: boolean }[]): ArrayBuffer {
+  const enc = new TextEncoder();
+  const u16 = (n: number) => [n & 0xff, (n >> 8) & 0xff];
+  const u32 = (n: number) => [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff];
+  const parts: Uint8Array[] = [];
+  const central: number[] = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = [...enc.encode(f.name)];
+    const raw = enc.encode(f.text);
+    const data = f.deflate ? new Uint8Array(deflateRawSync(raw)) : raw;
+    const method = f.deflate ? 8 : 0;
+    // local file header: sig, version, flags, method, time, date, crc
+    // (unchecked by the reader), sizes, name-/extra-length, name
+    const local = new Uint8Array([
+      ...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(method), ...u16(0), ...u16(0),
+      ...u32(0), ...u32(data.length), ...u32(raw.length), ...u16(name.length), ...u16(0),
+      ...name,
+    ]);
+    // central directory header: adds version-made-by, comment/disk/attr
+    // fields (all zero here) and the local header's offset
+    central.push(
+      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(method), ...u16(0), ...u16(0),
+      ...u32(0), ...u32(data.length), ...u32(raw.length), ...u16(name.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(offset),
+      ...name,
+    );
+    parts.push(local, data);
+    offset += local.length + data.length;
+  }
+  parts.push(new Uint8Array([
+    ...central,
+    // EOCD: sig, disk numbers, entry counts, central dir size + offset, comment length
+    ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length),
+    ...u32(central.length), ...u32(offset), ...u16(0),
+  ]));
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let p = 0;
+  for (const part of parts) { out.set(part, p); p += part.length; }
+  return out.buffer;
+}
+
+const CONTAINER = `<?xml version="1.0"?>
+<container><rootfiles><rootfile full-path="score.musicxml"/></rootfiles></container>`;
+
+describe("MxlIn", () => {
+  it("extracts the rootfile the META-INF manifest names, deflated, and it parses", async () => {
+    const mxl = tinyZip([
+      { name: "mimetype", text: "application/vnd.recordare.musicxml" },
+      { name: "META-INF/container.xml", text: CONTAINER, deflate: true },
+      { name: "score.musicxml", text: XML, deflate: true },
+    ]);
+    const xml = await MxlIn.extract(mxl, nodeInflateRaw);
+    const score = MusicxmlIn.parse(xml);
+    expect(score.notes.map((n) => n.pitch)).toEqual([60, 61]);
+  });
+
+  it("falls back to the first non-META-INF *.xml when the manifest is absent", async () => {
+    const mxl = tinyZip([{ name: "piece.xml", text: XML }]); // stored, no manifest
+    expect(await MxlIn.extract(mxl, nodeInflateRaw)).toBe(XML);
+  });
+
+  it("rejects an archive with no MusicXML document", async () => {
+    const mxl = tinyZip([{ name: "readme.txt", text: "hi" }]);
+    await expect(MxlIn.extract(mxl, nodeInflateRaw)).rejects.toThrow(/No MusicXML/);
+  });
+
+  it("rejects non-ZIP bytes", async () => {
+    await expect(MxlIn.extract(new Uint8Array(64).buffer)).rejects.toThrow(/ZIP/);
   });
 });
 

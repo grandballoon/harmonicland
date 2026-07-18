@@ -1,0 +1,7 @@
+Salamander Grand Piano V3 — recorded by Alexander Holm.
+Licensed under Creative Commons Attribution 3.0 (CC BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+
+This is the single-velocity mp3 subset (one sample per minor third,
+A0–C8) as distributed with Tone.js: https://tonejs.github.io/audio/salamander/
+Original project: https://sfzinstruments.github.io/pianos/salamander/

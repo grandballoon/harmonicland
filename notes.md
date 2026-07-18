@@ -36,3 +36,5 @@ Changes to list of outputs:
 - We should implement Nashville Number system alongside the chord coloration option—but I'm betting that the space of chord coloring/mode-augmentation options is A) much larger than what was built for Perfecto, and B) possible to concretize in a more precise way based on the Geometrical approach described in A Geometry of Music. (I wonder if any of that overlaps with tonnetz view. Might be nice.)
 
 - We need a mapping of chords to modes and colorations—each chord, let's say, is a collection of notes, and connects in some data structure to the mode/notes K-V pair of each of its modes. Plus, modulations in the form of Nashville number system-style colorations, for which we need a comprehensive list. 
+
+- Don't understand what constitutes a tonnetz. It seems like it can start on any note. I should take a closer look at the actual specification for building one that's closer to Euler than just summaries on Youtube, I need a more mathematical look.

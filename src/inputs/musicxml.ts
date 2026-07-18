@@ -12,8 +12,8 @@
      <chord>      — note shares the previous note's onset, no advance
      <backup>/<forward> — move the cursor (multi-voice / multi-staff)
      <tie>        — merge tied notes into one sustained note
-   Out of scope (kept isolated, like every limitation): compressed
-   .mxl (a zip) and timewise scores.
+   Out of scope (kept isolated, like every limitation): timewise
+   scores. Compressed .mxl arrives here already unwrapped by MxlIn.
    ==================================================================== */
 import { Core } from "../core";
 import type { Score, RawNote, Letter } from "../types";
@@ -46,7 +46,9 @@ export function parse(src: string): Score {
 
   const notes: RawNote[] = [];
 
+  let partOrdinal = 0;
   for (const part of root.querySelectorAll(":scope > part")) {
+    partOrdinal++;
     let divisions = 1; // divisions per quarter note (from <attributes>)
     let tempo = initialTempo;
     let cursor = 0; // seconds from piece start
@@ -116,7 +118,12 @@ export function parse(src: string): Score {
               break;
             }
 
-            const note: RawNote = { pitch, spelling, onset, duration: Math.max(0.02, durSec) };
+            // which staff (piano: 1 = right hand, 2 = left). A note states
+            // it via <staff>; a part without staves gets its ordinal, so
+            // two-part piano exports still split into two streams.
+            const staffNo = numOf(el, ":scope > staff", partOrdinal);
+
+            const note: RawNote = { pitch, spelling, onset, duration: Math.max(0.02, durSec), staff: staffNo };
             notes.push(note);
             if (tieStart) open.set(pitch, note);
             break;

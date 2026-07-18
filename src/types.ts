@@ -30,6 +30,11 @@ export interface Note {
   readonly spelling: Spelling;
   readonly onset: number; // seconds from start (tempo already resolved)
   readonly duration: number; // seconds
+  /** Which staff/stream the note came from (MusicXML `<staff>`, MIDI track,
+   *  part ordinal) — 1-based, lower = upper staff. In piano music this is
+   *  the hands: 1 = right, 2 = left. Absent when the source has no such
+   *  grouping; consumers must treat it as advisory, not structural. */
+  readonly staff?: number;
 }
 
 /** A score: notes sorted by onset, plus the total duration. */
@@ -45,6 +50,7 @@ export interface RawNote {
   spelling?: Spelling;
   onset: number;
   duration: number;
+  staff?: number;
 }
 
 /** An output projection. Every view satisfies this exact shape, which is why

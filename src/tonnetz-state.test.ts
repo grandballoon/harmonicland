@@ -13,11 +13,12 @@ vi.mock("./live-keys", () => ({
 }));
 
 import { TonnetzState } from "./tonnetz-state";
+import { MIN_OCTAVE, MAX_OCTAVE, DEFAULT_OCTAVE } from "./perf-state";
 
 beforeEach(() => {
   TonnetzState.release();
   TonnetzState.home();
-  TonnetzState.nudgeOctave(4 - TonnetzState.snapshot().octave); // reset octave to 4
+  TonnetzState.nudgeOctave(DEFAULT_OCTAVE - TonnetzState.snapshot().octave); // back to home register
   held.clear();
 });
 
@@ -61,14 +62,16 @@ describe("TonnetzState.release", () => {
 });
 
 describe("TonnetzState.nudgeOctave", () => {
-  it("clamps to minimum 0", () => {
+  // the playable register is the instrument's, shared with PerfState, so a
+  // held nudge can't walk either view out to an unplayable octave
+  it("clamps to the bottom of the playable register", () => {
     TonnetzState.nudgeOctave(-100);
-    expect(TonnetzState.snapshot().octave).toBe(0);
+    expect(TonnetzState.snapshot().octave).toBe(MIN_OCTAVE);
   });
 
-  it("clamps to maximum 8", () => {
+  it("clamps to the top of the playable register", () => {
     TonnetzState.nudgeOctave(100);
-    expect(TonnetzState.snapshot().octave).toBe(8);
+    expect(TonnetzState.snapshot().octave).toBe(MAX_OCTAVE);
   });
 
   it("re-sounds with the new octave if a chord is held", () => {

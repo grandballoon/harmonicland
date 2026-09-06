@@ -69,6 +69,20 @@ export type JoystickDirection =
   | "center" | "up" | "upRight" | "right" | "downRight"
   | "down" | "downLeft" | "left" | "upLeft";
 
+// BASE LIVES ON THE RING, NOT IN THE HUB. The uncolored triad sits at the
+// BOTTOM of the coloration ring so the hub is free: the stick can sweep from
+// any color to any other straight across the middle without passing through
+// Base on the way. The hub therefore selects nothing — the input layer treats
+// center as a pass-through that HOLDS the last color (see gamepad-perfecto).
+export const BASE_DIRECTION = "down" as const;
+
+// The two directions that carry no coloration: the Base zone, and the neutral
+// hub — which the stick no longer selects, but which remote ChordWire frames
+// and older senders can still carry, so it stays a legal, plain-sounding value.
+export type PlainDirection = "center" | typeof BASE_DIRECTION;
+export const isPlainDirection = (d: JoystickDirection): d is PlainDirection =>
+  d === "center" || d === BASE_DIRECTION;
+
 // Chord intervals in semitones from the chord root, one list per base quality.
 export interface JoystickOutcome {
   major: number[];
@@ -78,36 +92,39 @@ export interface JoystickOutcome {
 
 const base: JoystickOutcome = { major: [0, 4, 7], minor: [0, 3, 7], dim: [0, 3, 6] };
 
+// Both plain directions — the Base zone at the bottom and the neutral hub —
+// resolve to the same uncolored triad, so a frame that still says "center"
+// sounds exactly like Base.
 export const JOYSTICK_TABLES: Record<JoystickMode, Record<JoystickDirection, JoystickOutcome>> = {
   default: {
     center:    base,
+    down:      base,
     up:        { major: [0, 3, 7],     minor: [0, 4, 7],     dim: [0, 4, 7] },     // flip major↔minor
     upRight:   { major: [0, 4, 7, 10], minor: [0, 3, 7, 10], dim: [0, 3, 6, 10] }, // dom7
     right:     { major: [0, 4, 7, 11], minor: [0, 3, 7, 10], dim: [0, 3, 6, 10] }, // maj7 / min7
     downRight: { major: [0, 4, 7, 14], minor: [0, 3, 7, 14], dim: [0, 3, 6, 14] }, // add9
-    down:      { major: [0, 5, 7],     minor: [0, 5, 7],     dim: [0, 5, 7] },     // sus4
     downLeft:  { major: [0, 4, 7, 9],  minor: [0, 2, 7],     dim: [0, 2, 6] },     // 6th / sus2
     left:      { major: [0, 3, 7],     minor: [0, 3, 6],     dim: [0, 3, 6] },     // dim/min
     upLeft:    { major: [0, 4, 8],     minor: [0, 3, 8],     dim: [0, 3, 7] },     // aug
   },
   extended: {
     center:    base,
+    down:      base,
     up:        { major: [0, 3, 7],         minor: [0, 4, 7],         dim: [0, 4, 7] },
     upRight:   { major: [0, 4, 7, 10, 14], minor: [0, 3, 7, 10, 14], dim: [0, 3, 6, 10, 14] }, // dom9
     right:     { major: [0, 4, 7, 17],     minor: [0, 3, 7, 17],     dim: [0, 3, 6, 17] },     // add11
     downRight: { major: [0, 3, 7, 10, 17], minor: [0, 3, 7, 10, 17], dim: [0, 3, 7, 10, 17] }, // min11
-    down:      { major: [0, 4, 7, 10, 15], minor: [0, 3, 7, 10, 15], dim: [0, 3, 6, 10, 15] }, // dom7#9
     downLeft:  { major: [0, 4, 7, 14],     minor: [0, 3, 7, 14],     dim: [0, 3, 6, 14] },     // add9
     left:      { major: [0, 5, 7, 10],     minor: [0, 5, 7, 10],     dim: [0, 5, 7, 10] },     // sus4+7
     upLeft:    { major: [0, 3, 6, 10],     minor: [0, 3, 6, 10],     dim: [0, 3, 6, 10] },     // half-dim7
   },
   chromatic: {
     center:    base,
+    down:      base,
     up:        { major: [0, 3, 7, 11],        minor: [0, 3, 7, 11],        dim: [0, 3, 7, 11] },        // minMaj7
     upRight:   { major: [0, 4, 7, 10, 14, 21], minor: [0, 4, 7, 10, 14, 21], dim: [0, 4, 7, 10, 14, 21] }, // dom13
     right:     { major: [0, 4, 7, 9, 14],     minor: [0, 3, 7, 9, 14],     dim: [0, 3, 6, 9, 14] },      // 6/9
     downRight: { major: [0, 4, 8, 10, 15],    minor: [0, 4, 8, 10, 15],    dim: [0, 4, 8, 10, 15] },     // dom7alt
-    down:      { major: [0, 4, 7, 11, 14, 21], minor: [0, 4, 7, 11, 14, 21], dim: [0, 4, 7, 11, 14, 21] }, // maj13
     downLeft:  { major: [0, 4, 7, 10, 13],    minor: [0, 3, 7, 10, 13],    dim: [0, 3, 6, 10, 13] },     // dom7b9
     left:      { major: [0, 3, 6, 10],        minor: [0, 3, 6, 10],        dim: [0, 3, 6, 10] },         // half-dim7
     upLeft:    { major: [0, 4, 7, 11, 18],    minor: [0, 4, 7, 11, 18],    dim: [0, 4, 7, 11, 18] },     // maj7#11
@@ -217,43 +234,56 @@ export const DIRECTION_SYMBOL: Record<JoystickDirection, string> = {
   down: "↓", downLeft: "↙", left: "←", upLeft: "↖", center: "·",
 };
 
+// The same 9 zones as unit vectors, y pointing DOWN — which is both the
+// Gamepad API's axis convention (axis 1/3 is +down) and SVG's, so the one
+// table serves the input mapping and every view that draws a stick.
+export const DIRECTION_VECTOR: Record<JoystickDirection, readonly [number, number]> = {
+  center: [0, 0],
+  up: [0, -1], upRight: [0.707, -0.707], right: [1, 0], downRight: [0.707, 0.707],
+  down: [0, 1], downLeft: [-0.707, 0.707], left: [-1, 0], upLeft: [-0.707, -0.707],
+};
+
 // ---------- Joystick zone short labels (the grid UI) ----------
+// The bottom of the ring is Base in every mode; the hub says the same thing
+// because it sounds the same, but no view draws it — the hub is empty.
 export const ZONE_LABEL: Record<JoystickMode, Record<JoystickDirection, string>> = {
   default: {
     up: "Flip 3rd", upRight: "Dom 7", right: "Maj 7", downRight: "Add 9",
-    down: "Sus 4", downLeft: "6/Sus2", left: "Dim", upLeft: "Aug", center: "Base",
+    down: "Base", downLeft: "6/Sus2", left: "Dim", upLeft: "Aug", center: "Base",
   },
   extended: {
     up: "Flip 3rd", upRight: "Dom 9", right: "Add 11", downRight: "Min 11",
-    down: "7♯9", downLeft: "Add 9", left: "Sus4 7", upLeft: "½dim 7", center: "Base",
+    down: "Base", downLeft: "Add 9", left: "Sus4 7", upLeft: "½dim 7", center: "Base",
   },
   chromatic: {
     up: "MinMaj 7", upRight: "Dom 13", right: "6/9", downRight: "7alt",
-    down: "Maj 13", downLeft: "7♭9", left: "½dim 7", upLeft: "Maj7♯11", center: "Base",
+    down: "Base", downLeft: "7♭9", left: "½dim 7", upLeft: "Maj7♯11", center: "Base",
   },
 };
 
 // ---------- Now-playing chord name: "C maj7" ----------
-// Quality suffix at center, derived from the diatonic degree convention.
-const CENTER_QUALITY = (d: Degree): string => {
+// Quality suffix for the plain directions, from the diatonic degree convention.
+const PLAIN_QUALITY = (d: Degree): string => {
   if (d === 1 || d === 4 || d === 5) return "maj";
   if (d === 2 || d === 3 || d === 6) return "min";
   return "dim"; // vii°
 };
 
 // Lowercased twin of ZONE_LABEL, appended to a root note for the readout.
-const QUALITY_LABEL: Record<JoystickMode, Record<Exclude<JoystickDirection, "center">, string>> = {
+// Only the colored directions appear — the plain ones are named by degree.
+const QUALITY_LABEL:
+  Record<JoystickMode, Record<Exclude<JoystickDirection, PlainDirection>, string>> = {
   default: {
     up: "flip 3rd", upRight: "dom7", right: "maj7", downRight: "add9",
-    down: "sus4", downLeft: "6/sus2", left: "dim", upLeft: "aug",
+    downLeft: "6/sus2", left: "dim", upLeft: "aug",
   },
   extended: {
     up: "flip 3rd", upRight: "dom9", right: "add11", downRight: "min11",
-    down: "7♯9", downLeft: "add9", left: "sus4 7", upLeft: "½dim7",
+    downLeft: "add9", left: "sus4 7", upLeft: "½dim7",
   },
   chromatic: {
     up: "minMaj7", upRight: "dom13", right: "6/9", downRight: "7alt",
-    down: "maj13", downLeft: "7♭9", left: "½dim7", upLeft: "maj7♯11",
+    downLeft: "7♭9", left: "½dim7", upLeft: "maj7♯11",
   },
 };
 
@@ -270,7 +300,7 @@ export function chordName(
   const rootPc = (key.root + degreeOffset) % 12;
   const rootName = PITCH_NAMES[rootPc];
   const quality =
-    direction === "center" ? CENTER_QUALITY(degree) : QUALITY_LABEL[mode][direction];
+    isPlainDirection(direction) ? PLAIN_QUALITY(degree) : QUALITY_LABEL[mode][direction];
   return `${rootName} ${quality}`;
 }
 
@@ -278,23 +308,24 @@ export function chordName(
 // A one-word mood for each coloration, the qualitative twin of the technical
 // ZONE_LABEL ("Dom 7" -> "bluesy"). The player thinks in colors, not chord
 // symbols, so this is what the readout leads with. One word per cell, keyed
-// the same (mode × direction) as every other joystick table; center is the
-// uncolored base. Subjective by design — tweak freely, the shape is stable.
+// the same (mode × direction) as every other joystick table; the plain
+// directions are the uncolored base. Subjective by design — tweak freely, the
+// shape is stable.
 export const COLORATION_DESCRIPTOR: Record<JoystickMode, Record<JoystickDirection, string>> = {
   default: {
-    center: "plain",
+    center: "plain", down: "plain",
     up: "bittersweet", upRight: "bluesy", right: "dreamy", downRight: "shimmery",
-    down: "floating", downLeft: "wistful", left: "dark", upLeft: "eerie",
+    downLeft: "wistful", left: "dark", upLeft: "eerie",
   },
   extended: {
-    center: "plain",
+    center: "plain", down: "plain",
     up: "bittersweet", upRight: "funky", right: "airy", downRight: "moody",
-    down: "gritty", downLeft: "shimmery", left: "yearning", upLeft: "melancholy",
+    downLeft: "shimmery", left: "yearning", upLeft: "melancholy",
   },
   chromatic: {
-    center: "plain",
+    center: "plain", down: "plain",
     up: "noir", upRight: "swanky", right: "sunny", downRight: "biting",
-    down: "cinematic", downLeft: "sinister", left: "melancholy", upLeft: "ethereal",
+    downLeft: "sinister", left: "melancholy", upLeft: "ethereal",
   },
 };
 

@@ -17,9 +17,28 @@ import { MidiOut } from "./outputs/midi-out";
 
 const held = new Set<number>(); // MIDI pitches currently pressed
 
+// How many times each pitch has been struck, ever. A held SET cannot answer
+// "was this key played again?", because a release and the next press can land
+// between two frames — PerfState.trigger() does exactly that, releasing and
+// re-pressing a chord in one synchronous call — and a reader that polls would
+// see no change at all. A monotonic count per pitch survives any sampling
+// rate, which is what the practice gate needs to hear a restrike.
+const strikes = new Map<number, number>();
+
+// A MIDI data byte is 7 bits, so 0..127 is the whole sayable range: MidiOut
+// would throw on anything outside it (taking the rest of the frame's note-ons
+// with it, and stranding whatever was already down). Generated voicings can
+// reach past it — a high register plus a wide coloration plus a voice-leading
+// octave shift all stack — so the gate belongs here, at the one seam every
+// input goes through, rather than in each sink.
+const inRange = (pitch: number): boolean =>
+  Number.isInteger(pitch) && pitch >= 0 && pitch <= 127;
+
 function press(pitch: number): void {
+  if (!inRange(pitch)) return; // unsayable: drop it rather than break the chord
   if (held.has(pitch)) return;
   held.add(pitch);
+  strikes.set(pitch, (strikes.get(pitch) ?? 0) + 1);
   AudioOut.liveOn(pitch);
   MidiOut.liveOn(pitch); // no-op until a MIDI-out port is enabled
 }
@@ -33,4 +52,10 @@ function releaseAll(): void {
   for (const p of [...held]) release(p);
 }
 
-export const LiveKeys = { press, release, releaseAll, held: () => held };
+export const LiveKeys = {
+  press,
+  release,
+  releaseAll,
+  held: () => held,
+  strikes: (): ReadonlyMap<number, number> => strikes,
+};

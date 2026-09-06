@@ -6,35 +6,22 @@
    instant the note's leading edge reaches the strike line. Same
    (svg, score, t) signature as the staves, so the toggle is one swap.
    Like StaffFull it reads `pitch` only and ignores `spelling` — the
-   keyboard is the physical-key view, not the notation view.
+   keyboard is the physical-key view, not the notation view. It also draws
+   `score.bars` as numbered horizontal lines when the input stated any, so
+   the bar you are stepping to is visible on the way down.
+
+   The keyboard itself is NOT drawn here: `outputs/keyboard.ts` owns the
+   geometry and the keys, so this view and the Hands view put the same C4
+   in the same place. What is local to the roll is the one thing the roll
+   adds — the strike line, which is simply the top of that keyboard.
    ==================================================================== */
 import { Core } from "../core";
 import { LiveKeys } from "../live-keys";
+import { isC, isWhite, KEYB, keysMarkup, layout, pitchAt, type Region } from "./keyboard";
+import { GLOW_DEFS, esc } from "./svg";
 import type { View, Note, Score } from "../types";
 
-const LOW = 21;
-const HIGH = 108; // A0 .. C8, the 88 keys (match StaffFull)
 const PPS = 120; // px/sec fall speed — match the staves
-const KEYB = 96; // keyboard band height (px)
-
-const semi = (p: number) => ((p % 12) + 12) % 12;
-const isWhite = (p: number) => ![1, 3, 6, 8, 10].includes(semi(p));
-const isC = (p: number) => semi(p) === 0;
-
-interface Layout {
-  whites: number[];
-  ww: number;
-  whiteIdx: Map<number, number>;
-  bw: number;
-  strikeY: number;
-  blackH: number;
-  lane: (p: number) => { x: number; w: number };
-}
-
-const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="3" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter></defs>`;
 
 // the full-screen view measures the (outer) svg itself and sets innerHTML; the
 // combo view instead asks for markup() at an exact W×H so it can place the roll
@@ -45,7 +32,7 @@ export const render: View = (svg, score, t) => {
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.innerHTML = GLOW + markup(W, H, score, t);
+  svg.innerHTML = GLOW_DEFS + markup(W, H, score, t);
 };
 
 // the roll as a markup string for a W×H region (origin at 0,0); no <defs> —
@@ -53,32 +40,48 @@ export const render: View = (svg, score, t) => {
 export const markup = (W: number, H: number, score: Score, t: number): string => {
   if (!W || !H) return "";
 
-  // keyboard layout + its inverse hit-test both come from one place.
-  const { whites, ww, whiteIdx, strikeY, blackH, lane } = layout(W, H);
+  const L = layout(W, H);
+  const strikeY = L.topY; // the top of the keyboard IS the strike line
 
   const active = new Set(Core.activeAt(score, t)); // note-object identity
   const activePitch = new Set([...active].map((n) => n.pitch));
   const held = LiveKeys.held(); // keys the user is holding
   // a key glows for a sounding score note OR a live key-press; a live press
   // wins the color so you can tell what YOU played from what's playing back.
-  const keyFill = (p: number, base: string) =>
-    held.has(p) ? "var(--key-press)" : activePitch.has(p) ? "var(--note-lit)" : base;
-  const keyGlow = (p: number) => (held.has(p) || activePitch.has(p) ? ` filter="url(#glow)"` : "");
+  const paint = (p: number) => {
+    const lit = held.has(p) || activePitch.has(p);
+    if (!lit) return null; // resting colour, from the keyboard's own default
+    return {
+      fill: held.has(p) ? "var(--key-press)" : "var(--note-lit)",
+      glow: true,
+    };
+  };
 
   let out = "";
 
   // --- background: faint vertical guide at each C, for orientation ---
-  for (const p of whites)
+  for (const p of L.whites)
     if (isC(p)) {
-      const x = whiteIdx.get(p)! * ww;
+      const x = L.whiteIdx.get(p)! * L.ww;
       out += `<line x1="${x}" y1="0" x2="${x}" y2="${strikeY}" stroke="var(--grid)" stroke-width="0.6" opacity="0.5"/>`;
     }
+
+  // --- bar lines: the same falling geometry as the notes, so a barline
+  // crosses the strike line exactly when that bar begins. Numbered with the
+  // score's own labels, which is what makes "back one bar" legible as motion
+  // rather than an unexplained jump. Drawn under the notes. ---
+  for (const b of score.bars) {
+    const y = strikeY - (b.time - t) * PPS;
+    if (y < 0 || y > strikeY) continue;
+    out += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--grid-oct)" stroke-width="1"/>`;
+    out += `<text x="4" y="${y - 4}" fill="var(--ink-dim)" font-size="9">${esc(b.label)}</text>`;
+  }
 
   // --- falling notes: y from (onset - t); leading edge hits strikeY at
   // onset, then the bar descends behind the keyboard. White lanes first,
   // black lanes on top so overlaps read correctly. ---
   const bar = (n: Note): string => {
-    const { x, w } = lane(n.pitch);
+    const { x, w } = L.lane(n.pitch);
     const bottom = strikeY - (n.onset - t) * PPS; // leading edge
     const top = bottom - n.duration * PPS;
     if (bottom < 0 || top > strikeY) return ""; // future-offscreen / passed
@@ -96,72 +99,11 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
   // --- strike line ---
   out += `<line x1="0" y1="${strikeY}" x2="${W}" y2="${strikeY}" stroke="var(--playhead)" stroke-width="1.2" opacity="0.85"/>`;
 
-  // --- the keyboard: white keys, then black keys on top. A key glows
-  // while any note of that pitch is sounding. ---
-  for (const p of whites) {
-    const i = whiteIdx.get(p)!;
-    out += `<rect x="${i * ww}" y="${strikeY}" width="${ww}" height="${KEYB}" fill="${keyFill(p, "var(--key-white)")}" stroke="#0b0e13" stroke-width="1"${keyGlow(p)}/>`;
-    if (isC(p)) out += `<text x="${i * ww + ww / 2}" y="${H - 6}" fill="var(--ink-dim)" font-size="9" text-anchor="middle">C${((p / 12) | 0) - 1}</text>`;
-  }
-  for (let p = LOW; p <= HIGH; p++) {
-    if (isWhite(p)) continue;
-    const { x, w } = lane(p);
-    out += `<rect x="${x}" y="${strikeY}" width="${w}" height="${blackH}" rx="2" fill="${keyFill(p, "var(--key-black)")}" stroke="#0b0e13" stroke-width="0.8"${keyGlow(p)}/>`;
-  }
+  // --- the keyboard ---
+  out += keysMarkup(L, paint);
 
   return out;
 };
 
-// keyboard geometry, shared by render (draw) and pitchAt (inverse hit-test)
-// so the two can never drift.
-function layout(W: number, H: number): Layout {
-  const whites: number[] = [];
-  for (let p = LOW; p <= HIGH; p++) if (isWhite(p)) whites.push(p);
-  const ww = W / whites.length; // white-key width
-  const whiteIdx = new Map(whites.map((p, i) => [p, i] as const));
-  const bw = ww * 0.62; // black-key width
-  const strikeY = H - KEYB; // top of keyboard = strike line
-  const blackH = KEYB * 0.62;
-  // x-lane for a pitch, aligned to its key (black sits on the lower white
-  // key's right edge — pitch-1 is always white for our 5 blacks).
-  const lane = (p: number): { x: number; w: number } => {
-    if (isWhite(p)) {
-      const i = whiteIdx.get(p)!;
-      return { x: i * ww, w: ww };
-    }
-    const cx = (whiteIdx.get(p - 1)! + 1) * ww;
-    return { x: cx - bw / 2, w: bw };
-  };
-  return { whites, ww, whiteIdx, bw, strikeY, blackH, lane };
-}
-
-// the region the roll occupies within an svg, in its local px space. The
-// full-screen view fills the svg; the combo view confines it to a sub-rect.
-export interface Region { x: number; y: number; w: number; h: number; }
-
-// the inverse of lane(): which key sits under a client-space point? Black
-// keys are drawn on top in the upper band, so test them first. Returns a
-// MIDI pitch, or null when the point isn't on the keyboard. The svg's
-// viewBox tracks its pixel size 1:1, so client offset == user units; `region`
-// then locates the roll within that svg (the combo view offsets it).
-function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number, region?: Region): number | null {
-  const r = svg.getBoundingClientRect();
-  const reg = region ?? { x: 0, y: 0, w: svg.clientWidth, h: svg.clientHeight };
-  if (!reg.w || !reg.h) return null;
-  const x = clientX - r.left - reg.x; // into the roll's local space
-  const y = clientY - r.top - reg.y;
-  const L = layout(reg.w, reg.h);
-  if (y < L.strikeY || y > reg.h) return null; // above keyboard / off-canvas
-  if (y <= L.strikeY + L.blackH) {
-    // black-key band: blacks win
-    for (let p = LOW; p <= HIGH; p++) {
-      if (isWhite(p)) continue;
-      const { x: bx, w } = L.lane(p);
-      if (x >= bx && x <= bx + w) return p;
-    }
-  }
-  const i = Math.max(0, Math.min(L.whites.length - 1, Math.floor(x / L.ww)));
-  return L.whites[i];
-}
-
+export { KEYB, pitchAt, type Region };
 export const PianoRoll = { render, markup, pitchAt };

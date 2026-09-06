@@ -7,30 +7,38 @@
    switching to the Tonnetz shows the very same chord as a shape on the
    lattice — one model, two projections.
 
-   Three regions, top to bottom:
+   Four regions:
    - the DEGREE ROW (I–vii°), each colored by its computed quality using the
      SAME convention as the Tonnetz (major = warm --note-lit, minor = cool
      --note, dim = --playhead tension); the held degree glows.
-   - the COLORATION WHEEL: the current mode's 9 joystick zones laid out
-     radially like the stick itself, the chosen direction lit.
+   - the CONTROLLER LEGEND (left of the wheel, whenever there's room): a
+     schematic Xbox 360 pad labelled straight from the gamepad mapping, so
+     you can see which button plays which number. See gamepad-legend.ts.
+   - the COLORATION WHEEL: the current mode's 8 joystick zones laid out
+     radially like the stick itself, the chosen direction lit. Base is one of
+     them, at the bottom; the hub is drawn empty because the stick selects
+     nothing there — it is the free crossing between colors.
    - the NOW-PLAYING readout: roman numeral, chord name, and the actual
      pitch-class spelling of the sounding (or previewed) voicing.
 
    Keeps the design language deliberately: dark field, one warm accent, the
    glow filter reused from the Tonnetz. No new colors invented.
    ==================================================================== */
-import { PerfState } from "../perf-state";
+import { PerfState, DEFAULT_OCTAVE } from "../perf-state";
+import { text, GLOW_DEFS, GLOW_ATTR, QUALITY_COLOR as QCOLOR, ON_LIT } from "./svg";
+import { GamepadLegend } from "./gamepad-legend";
 import {
   computeVoicing,
   degreeQuality,
   chordName,
   colorationDescriptor,
+  isPlainDirection,
   PITCH_NAMES,
   DEGREE_NUMERAL,
   DIRECTION_SYMBOL,
+  DIRECTION_VECTOR,
   ZONE_LABEL,
   SCALE_DISPLAY_NAMES,
-  type ChordQuality,
   type Degree,
   type JoystickDirection,
 } from "../harmony/perfecto";
@@ -39,53 +47,32 @@ import type { View } from "../types";
 const DEGREES: Degree[] = [1, 2, 3, 4, 5, 6, 7];
 const MODES = ["default", "extended", "chromatic"] as const;
 
-// the 8 compass directions as unit vectors (screen y-down); center is origin.
-const DIR_VEC: Record<JoystickDirection, [number, number]> = {
-  center: [0, 0],
-  up: [0, -1], upRight: [0.707, -0.707], right: [1, 0], downRight: [0.707, 0.707],
-  down: [0, 1], downLeft: [-0.707, 0.707], left: [-1, 0], upLeft: [-0.707, -0.707],
-};
-
-// quality -> token, the same mapping the Tonnetz uses for triads.
-const QCOLOR: Record<ChordQuality, string> = {
-  maj: "var(--note-lit)",
-  min: "var(--note)",
-  dim: "var(--playhead)",
-};
-
-const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="3" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter></defs>`;
-
-const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-
-const text = (
-  x: number, y: number, s: string,
-  opts: { size?: number; weight?: number; fill?: string; anchor?: string } = {},
-): string =>
-  `<text x="${x}" y="${y}" text-anchor="${opts.anchor ?? "middle"}" ` +
-  `font-size="${opts.size ?? 12}" font-weight="${opts.weight ?? 400}" ` +
-  `fill="${opts.fill ?? "var(--ink)"}">${esc(s)}</text>`;
-
 const cell = (
   cx: number, cy: number, w: number, h: number,
   fill: string, stroke: string, lit: boolean,
 ): string =>
   `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="8" ` +
   `fill="${fill}" stroke="${stroke}" stroke-width="${lit ? 2 : 1}"` +
-  `${lit ? ' filter="url(#glow)"' : ""}/>`;
+  `${lit ? GLOW_ATTR : ""}/>`;
 
+// the full-screen view measures the svg itself; the stacked view asks for
+// markup() at an exact W×H so it can place this panel above the piano roll in
+// one svg. No <defs> here — the caller supplies the shared glow filter.
 export const render: View = (svg) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = GLOW_DEFS + markup(W, H);
+};
+
+export const markup = (W: number, H: number): string => {
+  if (!W || !H) return "";
 
   const s = PerfState.snapshot();
   const sounding = s.sounding.length > 0;
 
-  let out = GLOW;
+  let out = "";
 
   // --- header: key + mode strip ------------------------------------
   out += text(24, 30, `${PITCH_NAMES[s.key.root]} ${SCALE_DISPLAY_NAMES[s.key.scale]}`,
@@ -109,32 +96,56 @@ export const render: View = (svg) => {
     const lit = d === s.degree;
     out += cell(cx, rowY, dw, 46, lit ? color : "var(--panel)", color, lit && sounding);
     out += text(cx, rowY + 5, DEGREE_NUMERAL[d],
-      { size: 18, weight: 700, fill: lit ? "#0b1020" : color });
+      { size: 18, weight: 700, fill: lit ? ON_LIT : color });
   }
 
-  // --- coloration wheel --------------------------------------------
-  const cx = W / 2;
-  const cy = rowY + 60 + (H - rowY - 60 - 70) / 2; // between degree row and readout
-  const R = Math.max(60, Math.min(W * 0.3, (H - rowY - 60 - 90) * 0.42, 200));
+  // --- body: controller legend (left) + coloration wheel ------------
+  // The band between the degree row and the readout. The legend takes a
+  // left column only when it can be drawn at a readable size; otherwise the
+  // wheel keeps the whole band, exactly as before.
+  const bodyY = rowY + 60;
+  const bodyH = H - 70 - bodyY;
+  const legendW = Math.min(W * 0.46, 640) - 24;
+  const showLegend = GamepadLegend.fits(legendW, bodyH);
+  if (showLegend) {
+    out += GamepadLegend.render(12, bodyY, legendW, bodyH, {
+      key: s.key,
+      degree: s.degree,
+      direction: s.joystickDirection,
+      sounding,
+    });
+  }
+
+  const wheelX = showLegend ? legendW + 24 : 0;
+  const wheelW = W - wheelX;
+  const cx = wheelX + wheelW / 2;
+  const cy = bodyY + bodyH / 2;
+  const R = Math.max(60, Math.min(wheelW * 0.3, (bodyH - 20) * 0.42, 200));
   const zoneTable = ZONE_LABEL[s.joystickMode];
 
   // faint spokes from the hub so the wheel reads as a stick
-  for (const dir of Object.keys(DIR_VEC) as JoystickDirection[]) {
+  for (const dir of Object.keys(DIRECTION_VECTOR) as JoystickDirection[]) {
     if (dir === "center") continue;
-    const [vx, vy] = DIR_VEC[dir];
+    const [vx, vy] = DIRECTION_VECTOR[dir];
     out += `<line x1="${cx}" y1="${cy}" x2="${cx + vx * R}" y2="${cy + vy * R}" ` +
       `stroke="var(--grid)" stroke-width="1"/>`;
   }
-  for (const dir of Object.keys(DIR_VEC) as JoystickDirection[]) {
-    const [vx, vy] = DIR_VEC[dir];
+  // the hub is EMPTY — Base sits at the bottom of the ring instead, so the
+  // stick can cross the middle from any color to any other without landing on
+  // anything. Drawn as a bare well where the spokes meet.
+  out += `<circle cx="${cx}" cy="${cy}" r="16" fill="var(--bg)" ` +
+    `stroke="var(--grid)" stroke-width="1"/>`;
+
+  for (const dir of Object.keys(DIRECTION_VECTOR) as JoystickDirection[]) {
+    if (dir === "center") continue;
+    const [vx, vy] = DIRECTION_VECTOR[dir];
     const zx = cx + vx * R;
     const zy = cy + vy * R;
     const lit = dir === s.joystickDirection;
-    const w = dir === "center" ? 70 : 90;
-    out += cell(zx, zy, w, 48, lit ? "var(--note-lit)" : "var(--panel)",
+    out += cell(zx, zy, 90, 48, lit ? "var(--note-lit)" : "var(--panel)",
       lit ? "var(--note-lit)" : "var(--grid-oct)", lit && sounding);
-    const ink = lit ? "#0b1020" : "var(--ink)";
-    const inkDim = lit ? "#0b1020" : "var(--ink-dim)";
+    const ink = lit ? ON_LIT : "var(--ink)";
+    const inkDim = lit ? ON_LIT : "var(--ink-dim)";
     out += text(zx, zy - 10, DIRECTION_SYMBOL[dir], { size: 13, weight: 700, fill: ink });
     out += text(zx, zy + 4, colorationDescriptor(s.joystickMode, dir),
       { size: 10, weight: 700, fill: ink });
@@ -154,17 +165,23 @@ export const render: View = (svg) => {
     { size: 26, weight: 800, anchor: "start", fill: QCOLOR[degreeQuality(s.key, s.degree)] });
   out += text(64, ry, name,
     { size: 22, weight: 700, anchor: "start", fill: sounding ? "var(--note-lit)" : "var(--ink-dim)" });
-  // descriptor sits just below the chord name, dimmed when the direction is center/plain
-  if (s.joystickDirection !== "center") {
+  // descriptor sits just below the chord name; the plain directions (Base and
+  // the neutral hub) have no color to name, so nothing is printed there
+  if (!isPlainDirection(s.joystickDirection)) {
     out += text(64, ry + 18, descriptor,
       { size: 11, weight: 600, anchor: "start", fill: sounding ? "var(--note-lit)" : "var(--ink-dim)" });
   }
   out += text(W - 24, ry, spelling,
     { size: 16, weight: 600, anchor: "end", fill: sounding ? "var(--ink)" : "var(--ink-dim)" });
+  // Shaping line. The octave is the only selection that accumulates, and a
+  // transposed instrument sounds like a bug rather than a setting — so once it
+  // leaves home it stops whispering in dim grey and says so in the accent.
+  const transposed = s.octave !== DEFAULT_OCTAVE;
   out += text(W - 24, ry - 22, `${s.inversion} · oct ${s.octave}${s.voiceLeading ? " · voice-led" : ""}`,
-    { size: 11, weight: 500, anchor: "end", fill: "var(--ink-dim)" });
+    { size: 11, weight: transposed ? 700 : 500, anchor: "end",
+      fill: transposed ? "var(--note-lit)" : "var(--ink-dim)" });
 
-  svg.innerHTML = out;
+  return out;
 };
 
-export const Nashville = { render };
+export const Nashville = { render, markup };

@@ -3,6 +3,8 @@ import {
   computeVoicing,
   degreeQuality,
   chordName,
+  isPlainDirection,
+  BASE_DIRECTION,
   type Key,
   type Degree,
   type ComputeVoicingArgs,
@@ -86,6 +88,29 @@ describe("computeVoicing — joystick coloration selects the interval list", () 
   });
 });
 
+describe("Base sits at the bottom of the ring, and the hub sounds the same", () => {
+  const modes = ["default", "extended", "chromatic"] as const;
+
+  it("plays the uncolored triad at ↓ in every coloration mode", () => {
+    for (const joystickMode of modes) {
+      expect(computeVoicing(args({ degree: 1, joystickMode, joystickDirection: BASE_DIRECTION })).notes)
+        .toEqual([60, 64, 67]); // C E G — no color added
+      expect(computeVoicing(args({ degree: 2, joystickMode, joystickDirection: BASE_DIRECTION })).notes)
+        .toEqual([62, 65, 69]); // D F A — quality still detected per degree
+    }
+  });
+
+  it("resolves the neutral hub to the same chord, so an old 'center' frame is plain", () => {
+    for (const joystickMode of modes) {
+      expect(computeVoicing(args({ joystickMode, joystickDirection: "center" })).notes)
+        .toEqual(computeVoicing(args({ joystickMode, joystickDirection: BASE_DIRECTION })).notes);
+    }
+    expect(isPlainDirection("center")).toBe(true);
+    expect(isPlainDirection(BASE_DIRECTION)).toBe(true);
+    expect(isPlainDirection("left")).toBe(false);
+  });
+});
+
 describe("computeVoicing — inversions raise the lowest voice(s) an octave", () => {
   it("first inversion raises the lowest note", () => {
     expect(computeVoicing(args({ degree: 1, inversion: "first" })).notes)
@@ -112,12 +137,14 @@ describe("computeVoicing — voice-leading keeps chord content, minimizes motion
 });
 
 describe("chordName", () => {
-  it("names center chords by degree convention", () => {
-    expect(chordName(C_MAJOR, 1, "default", "center")).toBe("C maj");
-    expect(chordName(C_MAJOR, 2, "default", "center")).toBe("D min");
-    expect(chordName(C_MAJOR, 7, "default", "center")).toBe("B dim");
+  it("names the plain chords by degree convention", () => {
+    for (const dir of ["center", BASE_DIRECTION] as const) {
+      expect(chordName(C_MAJOR, 1, "default", dir)).toBe("C maj");
+      expect(chordName(C_MAJOR, 2, "default", dir)).toBe("D min");
+      expect(chordName(C_MAJOR, 7, "default", dir)).toBe("B dim");
+    }
   });
-  it("appends the joystick quality label off-center", () => {
+  it("appends the joystick quality label on a colored zone", () => {
     expect(chordName(C_MAJOR, 1, "default", "right")).toBe("C maj7");
     expect(chordName(C_MAJOR, 5, "extended", "upRight")).toBe("G dom9");
   });

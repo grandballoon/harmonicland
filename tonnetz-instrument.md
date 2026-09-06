@@ -169,7 +169,7 @@ export const TonnetzState = {
   isSounding,         // sounding.length > 0
   apply,              // (t: Transform) => void   — move cursor; re-sound if already sounding
   step,               // (s: LatticeStep) => void — translate cursor; re-sound if sounding
-  nudgeOctave,        // (delta: number) => void  — clamp 0..8 like PerfState.setOctave; re-sound if sounding
+  nudgeOctave,        // (delta: number) => void  — clamp to the playable register (perf-state's MIN_OCTAVE..MAX_OCTAVE); re-sound if sounding
   home,               // reset cursor to up (0,0); re-sound if sounding
   snapshot,           // { cursor, octave, sounding } — for the future cursor-render task
 };
@@ -182,7 +182,7 @@ Add `src/tonnetz-state.test.ts` (mirror `perf-state.test.ts` if it exists):
 - `trigger` on the default cursor presses `[60,64,67]` into `LiveKeys`.
 - `apply("P")` while sounding leaves the common tones (root + fifth) held and swaps only the third in `LiveKeys.held()`.
 - `release` lifts exactly the sounding notes and leaves `LiveKeys.held()` empty.
-- `nudgeOctave` clamps to `0..8`.
+- `nudgeOctave` clamps to the playable register shared with `PerfState` (`MIN_OCTAVE..MAX_OCTAVE`).
 
 **Done when.**
 `npm test` passes and `LiveKeys.held()` reflects the diffs above.
@@ -285,23 +285,30 @@ The cursor triangle is visible and distinct from sounding triads in both the ful
 
 ---
 
-## Task 6 (future) — customizable bindings
+## Task 6 — customizable bindings
 
 **Goal.**
 Let the player rebind controller buttons to actions at runtime, and persist the choice.
 
-**Why it is cheap by now.**
-Task 3 already made the binding data (`Bindings` = `Record<buttonIndex, ActionId>`) over a fixed action vocabulary (`ActionId`), with a `setBindings` setter and a single dispatch path.
-So this task adds no handler code — it only produces a `Bindings` object from somewhere and calls `setBindings`.
+**Status: shipped for the Perfecto / Nashville mapping.**
+`src/gamepad-perfecto.ts` now carries the same shape this document specified for the lattice: an `ActionId` vocabulary, a `CATALOG` holding each action's effect *and* its name at the three lengths the UI needs (cap label, legend caption, menu name), a `Bindings` table, `setBindings`, and one dispatch path for every button.
+The triggers stopped being special — `rootTrigger` is gone from `PerfectoConfig`, because "RT plays chord I" is now just a row in the default table.
+`PerfectoConfig` keeps only what is *not* a button: which analog stick picks degrees, and which one colors them.
 
-**Likely pieces (not yet specified in detail).**
-- A persistence read/write for the binding table (localStorage is consistent with the app's other client-only state).
-- A small "listen for the next button press" capture flow so the player can assign a button to a selected action by pressing it.
-- A view that lists the `ActionId` catalog with each action's currently-bound button, reusing the design language already in `nashville.ts`.
+The editing surface is `src/ui/gamepad-remap.ts`, mounted into the Nashville view's "Gamepad map" dropdown.
+It enumerates `CONTROLS` (the physical vocabulary) against `ACTION_CHOICES` (the functional one) and hands an edited table back through `setBindings`, so it holds no mapping knowledge of its own and a new catalog action appears in every menu for free.
+The choice is persisted in `localStorage` under `notation-animator.perfecto.bindings`, gated by a pure `parseBindings` that drops anything the current build doesn't recognize — a stale saved table can never wedge the input layer.
+Persistence and DOM live in the UI module precisely because the mapping is not allowed to know about either.
+
+`outputs/gamepad-legend.ts` reads the same `controlMap()`, so a rebound button redraws its own cap, caption, and highlight with no legend change.
+
+**Still to do for the lattice mapping.**
+`gamepad-tonnetz.ts` already has the `Bindings` / `setBindings` seam but no names in its catalog and no panel.
+Adding `label` / `caption` / `name` to its `CATALOG` entries and reusing the remap panel (parameterised over the two mappings) is the whole job.
 
 **Design note.**
 Keep the action vocabulary (`ActionId` and `CATALOG`) as the single source of truth.
-The customization view should enumerate `CATALOG`, never hardcode its own list, so a new action becomes bindable the moment it is added to the catalog.
+The customization view enumerates the catalog and never hardcodes its own list, so a new action becomes bindable the moment it is added.
 
 ---
 
@@ -309,5 +316,5 @@ The customization view should enumerate `CATALOG`, never hardcode its own list, 
 
 Tasks 1 -> 2 -> 3 -> 4 are a strict chain; each depends only on the one before.
 Task 5 depends on Task 2 (for `snapshot()`) but is otherwise independent and optional — the instrument is fully playable after Task 4.
-Task 6 depends on Task 3's `Bindings` / `setBindings` seam and is deferred; the default binding is fully playable without it.
+Task 6 depends on Task 3's `Bindings` / `setBindings` seam; it has since shipped for the Perfecto / Nashville mapping and is still open for the lattice one (see that task).
 Every task ships its own tests, so each can be reviewed and merged on its own.

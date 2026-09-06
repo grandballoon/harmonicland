@@ -20,11 +20,12 @@ Current state: a **Vite + TypeScript** project (`src/`), tested with Vitest.
 
 ```
 src/
-  types.ts          the contract: Note, Score, Spelling, RawNote, View, Sink, Parser, Clock
-  core.ts           makeScore, activeAt, defaultSpelling
+  types.ts          the contract: Note, Score, Bar, Spelling, RawNote, View, Sink, Parser, Clock
+  core.ts           makeScore, activeAt, defaultSpelling, barIndexAt, barStep
   clock.ts          makeClock → Clock
   inputs/   midi.ts  musicxml.ts  lily.ts
-  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  tonnetz.ts  audio.ts  midi-out.ts
+  outputs/  staff-full.ts  staff-std.ts  piano-roll.ts  tonnetz.ts  nashville.ts
+            combo.ts (stacked views)  svg.ts (shared primitives)  audio.ts  midi-out.ts
   live-keys.ts      held-pitch set; press/release; the live-input seam
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
@@ -88,10 +89,16 @@ Time is in **seconds everywhere downstream**. The core knows nothing of tempo,
 ticks, or beats — those are parser-internal concerns. A parser resolves tempo
 once and freezes seconds into the value.
 
-`Core` exposes: `makeScore(rawNotes)`, `activeAt(score, t)`,
-`defaultSpelling(pitch)`. The authoritative definitions now live in
-`src/types.ts` (`Note`, `Score`, `Spelling`, `RawNote`); this block is the
+`Core` exposes: `makeScore(rawNotes, bars?)`, `activeAt(score, t)`,
+`defaultSpelling(pitch)`, `barIndexAt(score, t)`, `barStep(score, t, dir)`.
+The authoritative definitions now live in
+`src/types.ts` (`Note`, `Score`, `Bar`, `Spelling`, `RawNote`); this block is the
 conceptual view.
+
+A `Score` also carries `bars: Bar[]` — `{time, label}` per measure, in seconds,
+labelled with the number the source file prints.
+It is the one piece of *structure* the model holds beyond notes, and it is optional data, not a second model: formats that state no measures (MIDI, LilyPond) leave it empty and every consumer reads that as "this score has no bar structure."
+`barIndexAt` and `barStep` are queries over it in exactly the sense `activeAt` is a query over notes — pure functions of `(score, t)`, which is why bar navigation added no state anywhere.
 
 ---
 
@@ -99,14 +106,17 @@ conceptual view.
 
 | Module (file) | Signature | Role |
 |---|---|---|
-| `Core` (`core.ts`) | — | the model + `activeAt` query + default speller |
-| `makeClock` (`clock.ts`) | `getDuration → Clock` | the one timer |
+| `Core` (`core.ts`) | — | the model + `activeAt`/bar queries + default speller |
+| `makeClock` (`clock.ts`) | `getDuration → Clock` | the one timer (+ playback rate) |
 | `MidiIn` (`inputs/midi.ts`) | `bytes → score` | SMF parser (pitch only → default sharps) |
-| `MusicxmlIn` (`inputs/musicxml.ts`) | `text → score` | partwise MusicXML; carries real spellings |
+| `MusicxmlIn` (`inputs/musicxml.ts`) | `text → score` | partwise MusicXML; carries real spellings + the bar grid |
 | `LilyIn` (`inputs/lily.ts`) | `text → score` | LilyPond source (common subset); real spellings |
 | `StaffFull` (`outputs/staff-full.ts`) | `View` | linear y = f(pitch), all 88 keys |
 | `StaffStd` (`outputs/staff-std.ts`) | `View` | grand staff, y = f(diatonic step) |
 | `PianoRoll` (`outputs/piano-roll.ts`) | `View` (+ `pitchAt`) | "Synthesia": x = f(pitch), notes fall onto a keyboard |
+| `Tonnetz` (`outputs/tonnetz.ts`) | `View` (+ `markup`) | the pitch-class lattice; sounding triads light as shapes |
+| `Nashville` (`outputs/nashville.ts`) | `View` (+ `markup`) | the live chord *selection* (degree + coloration), not the score |
+| `Combo` / `NashvilleRoll` (`outputs/combo.ts`) | `View` (+ `rollRegion`) | `stack(top)`: a top panel above the piano roll, in one svg |
 | `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
 | `MidiOut` (`outputs/midi-out.ts`) | `Sink` (+ `enable/disable`) | Web MIDI out, edge-triggered note-on/off |
 | `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam |
@@ -117,9 +127,23 @@ prose seams above, now compiler-checked. `VIEWS` is just `Record<string, View>`.
 
 ### Clock
 One `requestAnimationFrame` loop. Everything reads `now()`. **`seek()` *is*
-scrubbing.** There is exactly one timer in the program — do not add a second.
+scrubbing, and `setRate()` *is* playback speed** — `rate` is score seconds per
+wall second, so slowing playback just makes `now()` advance slower and *nothing*
+downstream is aware there is such a thing as speed.
+Changing the rate banks the elapsed span at the old rate first, so the playhead never jumps at the moment of the change.
+Pitch is unaffected by design (the synth is driven by the same `activeAt` set as always), which is what makes 0.25× useful for practice.
+There is exactly one timer in the program — do not add a second.
 It's wrapped behind an interface specifically so it can be replaced with
 Tone.js `Transport` (or the WebAudio clock) later without touching anything.
+
+### Practice transport (bar stepping + speed)
+Stepping bar-by-bar and changing speed are both **pure transport**, and neither
+one is a new mechanism: stepping is `clock.seek(Core.barStep(...))` and speed is
+`clock.setRate(...)`.
+No view, sink, or parser learned anything — the frame loop still just projects `(score, now())`.
+`barStep` back restarts the *current* bar unless the playhead is already sitting at its start (within 0.12s of score time), so repeated taps walk backwards instead of sticking; forward at the last bar lands on the end of the score.
+`main.ts` binds these to the two `Bar` buttons and to ← / →, and disables the buttons when `score.bars` is empty rather than pretending a grid exists.
+The readout shows the score's own bar label, so "bar 17" here is bar 17 on the page.
 
 ### MidiIn
 From-scratch Standard MIDI File reader: header/track chunks, variable-length
@@ -150,6 +174,16 @@ Draws clef glyphs, accidentals from `spelling.acc`, and ledger lines for notes
 above treble / below bass / in the middle gap. Octave-boundary spellings (B♯,
 C♭) are handled in `octaveFor`.
 
+It also reads `LiveKeys.held()`: a key you press on a MIDI keyboard (or the
+pointer keyboard, or the gamepad) appears as a green notehead riding the
+playhead, on the row it would be notated on, with its name spelled out above
+the playhead.
+A live key carries only a pitch — there is no performance context to spell it
+from — so it goes through `Core.defaultSpelling` (sharps), the same choice
+`MidiIn` freezes into imported MIDI.
+Score notes and live keys share one `notehead()` routine, so they can't drift
+in geometry; they differ only in fill and in x.
+
 ### PianoRoll
 The "Synthesia" view, and the proof the output seam composes: it's `StaffFull`
 rotated a quarter turn. Pitch runs along the **x** axis as a literal piano
@@ -158,7 +192,10 @@ white key's right edge at 62% width); time runs **down** the **y** axis. Notes
 fall toward the keyboard, and a note's leading edge reaches the strike line (the
 keyboard top) at exactly `t == onset`, then descends behind the keys. A key
 glows while any note of its pitch is sounding, read from the same `activeAt`
-query the staves and audio use. Like `StaffFull` it reads `pitch` only and
+query the staves and audio use. It draws `score.bars` as numbered horizontal
+lines riding the same fall geometry, so a barline crosses the strike line
+exactly when that bar begins — the visible counterpart of bar stepping, and
+absent (not faked) for scores that state no measures. Like `StaffFull` it reads `pitch` only and
 ignores `spelling` — the keyboard *is* the physical-key view, not the notation
 view, so there's nothing to spell. Adding it touched exactly one module plus the
 view toggle (a `VIEWS` lookup map) and two key-color tokens — no `Core`, parser,
@@ -220,7 +257,7 @@ which `spelling` values get frozen in; renderers untouched.
 `AudioOut` only. Same `at()` signature.
 
 **Swap the clock for Tone.js** — implement the `{now, play, pause, seek,
-isPlaying, onFrame}` interface backing onto `Tone.Transport`. The loop and every
+isPlaying, rate, setRate, onFrame}` interface backing onto `Tone.Transport`. The loop and every
 output stay as-is. Beware: this introduces an audio-thread clock, so make sure
 `now()` stays the single source of truth — do not let Tone schedule audio on a
 *separate* timeline from the visual cursor. One clock, every view, always.
@@ -229,7 +266,8 @@ output stay as-is. Beware: this introduces an audio-thread clock, so make sure
 notes keyboard view; see the module section above. It slotted into the existing
 output seam with no cross-module changes, exactly as this section promised.
 
-**Live MIDI input** — *next up, designed, not yet built.* A MIDI controller is a
+**Live MIDI input** — *done* (`live-midi.ts`, wired to the `Enable MIDI`
+button); the plan below is how it was built and still describes it. A MIDI controller is a
 second driver of the **existing `LiveKeys` seam** — the pointer keyboard in
 `main.ts` already proved it: an input surface that calls `LiveKeys.press(pitch)`
 / `LiveKeys.release(pitch)` and touches nothing else. `AudioOut` already sounds
@@ -291,6 +329,12 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
   music definition is what gets parsed; `melody = …` then `\melody` is not
   resolved). Relative octaves across `<< >>` use the block's entry reference per
   voice; brace each voice. Double accidentals collapse to one glyph (as MusicXML).
+- Bar stepping needs a score that states measures, so it is MusicXML-only today.
+  MIDI could derive a grid from its time-signature meta and LilyPond from its
+  durations; both would be parser-local changes that fill in `score.bars`, with
+  no transport or view change.
+- Playback speed changes rate only — no pitch/time-stretch, because there is no
+  recorded audio to stretch; the synth simply plays the same notes for longer.
 - Audio is a plain triangle wave — correct timing, plain sound.
 - Scrubbing fast re-triggers voices as the active set churns; can sound busy.
   Lives entirely in `AudioOut`; smooth there if it matters.
@@ -298,12 +342,14 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
 - `PianoRoll` keyboard band is a fixed 96px; on very short viewports it eats
   the fall area. Ignores `spelling` by design (it's the physical-key view), so
   enharmonics share a key — that's correct, not a gap.
-- Web MIDI *live input* is not wired yet — but the seam is built and proven: a
-  pointer-driven playable keyboard already routes through `LiveKeys` (sound +
-  key glow). Web MIDI just needs to feed the same `press/release` calls; see
-  *Live MIDI input* under "How to extend." Recording into the `score`
-  (`Live_in.stream : midi_event → score → score`, append-only) remains a
-  separate, deferred step.
+- Live input (Web MIDI, pointer keyboard, gamepad) is performance feedback
+  only: sound, key glow, and staff noteheads.
+  Recording a performance into the `score` (`Live_in.stream : midi_event →
+  score → score`, append-only) remains a separate, deferred step — the
+  immutable score is never touched.
+- A live key press on the grand staff is spelled with sharps, for the same
+  reason imported MIDI is: a bare pitch carries no spelling. So a D♭ you play
+  reads as C♯.
 - Browser support: built/tested for Chrome. Web MIDI and the audio path are
   weakest on Safari/Firefox.
 

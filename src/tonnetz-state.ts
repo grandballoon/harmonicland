@@ -9,6 +9,7 @@
    changed notes are released/pressed.
    ==================================================================== */
 import { LiveKeys } from "./live-keys";
+import { MIN_OCTAVE, MAX_OCTAVE, DEFAULT_OCTAVE } from "./perf-state";
 import {
   voiceTriad, transform, translate,
   type Cursor, type Transform, type LatticeStep,
@@ -21,7 +22,7 @@ export interface TonnetzSnapshot {
 }
 
 let cursor: Cursor = { col: 0, row: 0, orient: "up" }; // default: C major
-let octave = 4;
+let octave = DEFAULT_OCTAVE;
 let sounding: number[] = [];
 
 // Reconcile LiveKeys to the current cursor voicing: release the notes we no
@@ -55,8 +56,10 @@ function step(s: LatticeStep): void {
   resoundIfHeld();
 }
 
+// same playable register as PerfState — the register is a property of the
+// instrument, not of which view you are playing it through.
 function nudgeOctave(delta: number): void {
-  octave = Math.max(0, Math.min(8, octave + delta));
+  octave = Math.max(MIN_OCTAVE, Math.min(MAX_OCTAVE, octave + delta));
   resoundIfHeld();
 }
 

@@ -10,14 +10,22 @@
      treble lines  E4 G4 B4 D5 F5  ->  +2 +4 +6 +8 +10
      bass   lines  G2 B2 D3 F3 A3  ->  -10 -8 -6 -4 -2
    The +1/-1 spaces flank the middle-C ledger line in the gap.
+
+   Live keys (MIDI / pointer / gamepad) ride the playhead as green
+   noteheads, so a key you press shows up on the row it would be
+   notated on. A live key carries no spelling — only a pitch — so it
+   gets `defaultSpelling` (sharps), exactly like imported MIDI.
    ==================================================================== */
 import { Core } from "../core";
-import type { View, Note, Letter, Accidental, Spelling } from "../types";
+import { LiveKeys } from "../live-keys";
+import type { View, Letter, Accidental, Spelling } from "../types";
 
 const LETTER: Record<Letter, number> = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 const PPS = 120; // pixels/sec — match StaffFull's scroll
 const PLAYHEAD_X = 0.18;
 const HALF = 7; // pixels per position unit (half line-space)
+const R = 5.5; // notehead radius
+const NAME_SIZE = 12; // px, the live note-name readout
 const ACC: Record<Accidental, string> = { "#": "♯", b: "♭", "": "" };
 
 interface Spelt {
@@ -26,16 +34,12 @@ interface Spelt {
   octave: number;
 }
 
-// pitch -> {letter, acc, octave} honoring a note's frozen spelling if present
-function spell(n: Note): Spelt {
-  if (n.spelling && n.spelling.letter)
-    return {
-      letter: n.spelling.letter,
-      acc: n.spelling.acc || "",
-      octave: octaveFor(n.pitch, n.spelling),
-    };
-  const s = Core.defaultSpelling(n.pitch);
-  return { letter: s.letter, acc: s.acc, octave: Math.floor(n.pitch / 12) - 1 };
+// pitch -> {letter, acc, octave}, honoring a frozen spelling when there is
+// one. A bare pitch (a live key press) falls back to the default speller —
+// the same sharps-only choice `MidiIn` freezes into imported MIDI.
+export function spell(pitch: number, sp?: Spelling): Spelt {
+  const s = sp && sp.letter ? sp : Core.defaultSpelling(pitch);
+  return { letter: s.letter, acc: s.acc || "", octave: octaveFor(pitch, s) };
 }
 // octave for a spelling: B# / Cb cross the octave boundary; handle simply
 function octaveFor(pitch: number, sp: Spelling): number {
@@ -46,10 +50,11 @@ function octaveFor(pitch: number, sp: Spelling): number {
 }
 // diatonic position relative to middle C (positive = higher on the page)
 const C4_STEP = LETTER.C + 7 * 4;
-function posFromMiddleC(n: Note): number {
-  const s = spell(n);
+export function posFromMiddleC(s: Spelt): number {
   return LETTER[s.letter] + 7 * s.octave - C4_STEP;
 }
+// how the note reads out loud: "C♯4", "E♭3", "G2"
+export const nameOf = (s: Spelt): string => `${s.letter}${ACC[s.acc]}${s.octave}`;
 
 export const render: View = (svg, score, t) => {
   const W = svg.clientWidth;
@@ -82,28 +87,28 @@ export const render: View = (svg, score, t) => {
   out += `<line x1="${playX}" y1="20" x2="${playX}" y2="${H - 20}" stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
 
   // --- notes -------------------------------------------------------
-  // x from (onset - t); y from diatonic position. Ledger lines drawn
-  // for notes outside both staves and across the middle gap.
-  const R = 5.5; // notehead radius
+  // x from (onset - t); y from diatonic position.
   for (const n of score.notes) {
     const x = playX + (n.onset - t) * PPS;
     if (x + R < 48 || x - R > W) continue; // cull (leave room for clefs)
-    const pos = posFromMiddleC(n);
-    const y = yOf(pos);
     const lit = t >= n.onset && t < n.onset + n.duration;
-    const fill = lit ? "var(--note-lit)" : "var(--note)";
-    const glow = lit ? ` filter="url(#glow)"` : "";
+    out += notehead(spell(n.pitch, n.spelling), x, yOf, lit ? "var(--note-lit)" : "var(--note)", lit ? 1 : 0.85, lit);
+  }
 
-    // ledger lines: any line-position (even) that's outside a staff and
-    // between the note and the nearest staff. Covers the middle-C region
-    // (-1..+1) and the far reaches beyond +10 / below -10.
-    out += ledgerLines(pos, x, yOf);
-
-    // notehead (ellipse, slightly wide like real engraving)
-    out += `<ellipse cx="${x}" cy="${y}" rx="${R + 1}" ry="${R}" fill="${fill}" opacity="${lit ? 1 : 0.85}"${glow}/>`;
-    // accidental to the left, from the spelling field
-    const s = spell(n);
-    if (s.acc) out += `<text x="${x - R - 9}" y="${y + 4}" font-size="15" fill="${fill}" font-family="serif">${ACC[s.acc]}</text>`;
+  // --- live keys ----------------------------------------------------
+  // What you're holding right now, drawn on the playhead in the live
+  // green so it reads apart from the playback notes, plus a readout of
+  // the note names above it. Last, so it sits on top.
+  const live = [...LiveKeys.held()].sort((a, b) => a - b).map((p) => spell(p));
+  for (const s of live) out += notehead(s, playX, yOf, "var(--key-press)", 1, true);
+  if (live.length) {
+    // centered on the playhead, but a big chord's names are wider than the
+    // 18% margin to its left, so nudge the label back inside the canvas.
+    // The page font is monospace, so char count is a good width estimate.
+    const names = live.map(nameOf).join(" ");
+    const half = names.length * (NAME_SIZE * 0.3); // ~0.6em per char, halved
+    const cx = Math.max(48 + half, Math.min(playX, W - 8 - half));
+    out += `<text x="${cx}" y="14" font-size="${NAME_SIZE}" fill="var(--key-press)" text-anchor="middle">${names}</text>`;
   }
 
   svg.innerHTML =
@@ -112,6 +117,30 @@ export const render: View = (svg, score, t) => {
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter></defs>` + out;
 };
+
+// one notehead at (x, its diatonic row): ledger lines, the ellipse itself
+// (slightly wide, like real engraving), and the accidental its spelling asks
+// for. Score notes and live key presses differ only in fill and x.
+function notehead(
+  s: Spelt,
+  x: number,
+  yOf: (p: number) => number,
+  fill: string,
+  opacity: number,
+  glow: boolean,
+): string {
+  const pos = posFromMiddleC(s);
+  const y = yOf(pos);
+  const filter = glow ? ` filter="url(#glow)"` : "";
+  // ledger lines: any line-position (even) that's outside a staff and between
+  // the note and the nearest staff. Covers the middle-C region (-1..+1) and
+  // the far reaches beyond +10 / below -10.
+  let out = ledgerLines(pos, x, yOf);
+  out += `<ellipse cx="${x}" cy="${y}" rx="${R + 1}" ry="${R}" fill="${fill}" opacity="${opacity}"${filter}/>`;
+  if (s.acc)
+    out += `<text x="${x - R - 9}" y="${y + 4}" font-size="15" fill="${fill}" font-family="serif">${ACC[s.acc]}</text>`;
+  return out;
+}
 
 // draw short ledger lines through a notehead sitting outside the staves
 function ledgerLines(pos: number, x: number, yOf: (p: number) => number): string {

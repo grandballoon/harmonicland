@@ -2,10 +2,13 @@
    TONNETZ_LATTICE — pure lattice math for the Tonnetz instrument.
    No DOM, no audio, no side effects. Formulas from tonnetz-instrument.md.
 
-   pitchClassAt and triadName are inlined rather than imported from
-   outputs/tonnetz.ts to prevent a circular dependency: tonnetz.ts imports
-   TonnetzState (Task 5 cursor overlay) which imports this file.
+   pitchClassAt is inlined rather than imported from outputs/tonnetz.ts to
+   prevent a circular dependency: tonnetz.ts imports TonnetzState (Task 5
+   cursor overlay) which imports this file. The triad NAMING has no such
+   problem and is not duplicated — it comes from harmony/triads.ts, which
+   depends on nothing.
    ==================================================================== */
+import { triadName } from "./triads";
 
 export type Orient = "up" | "down";
 export interface Cursor { col: number; row: number; orient: Orient; }
@@ -17,7 +20,6 @@ export type LatticeStep =
 
 const FIFTH = 7;
 const MAJ3 = 4;
-const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const pc = (col: number, row: number): number =>
   (((FIFTH * col + MAJ3 * row) % 12) + 12) % 12;
@@ -93,6 +95,5 @@ export function voiceTriad(c: Cursor, octave: number): number[] {
 
 export function cursorLabel(c: Cursor): string {
   const { root } = triadPitchClasses(c);
-  const quality = c.orient === "up" ? "maj" : "min";
-  return NAMES[((root % 12) + 12) % 12] + (quality === "min" ? "m" : "");
+  return triadName(root, c.orient === "up" ? "maj" : "min");
 }

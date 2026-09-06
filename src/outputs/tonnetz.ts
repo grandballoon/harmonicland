@@ -25,37 +25,25 @@
    one-way read — TonnetzState never imports back into this file.
    ==================================================================== */
 import { Core } from "../core";
+import { PC_NAMES, neoTransform, triadName, type Role } from "../harmony/triads";
 import { LiveKeys } from "../live-keys";
 import { TonnetzState } from "../tonnetz-state";
 import type { View, Score } from "../types";
 
 type Cell = readonly [number, number]; // lattice coords (col, row)
-type Role = "root" | "third" | "fifth";
 
 const FIFTH = 7;
 const MAJ3 = 4;
 const DX = 92; // node horizontal spacing (px)
 const DY = DX * 0.866; // row height → ~equilateral triangles
 
-const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-// pure harmony (exported for tests): the lattice and its transforms.
+// The lattice geometry is this view's own; the triad vocabulary it labels
+// nodes and edges with belongs to harmony and is re-exported here so the
+// existing callers (and this view's tests) keep one import.
 export const pitchClassAt = (col: number, row: number): number =>
   (((FIFTH * col + MAJ3 * row) % 12) + 12) % 12;
 
-export const triadName = (root: number, quality: "maj" | "min"): string =>
-  NAMES[((root % 12) + 12) % 12] + (quality === "min" ? "m" : "");
-
-// which neo-Riemannian transform crosses the edge between two chord
-// tones: keep the two named, move the third. P swaps the third (keeps
-// root+fifth); for a major triad R keeps root+third and L keeps
-// third+fifth — and the two swap for a minor triad.
-export function neoTransform(a: Role, b: Role, quality: "maj" | "min"): "P" | "L" | "R" {
-  const s = new Set<Role>([a, b]);
-  if (s.has("root") && s.has("fifth")) return "P";
-  if (s.has("root") && s.has("third")) return quality === "maj" ? "R" : "L";
-  return quality === "maj" ? "L" : "R"; // third + fifth
-}
+export { triadName, neoTransform };
 
 const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="3" result="b"/>
@@ -150,7 +138,7 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
       const fill = held.has(p) ? "var(--key-press)" : sounding.has(p) ? "var(--note-lit)" : "var(--panel)";
       const glow = on ? ` filter="url(#glow)"` : "";
       nodes += `<circle cx="${X(A)}" cy="${Y(A)}" r="14" fill="${fill}" stroke="var(--grid-oct)" stroke-width="1"${glow}/>`;
-      nodes += `<text x="${X(A)}" y="${Y(A) + 4}" text-anchor="middle" font-size="11" font-weight="${on ? 700 : 400}" fill="${on ? "#0b1020" : "var(--ink-dim)"}">${NAMES[p]}</text>`;
+      nodes += `<text x="${X(A)}" y="${Y(A) + 4}" text-anchor="middle" font-size="11" font-weight="${on ? 700 : 400}" fill="${on ? "#0b1020" : "var(--ink-dim)"}">${PC_NAMES[p]}</text>`;
     }
   }
 

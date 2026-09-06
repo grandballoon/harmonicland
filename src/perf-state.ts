@@ -21,6 +21,7 @@
 import { LiveKeys } from "./live-keys";
 import {
   computeVoicing,
+  BASE_DIRECTION,
   type Key,
   type Degree,
   type JoystickMode,
@@ -43,13 +44,27 @@ export interface PerfSnapshot {
 const MODES: JoystickMode[] = ["default", "extended", "chromatic"];
 const INVERSIONS: Inversion[] = ["root", "first", "second"];
 
+// The playable register, not the MIDI one. Octave is the only selection that
+// ACCUMULATES — every other control wraps or is absolute — so a stray nudge is
+// the one input a player can't hear their way out of. Bounding it to the two
+// octaves either side of middle C keeps every reachable chord inside a range
+// worth playing (C2..C6 roots) instead of the sub-audible mud at 0 and the
+// piccolo squeal at 8, and caps how far a mis-hit can carry the instrument.
+// The input layer's job is to make the nudge deliberate (see the pad's default
+// bindings); this is the backstop.
+export const MIN_OCTAVE = 2;
+export const MAX_OCTAVE = 6;
+export const DEFAULT_OCTAVE = 4;
+
 const sel = {
   key: { root: 0, scale: "major" } as Key, // C major
   degree: 1 as Degree,
   joystickMode: "default" as JoystickMode,
-  joystickDirection: "center" as JoystickDirection,
+  // start on the uncolored Base zone at the bottom of the ring: the hub is
+  // empty, so it is never a selection the player can be sitting on
+  joystickDirection: BASE_DIRECTION as JoystickDirection,
   inversion: "root" as Inversion,
-  octave: 4,
+  octave: DEFAULT_OCTAVE,
   voiceLeading: false,
 };
 
@@ -87,7 +102,11 @@ function setDegree(d: Degree): void { sel.degree = d; }
 function setDirection(dir: JoystickDirection): void { sel.joystickDirection = dir; }
 function setKey(key: Key): void { sel.key = key; }
 function setInversion(inv: Inversion): void { sel.inversion = inv; }
-function setOctave(oct: number): void { sel.octave = Math.max(0, Math.min(8, oct)); }
+function setOctave(oct: number): void {
+  sel.octave = Math.max(MIN_OCTAVE, Math.min(MAX_OCTAVE, oct));
+}
+// back to the home register in one move, from wherever the octave drifted to.
+function resetOctave(): void { sel.octave = DEFAULT_OCTAVE; }
 function setVoiceLeading(on: boolean): void { sel.voiceLeading = on; }
 function setMode(m: JoystickMode): void { sel.joystickMode = m; }
 
@@ -112,6 +131,7 @@ export const PerfState = {
   setKey,
   setInversion,
   setOctave,
+  resetOctave,
   setVoiceLeading,
   setMode,
   cycleMode,

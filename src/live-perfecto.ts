@@ -34,6 +34,8 @@ export function describeFrame(f: ChordWireFrame): string {
 // mirror a chord frame's selection into PerfState. Setters only, never
 // trigger(): re-running computeVoicing here could disagree with the voicing
 // the phone actually played (voice-leading depends on history it owns).
+// setOctave clamps to this instrument's playable register, so a remote frame
+// from outside it is displayed at the nearest octave we can actually play.
 export function mirrorSelection(f: ChordFrame): void {
   PerfState.setKey(f.key);
   PerfState.setDegree(f.degree);

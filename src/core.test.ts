@@ -45,10 +45,79 @@ describe("makeScore", () => {
     expect(s.duration).toBe(3.5);
   });
 
-  it("an empty score has zero duration and no notes", () => {
+  it("an empty score has zero duration, no notes, and no bars", () => {
     const s = Core.makeScore([]);
     expect(s.notes).toHaveLength(0);
     expect(s.duration).toBe(0);
+    expect(s.bars).toEqual([]);
+  });
+
+  it("keeps bars sorted by time, and defaults to none", () => {
+    const s = Core.makeScore(
+      [{ pitch: 60, onset: 0, duration: 1 }],
+      [{ time: 2, label: "2" }, { time: 0, label: "1" }],
+    );
+    expect(s.bars.map((b) => b.label)).toEqual(["1", "2"]);
+  });
+});
+
+/* ---- bar grid ------------------------------------------------------
+   Four 1-second bars, the first labelled "0" as a pickup would be. */
+describe("bar queries", () => {
+  const barred = Core.makeScore(
+    [{ pitch: 60, onset: 0, duration: 4 }],
+    [
+      { time: 0, label: "0" },
+      { time: 1, label: "1" },
+      { time: 2, label: "2" },
+      { time: 3, label: "3" },
+    ],
+  );
+  const unbarred = Core.makeScore([{ pitch: 60, onset: 0, duration: 4 }]);
+
+  describe("barIndexAt", () => {
+    it("returns the bar containing t, boundary-inclusive", () => {
+      expect(Core.barIndexAt(barred, 0)).toBe(0);
+      expect(Core.barIndexAt(barred, 0.9)).toBe(0);
+      expect(Core.barIndexAt(barred, 1)).toBe(1); // exactly on the barline = the new bar
+      expect(Core.barIndexAt(barred, 3.5)).toBe(3);
+      expect(Core.barIndexAt(barred, 99)).toBe(3); // past the end: still the last bar
+    });
+
+    it("is -1 when the score states no bars", () => {
+      expect(Core.barIndexAt(unbarred, 1)).toBe(-1);
+    });
+  });
+
+  describe("barStep", () => {
+    it("steps forward to the next barline", () => {
+      expect(Core.barStep(barred, 0, 1)).toBe(1);
+      expect(Core.barStep(barred, 1.4, 1)).toBe(2);
+    });
+
+    it("forward from the last bar lands on the end of the score", () => {
+      expect(Core.barStep(barred, 3.2, 1)).toBe(barred.duration);
+    });
+
+    it("back restarts the current bar from anywhere inside it", () => {
+      expect(Core.barStep(barred, 2.5, -1)).toBe(2);
+      expect(Core.barStep(barred, 2.9, -1)).toBe(2);
+    });
+
+    it("back from a bar's start goes to the previous bar, so taps walk backwards", () => {
+      expect(Core.barStep(barred, 2, -1)).toBe(1);
+      expect(Core.barStep(barred, 2.05, -1)).toBe(1); // still 'at' the start
+      expect(Core.barStep(barred, 1, -1)).toBe(0);
+    });
+
+    it("back at the very start stays put", () => {
+      expect(Core.barStep(barred, 0, -1)).toBe(0);
+    });
+
+    it("is a no-op in both directions without a bar grid", () => {
+      expect(Core.barStep(unbarred, 1.7, 1)).toBe(1.7);
+      expect(Core.barStep(unbarred, 1.7, -1)).toBe(1.7);
+    });
   });
 });
 

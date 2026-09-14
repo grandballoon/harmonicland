@@ -20,13 +20,17 @@
     --ink-dim:   #6b7785;   /* labels, captions                       */
     --note:      #5b7fff;   /* resting noteheads (cool)               */
     --note-lit:  #ffd24a;   /* sounding note (warm, the one accent)   */
+    --note-hit:  #fff6d0;   /* the flash on a key you just struck right */
     --playhead:  #ff5a3c;   /* the moving line                        */
     --line-acc:  #2b3340;
     --key-white: #cdd7e2;   /* piano-roll white keys (cool off-white)  */
     --key-black: #11161d;   /* piano-roll black keys                   */
-    --key-press: #46d39a;   /* a key you're playing live (cool green)  */
+    --key-press: #46d39a;   /* a key you're HOLDING (cool green)       */
     --hand-r:    #4ac1ff;   /* hand coloring: upper staff / right hand */
     --hand-l:    #c77dff;   /* hand coloring: lower staff / left hand  */
+    --hand-r-dim:#20607f;   /* ...the same hands, receded: context, not a cue */
+    --hand-l-dim:#5f3f80;
+    --wrong:     #ff4d6d;   /* a key you played that the step didn't ask for */
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -57,16 +61,22 @@
     border-bottom: 1px solid var(--line-acc);
     background: var(--panel);
   }
-  button, label.file, select, #gamepad-help > summary {
+  button, label.file, select, input[type=number], #gamepad-help > summary {
     font: inherit; color: var(--ink);
     background: #1d242e; border: 1px solid var(--line-acc);
     padding: 7px 13px; border-radius: 6px; cursor: pointer;
     transition: border-color .12s, background .12s;
   }
-  button:hover, label.file:hover, select:hover, #gamepad-help > summary:hover { border-color: #46566a; }
-  button:focus-visible, label.file:focus-within, select:focus-visible, #gamepad-help > summary:focus-visible {
+  button:hover, label.file:hover, select:hover, input[type=number]:hover, #gamepad-help > summary:hover { border-color: #46566a; }
+  button:focus-visible, label.file:focus-within, select:focus-visible, input[type=number]:focus-visible, #gamepad-help > summary:focus-visible {
     outline: 2px solid var(--note); outline-offset: 1px;
   }
+  /* the bar-range inputs: two short numbers that read as one control */
+  input[type=number] { width: 4.6em; padding: 6px 8px; cursor: text; font-variant-numeric: tabular-nums; }
+  .bar-range .dash { color: var(--ink-dim); }
+  /* the step buttons: a pair, so they sit tighter than the rest */
+  .step-pair { display: inline-flex; gap: 4px; }
+  .step-pair button { padding-left: 11px; padding-right: 11px; }
 
   /* gamepad help dropdown ---------------------------------------------- */
   #gamepad-help { position: relative; }
@@ -124,6 +134,12 @@
   .toggle .hand-l { color: var(--hand-l); font-weight: 600; }
 
   .status { color: var(--ink-dim); font-size: 12px; }
+  /* the practice controls travel as one group, so they wrap as one */
+  .practice-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  /* the progression picker carries long names; the key beside it is two
+     characters and must not be stretched to match. */
+  #progression { max-width: 230px; }
+  #prog-root { padding-left: 9px; padding-right: 9px; }
 </style>
 </head>
 <body>
@@ -215,11 +231,57 @@
       <option value="tonnetz">Tonnetz (harmonic lattice)</option>
       <option value="both">Tonnetz + piano roll</option>
       <option value="nashville">Nashville (chord coloration)</option>
+      <option value="practice">Practice (step by step)</option>
     </select>
   </label>
   <label class="toggle" id="hands-wrap" style="display:none" title="Color notes by staff: right hand blue, left hand violet">
     <input type="checkbox" id="hands"> <span class="hand-r">R</span>/<span class="hand-l">L</span> hands
   </label>
+  <span class="practice-controls" id="practice-wrap" style="display:none">
+    <!-- A structure to practise INSTEAD of a file. The options are built
+         from harmony/repertoire.ts at startup, so this element carries the
+         empty choice only — a list typed out here would be a second copy
+         of the catalogue, kept in sync by hand. -->
+    <label class="toggle" title="Practise a chord progression instead of a loaded score">
+      <select id="progression">
+        <option value="">— from loaded score —</option>
+      </select>
+    </label>
+    <label class="toggle" title="Transpose the progression">
+      <select id="prog-root" title="Key"></select>
+    </label>
+    <label class="toggle" title="Which hand the steps come from">
+      <select id="practice-hand">
+        <option value="both">Hands together</option>
+        <option value="upper">Right hand</option>
+        <option value="lower">Left hand</option>
+      </select>
+    </label>
+    <label class="toggle" title="Show the other hand's keys, dimmed">
+      <input type="checkbox" id="show-other" checked> show other
+    </label>
+    <label class="toggle" title="Play the other hand for you as you advance">
+      <input type="checkbox" id="play-other" checked> play other
+    </label>
+    <label class="toggle" title="Hide the arcs drawn from the keys under your fingers to the keys this step asks for">
+      <input type="checkbox" id="hide-arrows" checked> hide arrows
+    </label>
+    <!-- Isolate a bar, or a run of bars, and loop it. Bar NUMBERS here, as a
+         musician counts them (from 1); the state counts from 0 and only
+         main.ts adds the one. Empty means the whole piece. Clicking a bar on
+         the page does the same thing, and shift-click extends. -->
+    <span class="toggle bar-range" title="Practise only these bars, looping — or click a bar on the page (shift-click to extend)">
+      bars
+      <input type="number" id="bar-from" min="1" step="1" placeholder="all" aria-label="First bar">
+      <span class="dash">–</span>
+      <input type="number" id="bar-to" min="1" step="1" placeholder="all" aria-label="Last bar">
+      <button id="bar-all" title="Practise the whole piece again">all</button>
+    </span>
+    <span class="step-pair">
+      <button id="step-back" title="Back one step (←)">◀</button>
+      <button id="step-fwd" title="Forward one step (→)">▶</button>
+    </span>
+  </span>
   <span class="status" id="status"></span>
 </div>
 

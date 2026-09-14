@@ -1,16 +1,38 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-// vi.hoisted creates the shared set before any mock factories run.
-const held = vi.hoisted(() => new Set<number>());
+// A miniature stand-in for the real LiveKeys, refcounted the same way, so
+// these tests exercise the voice-handle contract rather than a set of ints.
+// vi.hoisted builds it before any mock factory runs.
+const keys = vi.hoisted(() => {
+  interface Voice { readonly pitch: number }
+  const voices = new Map<number, Set<Voice>>();
+  const press = (pitch: number): Voice => {
+    const v = { pitch };
+    let set = voices.get(pitch);
+    if (!set) voices.set(pitch, (set = new Set<Voice>()));
+    set.add(v);
+    return v;
+  };
+  const release = (v: Voice): void => {
+    const set = voices.get(v.pitch);
+    if (set?.delete(v) && set.size === 0) voices.delete(v.pitch);
+  };
+  return {
+    press,
+    release,
+    isLive: (v: Voice) => voices.get(v.pitch)?.has(v) ?? false,
+    releaseAll: () => { voices.clear(); },
+    held: () => new Set(voices.keys()),
+    clear: () => { voices.clear(); },
+  };
+});
+const held = { // read-only view, so the assertions below read unchanged
+  get size() { return keys.held().size; },
+  has: (p: number) => keys.held().has(p),
+  [Symbol.iterator]: () => keys.held()[Symbol.iterator](),
+};
 
-vi.mock("./live-keys", () => ({
-  LiveKeys: {
-    press:      (p: number) => { held.add(p); },
-    release:    (p: number) => { held.delete(p); },
-    releaseAll: () => { held.clear(); },
-    held:       () => held,
-  },
-}));
+vi.mock("./live-keys", () => ({ LiveKeys: keys }));
 
 import { TonnetzState } from "./tonnetz-state";
 
@@ -18,7 +40,7 @@ beforeEach(() => {
   TonnetzState.release();
   TonnetzState.home();
   TonnetzState.nudgeOctave(4 - TonnetzState.snapshot().octave); // reset octave to 4
-  held.clear();
+  keys.clear();
 });
 
 describe("TonnetzState.trigger", () => {
@@ -75,5 +97,15 @@ describe("TonnetzState.nudgeOctave", () => {
     TonnetzState.trigger();        // C major oct 4: [60,64,67]
     TonnetzState.nudgeOctave(1);   // → oct 5: [72,76,79]
     expect([...held].sort((a, b) => a - b)).toEqual([72, 76, 79]);
+  });
+});
+
+describe("TonnetzState vs a releaseAll from elsewhere", () => {
+  it("re-presses the whole triad after LiveKeys.releaseAll invalidated its voices", () => {
+    TonnetzState.trigger();
+    keys.releaseAll();                     // e.g. a view change, which knows
+    expect(TonnetzState.isSounding()).toBe(false); // nothing of our mirror
+    TonnetzState.trigger();
+    expect([...held].sort((a, b) => a - b)).toEqual([60, 64, 67]);
   });
 });

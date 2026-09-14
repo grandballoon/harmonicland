@@ -4,22 +4,15 @@
    88-key range (A0=21 .. C8=108). No clefs, no ledger lines, no
    spelling. Notes scroll past a fixed playhead; active notes light up.
    ==================================================================== */
-import { LiveKeys } from "../live-keys";
-import type { View } from "../types";
+import { LOW, HIGH, isWhite, isC } from "../pitch";
+import { SCROLL } from "./scroll";
+import { glowFilter, glowAttr } from "./defs";
+import type { View, ViewModule } from "../view";
 
-const LOW = 21;
-const HIGH = 108; // A0 .. C8
-const PPS = 120; // pixels per second (scroll speed)
-const PLAYHEAD_X = 0.18; // playhead at 18% from left
+const { PPS, PLAYHEAD_X } = SCROLL;
+const GLOW_ID = "staffFullGlow";
 
-function isWhite(pitch: number): boolean {
-  return ![1, 3, 6, 8, 10].includes(((pitch % 12) + 12) % 12);
-}
-function isC(pitch: number): boolean {
-  return ((pitch % 12) + 12) % 12 === 0;
-}
-
-export const render: View = (svg, score, t) => {
+export const render: View = (svg, { score, t, live }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
@@ -53,22 +46,20 @@ export const render: View = (svg, score, t) => {
     const lit = t >= n.onset && t < n.onset + n.duration;
     const fill = lit ? "var(--note-lit)" : "var(--note)";
     const op = lit ? 1 : 0.82;
-    const glow = lit ? ` filter="url(#glow)"` : "";
+    const glow = glowAttr(GLOW_ID, lit);
     out += `<rect x="${x}" y="${y - 4}" width="${w}" height="8" rx="3" fill="${fill}" opacity="${op}"${glow}/>`;
   }
 
   // live held keys (MIDI / pointer): a green glowing dot rides the playhead
   // at that pitch's row, so what YOU play reads apart from the playback notes.
-  for (const pitch of LiveKeys.held()) {
+  for (const pitch of live.held) {
     if (pitch < LOW || pitch > HIGH) continue;
-    out += `<circle cx="${playX}" cy="${yOf(pitch)}" r="6" fill="var(--key-press)" filter="url(#glow)"/>`;
+    out += `<circle cx="${playX}" cy="${yOf(pitch)}" r="6" fill="var(--key-press)"${glowAttr(GLOW_ID)}/>`;
   }
 
-  svg.innerHTML =
-    `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur stdDeviation="3" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter></defs>` + out;
+  svg.innerHTML = `<defs>${glowFilter(GLOW_ID)}</defs>` + out;
 };
 
-export const StaffFull = { render };
+// no pointer-playable keyboard in this view: the linear pitch axis is a
+// read-out, not a keyboard. Answered explicitly rather than omitted.
+export const StaffFull: ViewModule = { render, keyboardRegion: () => null };

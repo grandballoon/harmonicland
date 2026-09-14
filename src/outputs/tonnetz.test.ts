@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { pitchClassAt, triadName, neoTransform } from "./tonnetz";
+import { neoTransform } from "./tonnetz";
+import { pitchClassAt, triadName } from "../harmony/tonnetz-lattice";
 
 describe("tonnetz lattice", () => {
   it("places C at the origin, fifths east, major thirds up", () => {

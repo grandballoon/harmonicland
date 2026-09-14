@@ -4,7 +4,9 @@
    chord on the fly: a Key (root + scale), a numbered Degree (Nashville
    I–vii°), and a joystick "coloration" (mode × direction). computeVoicing
    feeds those through the diatonic-thirds rule and returns MIDI numbers,
-   ready for LiveKeys.press. Pure: imports nothing, no DOM, no audio.
+   ready for LiveKeys.press. Pure: no DOM, no audio, and its only import is
+   the pitch leaf, which is itself import-free — a pitch name table is not
+   the kind of dependency this header exists to forbid.
 
    Three load-bearing subtleties, each pinned by a test:
    - Quality is DETECTED, not stored. The diatonic 3rd/5th above the root
@@ -24,7 +26,8 @@
 export enum PitchClass {
   C = 0, Cs, D, Ds, E, F, Fs, G, Gs, A, As, B,
 }
-export const PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+import { PITCH_NAMES } from "../pitch";
+export { PITCH_NAMES }; // re-exported: this file's callers name pitches too
 
 // ---------- Scales ----------
 export type ScaleType =
@@ -139,11 +142,24 @@ export type ChordQuality = "maj" | "min" | "dim";
 // rule shared by computeVoicing (to pick a joystick interval list) and the
 // views (to color a degree by its quality). Honors the same short-scale
 // octave-wrap as the voicing math, so it's correct for pentatonic/blues too.
+// The chord root's semitone offset above the KEY root, honoring the
+// short-scale octave-wrap (see the header). Extracted because three
+// callers computed it — the quality rule, the voicing, and now the
+// progression realizer, which needs to know where a degree sits before a
+// voicing exists — and a fourth copy of the wrap is a fourth chance to
+// simplify it away.
+export function degreeOffsetOf(key: Key, degree: Degree): number {
+  const scale = SCALE_INTERVALS[key.scale];
+  const n = scale.length;
+  const degIdx = degreeIndex(degree);
+  return scale[degIdx % n] + Math.floor(degIdx / n) * 12;
+}
+
 export function degreeQuality(key: Key, degree: Degree): ChordQuality {
   const scale = SCALE_INTERVALS[key.scale];
   const n = scale.length;
   const degIdx = degreeIndex(degree);
-  const degreeOffset = scale[degIdx % n] + Math.floor(degIdx / n) * 12;
+  const degreeOffset = degreeOffsetOf(key, degree);
   const thirdSteps = degIdx + 2;
   const fifthSteps = degIdx + 4;
   const thirdAbs = scale[thirdSteps % n] + Math.floor(thirdSteps / n) * 12;
@@ -153,17 +169,21 @@ export function degreeQuality(key: Key, degree: Degree): ChordQuality {
   return isDim ? "dim" : isMinor ? "min" : "maj";
 }
 
+// Which of a joystick cell's three interval lists this selection uses —
+// the detected quality picking one of them. The one place that choice is
+// made, so a caller that wants to NAME the chord and one that wants to
+// SOUND it can never disagree about which notes it has.
+export function chordIntervals(
+  key: Key, degree: Degree, mode: JoystickMode, direction: JoystickDirection,
+): number[] {
+  const outcome = JOYSTICK_TABLES[mode][direction];
+  const quality = degreeQuality(key, degree);
+  return quality === "dim" ? outcome.dim : quality === "min" ? outcome.minor : outcome.major;
+}
+
 export function computeVoicing(a: ComputeVoicingArgs): Voicing {
-  const scale = SCALE_INTERVALS[a.key.scale];
-  const n = scale.length;
-  const degIdx = degreeIndex(a.degree);
-
-  // chord root above key root (wraps for short scales)
-  const degreeOffset = scale[degIdx % n] + Math.floor(degIdx / n) * 12;
-
-  const quality = degreeQuality(a.key, a.degree);
-  const outcome = JOYSTICK_TABLES[a.joystickMode][a.joystickDirection];
-  const intervals = quality === "dim" ? outcome.dim : quality === "min" ? outcome.minor : outcome.major;
+  const degreeOffset = degreeOffsetOf(a.key, a.degree);
+  const intervals = chordIntervals(a.key, a.degree, a.joystickMode, a.joystickDirection);
 
   const chordRoot = a.key.root + (a.octave + 1) * 12 + degreeOffset;
 
@@ -181,16 +201,21 @@ export function computeVoicing(a: ComputeVoicingArgs): Voicing {
   const cost = (cand: number[], ref: number[]): number =>
     cand.reduce((sum, note) => sum + Math.min(...ref.map((r) => Math.abs(note - r))), 0);
 
+  // Voice-leading searches the OCTAVE SHIFT and keeps the requested inversion
+  // fixed. The inversion is a constraint the player set, not a seed: the
+  // search used to loop over all three inversions too, which silently
+  // overrode it and made cycleInversion (keyboard `i`, gamepad d-pad left) a
+  // no-op whenever voice-leading was on — a live control, a readout agreeing
+  // with it, and no effect on the sound. Most of the common-tone gain comes
+  // from the octave shift anyway, so this costs nothing musically.
   if (a.voiceLeading && a.previousVoicing && a.previousVoicing.notes.length > 0) {
     const prev = a.previousVoicing.notes;
     let best = applyInversion(build(intervals, 0), a.inversion);
     let bestCost = cost(best, prev);
-    for (const shift of [-1, 0, 1]) {
-      for (const inv of ["root", "first", "second"] as Inversion[]) {
-        const cand = applyInversion(build(intervals, shift), inv);
-        const c = cost(cand, prev);
-        if (c < bestCost) { bestCost = c; best = cand; }
-      }
+    for (const shift of [-1, 1]) {
+      const cand = applyInversion(build(intervals, shift), a.inversion);
+      const c = cost(cand, prev);
+      if (c < bestCost) { bestCost = c; best = cand; }
     }
     return { notes: best };
   }
@@ -199,16 +224,31 @@ export function computeVoicing(a: ComputeVoicingArgs): Voicing {
 }
 
 // ---------- Degree display ----------
-export const DEGREE_NUMERAL: Record<Degree, string> = {
-  1: "I", 2: "ii", 3: "iii", 4: "IV", 5: "V", 6: "vi", 7: "vii°",
+const ROMAN: Record<Degree, string> = {
+  1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII",
 };
 
-// Button accent colors (semantic: orange=major-ish, blue=minor, etc.).
-// Casing of the numeral above is cosmetic — it assumes a major-ish diatonic
-// context and does NOT re-case for minor keys, matching the shipped app.
-export const DEGREE_COLOR: Record<Degree, string> = {
-  1: "orange", 2: "blue", 3: "indigo", 4: "orange",
-  5: "orange", 6: "blue", 7: "purple",
+// The Nashville numeral for a degree IN A KEY. Casing and the ° are notation
+// for the chord's quality, so they come from degreeQuality — the same one
+// rule computeVoicing uses — rather than from a flat table baked around the
+// major mode. In A natural minor, degree 1 is "i", not "I".
+export function degreeNumeral(key: Key, degree: Degree): string {
+  const q = degreeQuality(key, degree);
+  const numeral = ROMAN[degree];
+  return q === "maj" ? numeral : q === "min" ? numeral.toLowerCase() : `${numeral.toLowerCase()}°`;
+}
+
+// ---------- Quality colors ----------
+// quality -> design token. Presentation, but presentation with ONE owner:
+// the Nashville wheel, the practice harmony bar and the Tonnetz all colour a
+// triad by its quality, and three copies of this map is three chances for
+// two views to disagree about what a diminished chord looks like. It sits
+// beside ZONE_LABEL and COLORATION_DESCRIPTOR because those are the same
+// kind of fact — the vocabulary this harmony is displayed in.
+export const QUALITY_COLOR: Record<ChordQuality, string> = {
+  maj: "var(--note-lit)", // warm: the bright, stable one
+  min: "var(--note)",     // cool
+  dim: "var(--playhead)", // tension
 };
 
 // ---------- Direction glyphs ----------
@@ -233,45 +273,72 @@ export const ZONE_LABEL: Record<JoystickMode, Record<JoystickDirection, string>>
   },
 };
 
-// ---------- Now-playing chord name: "C maj7" ----------
-// Quality suffix at center, derived from the diatonic degree convention.
-const CENTER_QUALITY = (d: Degree): string => {
-  if (d === 1 || d === 4 || d === 5) return "maj";
-  if (d === 2 || d === 3 || d === 6) return "min";
-  return "dim"; // vii°
-};
+// ---------- Now-playing chord name: "C dom7" ----------
+// DERIVED from the intervals that will actually sound, not looked up in a
+// table keyed by joystick direction. That table was a second, quality-BLIND
+// copy of the harmony: `default/right` is the diatonic seventh, so it makes
+// a maj7 on I and a min7 on ii — and the table called both of them "maj7".
+// A ii–V–I read "D maj7 · G dom7 · C maj7", which is wrong about the first
+// chord in the most-played progression there is.
+//
+// Naming from the notes cannot drift, because there is nothing to keep in
+// sync: add a joystick cell and it names itself.
+//
+// The vocabulary is this app's own — "dom7" rather than a bare "7", "min7"
+// rather than "m7" — because that is what ZONE_LABEL, the gamepad help and
+// the coloration wheel already say, and one program should use one set of
+// words for one thing.
+export function chordSymbol(intervals: readonly number[]): string {
+  const has = (i: number): boolean => intervals.includes(i);
 
-// Lowercased twin of ZONE_LABEL, appended to a root note for the readout.
-const QUALITY_LABEL: Record<JoystickMode, Record<Exclude<JoystickDirection, "center">, string>> = {
-  default: {
-    up: "flip 3rd", upRight: "dom7", right: "maj7", downRight: "add9",
-    down: "sus4", downLeft: "6/sus2", left: "dim", upLeft: "aug",
-  },
-  extended: {
-    up: "flip 3rd", upRight: "dom9", right: "add11", downRight: "min11",
-    down: "7♯9", downLeft: "add9", left: "sus4 7", upLeft: "½dim7",
-  },
-  chromatic: {
-    up: "minMaj7", upRight: "dom13", right: "6/9", downRight: "7alt",
-    down: "maj13", downLeft: "7♭9", left: "½dim7", upLeft: "maj7♯11",
-  },
-};
+  const third = has(4) ? "maj" : has(3) ? "min" : has(5) ? "sus4" : has(2) ? "sus2" : "none";
+  // a fifth that is not perfect. Spoken here only when the core name does
+  // not already say it: "aug" and "dim" ARE the altered fifth.
+  const fifth = has(7) ? "" : has(6) ? "♭5" : has(8) ? "♯5" : "";
+  const seventh = has(11) ? "maj7" : has(10) ? "dom7" : "";
+  // the highest NATURAL extension names the chord; a 13th implies the 9th
+  // and 11th below it and they are not spelled out. 18 is a ♯11 and is an
+  // alteration, not an eleventh — which is why it is not in this list.
+  const ext = has(21) ? 13 : has(17) ? 11 : has(14) ? 9 : 0;
+  const alts = (has(13) ? "♭9" : "") + (has(15) ? "♯9" : "") + (has(18) ? "♯11" : "");
+  // a sixth, only where no seventh has already claimed that region.
+  const sixth = has(9) && seventh === "";
 
-// Root name uses intervals[degIdx % n] only (pitch class — no octave-wrap
-// needed for naming), unlike computeVoicing's chord-root math.
+  const core = ((): string => {
+    if (third === "sus4" || third === "sus2")
+      return seventh === "" ? third : `${seventh}${third}`;
+    if (third === "maj") {
+      if (seventh) return ext ? `${seventh === "maj7" ? "maj" : "dom"}${ext}` : seventh;
+      if (sixth) return ext === 9 ? "6/9" : "6";
+      if (has(8)) return "aug";
+      return ext ? `add${ext}` : "maj";
+    }
+    if (third === "min") {
+      const half = fifth === "♭5"; // a diminished fifth under a minor third
+      if (seventh === "maj7") return "minMaj7";
+      if (seventh === "dom7") return `${half ? "½dim" : "min"}${ext || 7}`;
+      if (half) return sixth && ext === 9 ? "dim6/9" : ext ? `dim add${ext}` : "dim";
+      if (sixth) return ext === 9 ? "min6/9" : "min6";
+      return ext ? `min add${ext}` : "min";
+    }
+    return "5"; // no third at all — a bare fifth
+  })();
+
+  // "aug" and "dim"/"½dim" have already said what the fifth is.
+  const spoken = /^(aug|dim|½dim)/.test(core);
+  return core + (spoken ? "" : fifth) + alts;
+}
+
+// Root name uses degreeOffsetOf mod 12 (pitch class — the octave-wrap the
+// offset carries falls out), unlike computeVoicing's absolute chord root.
 export function chordName(
   key: Key,
   degree: Degree,
   mode: JoystickMode,
   direction: JoystickDirection,
 ): string {
-  const intervals = SCALE_INTERVALS[key.scale];
-  const degreeOffset = intervals[degreeIndex(degree) % intervals.length];
-  const rootPc = (key.root + degreeOffset) % 12;
-  const rootName = PITCH_NAMES[rootPc];
-  const quality =
-    direction === "center" ? CENTER_QUALITY(degree) : QUALITY_LABEL[mode][direction];
-  return `${rootName} ${quality}`;
+  const rootPc = (((key.root + degreeOffsetOf(key, degree)) % 12) + 12) % 12;
+  return `${PITCH_NAMES[rootPc]} ${chordSymbol(chordIntervals(key, degree, mode, direction))}`;
 }
 
 // ---------- Coloration descriptors: the FEEL of a joystick cell ----------
@@ -301,4 +368,7 @@ export const COLORATION_DESCRIPTOR: Record<JoystickMode, Record<JoystickDirectio
 export const colorationDescriptor = (mode: JoystickMode, direction: JoystickDirection): string =>
   COLORATION_DESCRIPTOR[mode][direction];
 
-export const Perfecto = { computeVoicing, degreeQuality, chordName, colorationDescriptor, degreeIndex };
+export const Perfecto = {
+  computeVoicing, degreeQuality, chordName, chordSymbol, chordIntervals,
+  colorationDescriptor, degreeIndex, degreeOffsetOf, QUALITY_COLOR,
+};

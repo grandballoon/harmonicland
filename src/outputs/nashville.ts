@@ -19,22 +19,22 @@
    Keeps the design language deliberately: dark field, one warm accent, the
    glow filter reused from the Tonnetz. No new colors invented.
    ==================================================================== */
-import { PerfState } from "../perf-state";
 import {
-  computeVoicing,
   degreeQuality,
   chordName,
   colorationDescriptor,
   PITCH_NAMES,
-  DEGREE_NUMERAL,
+  degreeNumeral,
   DIRECTION_SYMBOL,
   ZONE_LABEL,
   SCALE_DISPLAY_NAMES,
-  type ChordQuality,
+  QUALITY_COLOR,
   type Degree,
   type JoystickDirection,
 } from "../harmony/perfecto";
-import type { View } from "../types";
+import { glowFilter, glowAttr, text } from "./defs";
+import type { View, ViewModule } from "../view";
+import type { PerfSnapshot } from "../perf-state";
 
 const DEGREES: Degree[] = [1, 2, 3, 4, 5, 6, 7];
 const MODES = ["default", "extended", "chromatic"] as const;
@@ -46,27 +46,11 @@ const DIR_VEC: Record<JoystickDirection, [number, number]> = {
   down: [0, 1], downLeft: [-0.707, 0.707], left: [-1, 0], upLeft: [-0.707, -0.707],
 };
 
-// quality -> token, the same mapping the Tonnetz uses for triads.
-const QCOLOR: Record<ChordQuality, string> = {
-  maj: "var(--note-lit)",
-  min: "var(--note)",
-  dim: "var(--playhead)",
-};
+// quality -> token: perfecto's one map, not a local copy. The practice
+// view's harmony bar colours its numerals from the same table.
+const QCOLOR = QUALITY_COLOR;
 
-const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="3" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter></defs>`;
-
-const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-
-const text = (
-  x: number, y: number, s: string,
-  opts: { size?: number; weight?: number; fill?: string; anchor?: string } = {},
-): string =>
-  `<text x="${x}" y="${y}" text-anchor="${opts.anchor ?? "middle"}" ` +
-  `font-size="${opts.size ?? 12}" font-weight="${opts.weight ?? 400}" ` +
-  `fill="${opts.fill ?? "var(--ink)"}">${esc(s)}</text>`;
+const GLOW_ID = "nashvilleGlow";
 
 const cell = (
   cx: number, cy: number, w: number, h: number,
@@ -74,18 +58,24 @@ const cell = (
 ): string =>
   `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="8" ` +
   `fill="${fill}" stroke="${stroke}" stroke-width="${lit ? 2 : 1}"` +
-  `${lit ? ' filter="url(#glow)"' : ""}/>`;
+  `${glowAttr(GLOW_ID, lit)}/>`;
 
-export const render: View = (svg) => {
+export const render: View = (svg, { live }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = markup(W, H, live.perf);
+};
 
-  const s = PerfState.snapshot();
+// the whole view as a markup string — a pure function of the selection, so
+// it can be rendered off-screen and snapshot-tested. It used to read
+// PerfState.snapshot() itself, which is exactly what made that impossible.
+export const markup = (W: number, H: number, s: PerfSnapshot): string => {
+  if (!W || !H) return "";
   const sounding = s.sounding.length > 0;
 
-  let out = GLOW;
+  let out = `<defs>${glowFilter(GLOW_ID)}</defs>`;
 
   // --- header: key + mode strip ------------------------------------
   out += text(24, 30, `${PITCH_NAMES[s.key.root]} ${SCALE_DISPLAY_NAMES[s.key.scale]}`,
@@ -108,7 +98,7 @@ export const render: View = (svg) => {
     const color = QCOLOR[q];
     const lit = d === s.degree;
     out += cell(cx, rowY, dw, 46, lit ? color : "var(--panel)", color, lit && sounding);
-    out += text(cx, rowY + 5, DEGREE_NUMERAL[d],
+    out += text(cx, rowY + 5, degreeNumeral(s.key, d),
       { size: 18, weight: 700, fill: lit ? "#0b1020" : color });
   }
 
@@ -144,13 +134,13 @@ export const render: View = (svg) => {
   // --- now-playing readout -----------------------------------------
   const name = chordName(s.key, s.degree, s.joystickMode, s.joystickDirection);
   const descriptor = colorationDescriptor(s.joystickMode, s.joystickDirection);
-  // actual sounding notes, or a root-position preview so it's informative when silent
-  const notes = sounding
-    ? s.sounding
-    : computeVoicing({ ...s, voiceLeading: false, previousVoicing: null }).notes;
+  // actual sounding notes, or the snapshot's root-position preview so the
+  // readout is informative when silent. Both come off the snapshot: the view
+  // asks PerfState no questions it has not already answered.
+  const notes = sounding ? s.sounding : s.preview;
   const spelling = notes.map((p) => PITCH_NAMES[((p % 12) + 12) % 12]).join("  ");
   const ry = H - 40;
-  out += text(24, ry, DEGREE_NUMERAL[s.degree],
+  out += text(24, ry, degreeNumeral(s.key, s.degree),
     { size: 26, weight: 800, anchor: "start", fill: QCOLOR[degreeQuality(s.key, s.degree)] });
   out += text(64, ry, name,
     { size: 22, weight: 700, anchor: "start", fill: sounding ? "var(--note-lit)" : "var(--ink-dim)" });
@@ -164,7 +154,13 @@ export const render: View = (svg) => {
   out += text(W - 24, ry - 22, `${s.inversion} · oct ${s.octave}${s.voiceLeading ? " · voice-led" : ""}`,
     { size: 11, weight: 500, anchor: "end", fill: "var(--ink-dim)" });
 
-  svg.innerHTML = out;
+  return out;
 };
 
-export const Nashville = { render };
+// the Nashville view is a chord instrument driven by keys and the gamepad,
+// not by pointing at a keyboard.
+export const Nashville: ViewModule & { markup: typeof markup } = {
+  render,
+  keyboardRegion: () => null,
+  markup,
+};

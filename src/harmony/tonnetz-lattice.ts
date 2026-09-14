@@ -2,10 +2,12 @@
    TONNETZ_LATTICE — pure lattice math for the Tonnetz instrument.
    No DOM, no audio, no side effects. Formulas from tonnetz-instrument.md.
 
-   pitchClassAt and triadName are inlined rather than imported from
-   outputs/tonnetz.ts to prevent a circular dependency: tonnetz.ts imports
-   TonnetzState (Task 5 cursor overlay) which imports this file.
+   This is the leaf that OWNS the lattice math: pitchClassAt, triadName and
+   cursorLabel live here and outputs/tonnetz.ts imports them. The layering is
+   outputs/ -> harmony/ -> leaves, one direction only, which pitch-leaf.test
+   enforces.
    ==================================================================== */
+import { PITCH_NAMES } from "../pitch";
 
 export type Orient = "up" | "down";
 export interface Cursor { col: number; row: number; orient: Orient; }
@@ -17,10 +19,17 @@ export type LatticeStep =
 
 const FIFTH = 7;
 const MAJ3 = 4;
-const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-const pc = (col: number, row: number): number =>
+/** The lattice formula: east = +fifth, up = +major third. The view draws
+ *  this; the state walks it; both read it from here. */
+export const pitchClassAt = (col: number, row: number): number =>
   (((FIFTH * col + MAJ3 * row) % 12) + 12) % 12;
+
+const pc = pitchClassAt;
+
+/** A triad's display name from its root pitch class and quality: "C", "Em". */
+export const triadName = (root: number, quality: "maj" | "min"): string =>
+  PITCH_NAMES[((root % 12) + 12) % 12] + (quality === "min" ? "m" : "");
 
 // Cell roles for up (major) and down (minor) triangles:
 //   up  (col,row): root=(col,row)   third=(col,row+1)  fifth=(col+1,row)
@@ -93,6 +102,5 @@ export function voiceTriad(c: Cursor, octave: number): number[] {
 
 export function cursorLabel(c: Cursor): string {
   const { root } = triadPitchClasses(c);
-  const quality = c.orient === "up" ? "maj" : "min";
-  return NAMES[((root % 12) + 12) % 12] + (quality === "min" ? "m" : "");
+  return triadName(root, c.orient === "up" ? "maj" : "min");
 }

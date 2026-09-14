@@ -19,32 +19,25 @@
    physical/harmonic view, not the notation view). Same (svg, score, t)
    signature as the staves, so the view toggle stays a single swap.
 
-   TonnetzState dependency: markup() reads TonnetzState.snapshot() once
-   to draw the cursor triangle (the player's current position) as a
-   stroked overlay, distinct from sounding fills. This is a deliberate
-   one-way read — TonnetzState never imports back into this file.
+   The cursor triangle (the player's current position) is drawn from the
+   frame's live snapshot, as is the set of held pitches; this file reads no
+   module-level state and is a pure function of its arguments. The lattice
+   MATH comes from harmony/tonnetz-lattice.ts, in the one allowed direction:
+   outputs/ -> harmony/ -> leaves.
    ==================================================================== */
 import { Core } from "../core";
-import { LiveKeys } from "../live-keys";
-import { TonnetzState } from "../tonnetz-state";
-import type { View, Score } from "../types";
+import { pitchClassAt, triadName } from "../harmony/tonnetz-lattice";
+import { PITCH_NAMES } from "../pitch";
+import { glowFilter, glowAttr } from "./defs";
+import type { Score, Pitch } from "../types";
+import type { View, ViewModule } from "../view";
+import type { Cursor } from "../harmony/tonnetz-lattice";
 
 type Cell = readonly [number, number]; // lattice coords (col, row)
 type Role = "root" | "third" | "fifth";
 
-const FIFTH = 7;
-const MAJ3 = 4;
 const DX = 92; // node horizontal spacing (px)
 const DY = DX * 0.866; // row height → ~equilateral triangles
-
-const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-// pure harmony (exported for tests): the lattice and its transforms.
-export const pitchClassAt = (col: number, row: number): number =>
-  (((FIFTH * col + MAJ3 * row) % 12) + 12) % 12;
-
-export const triadName = (root: number, quality: "maj" | "min"): string =>
-  NAMES[((root % 12) + 12) % 12] + (quality === "min" ? "m" : "");
 
 // which neo-Riemannian transform crosses the edge between two chord
 // tones: keep the two named, move the third. P swaps the third (keeps
@@ -57,27 +50,36 @@ export function neoTransform(a: Role, b: Role, quality: "maj" | "min"): "P" | "L
   return quality === "maj" ? "L" : "R"; // third + fifth
 }
 
-const GLOW = `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="3" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter></defs>`;
+/** See piano-roll's MarkupOpts: the glow filter is the caller's to define. */
+export interface MarkupOpts {
+  glowId: string;
+  /** pitches sounding live right now — passed in, not read from a global. */
+  held: ReadonlySet<Pitch>;
+  /** the player's position on the lattice, drawn as a stroked overlay. */
+  cursor: Cursor;
+}
+
+const OWN_GLOW = "tonnetzGlow"; // this view's own filter, when it owns the svg
 
 // the full-screen view measures the (outer) svg itself and sets innerHTML;
 // the combo view instead asks for markup() at an exact W×H so it can place
 // the lattice inside a clipped <g> in its own single svg — no nested <svg>,
 // whose clipping and getBoundingClientRect both misbehave.
-export const render: View = (svg, score, t) => {
+export const render: View = (svg, { score, t, live }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.innerHTML = GLOW + markup(W, H, score, t);
+  svg.innerHTML =
+    `<defs>${glowFilter(OWN_GLOW)}</defs>` +
+    markup(W, H, score, t, { glowId: OWN_GLOW, held: live.held, cursor: live.tonnetz.cursor });
 };
 
 // the lattice as a markup string for a W×H region (origin at 0,0); no <defs>
-// — the caller supplies one shared glow filter.
-export const markup = (W: number, H: number, score: Score, t: number): string => {
+// — the caller defines the glow filter and names it in `o.glowId`.
+export const markup = (W: number, H: number, score: Score, t: number, o: MarkupOpts): string => {
   if (!W || !H) return "";
+  const { glowId, cursor } = o;
   const cx = W / 2;
   const cy = H / 2;
   const X = (c: Cell) => cx + c[0] * DX + c[1] * (DX / 2);
@@ -87,9 +89,9 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
   // sounding pitch classes = score notes active now ∪ live-held keys.
   const sounding = new Set<number>();
   for (const n of Core.activeAt(score, t)) sounding.add(((n.pitch % 12) + 12) % 12);
-  const held = new Set<number>();
-  for (const p of LiveKeys.held()) held.add(((p % 12) + 12) % 12);
-  const lit = (p: number) => held.has(p) || sounding.has(p);
+  const heldClasses = new Set<number>();
+  for (const p of o.held) heldClasses.add(((p % 12) + 12) % 12);
+  const lit = (p: number) => heldClasses.has(p) || sounding.has(p);
 
   const onScreen = (c: Cell, m = DX) => X(c) >= -m && X(c) <= W + m && Y(c) >= -m && Y(c) <= H + m;
 
@@ -147,16 +149,15 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
       // the node + its pitch-class name, lit when sounding/held.
       const p = pc(A);
       const on = lit(p);
-      const fill = held.has(p) ? "var(--key-press)" : sounding.has(p) ? "var(--note-lit)" : "var(--panel)";
-      const glow = on ? ` filter="url(#glow)"` : "";
+      const fill = heldClasses.has(p) ? "var(--key-press)" : sounding.has(p) ? "var(--note-lit)" : "var(--panel)";
+      const glow = glowAttr(glowId, on);
       nodes += `<circle cx="${X(A)}" cy="${Y(A)}" r="14" fill="${fill}" stroke="var(--grid-oct)" stroke-width="1"${glow}/>`;
-      nodes += `<text x="${X(A)}" y="${Y(A) + 4}" text-anchor="middle" font-size="11" font-weight="${on ? 700 : 400}" fill="${on ? "#0b1020" : "var(--ink-dim)"}">${NAMES[p]}</text>`;
+      nodes += `<text x="${X(A)}" y="${Y(A) + 4}" text-anchor="middle" font-size="11" font-weight="${on ? 700 : 400}" fill="${on ? "#0b1020" : "var(--ink-dim)"}">${PITCH_NAMES[p]}</text>`;
     }
   }
 
   // cursor overlay: the player's current position, as a stroked outline
-  // distinct from sounding fills. Single read of snapshot() — see header.
-  const { cursor } = TonnetzState.snapshot();
+  // distinct from sounding fills. Handed in with the frame — see the header.
   const cv = (c: number, r: number): Cell => [c, r] as Cell;
   const cursorVerts = cursor.orient === "up"
     ? [cv(cursor.col, cursor.row), cv(cursor.col, cursor.row + 1), cv(cursor.col + 1, cursor.row)]
@@ -167,4 +168,8 @@ export const markup = (W: number, H: number, score: Score, t: number): string =>
   return fills + edges + nodes + labels + cursorOverlay;
 };
 
-export const Tonnetz = { render, markup, pitchClassAt, triadName, neoTransform };
+// a pitch-class lattice is not a keyboard — no pointer hit-testing here.
+export const Tonnetz: ViewModule & {
+  markup: typeof markup;
+  neoTransform: typeof neoTransform;
+} = { render, keyboardRegion: () => null, markup, neoTransform };

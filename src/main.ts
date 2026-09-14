@@ -12,21 +12,31 @@ import { MxlIn } from "./inputs/mxl";
 import { LilyIn } from "./inputs/lily";
 import { StaffFull } from "./outputs/staff-full";
 import { StaffStd } from "./outputs/staff-std";
-import { PianoRoll, type Region as PianoRollRegion } from "./outputs/piano-roll";
+import { PianoRoll } from "./outputs/piano-roll";
 import { StaffPiano } from "./outputs/staff-piano";
 import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
+import { Practice } from "./outputs/practice";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
-import { LiveKeys } from "./live-keys";
+import { LiveKeys, type Voice } from "./live-keys";
+import { TonnetzState } from "./tonnetz-state";
 import { LiveMidi } from "./live-midi";
 import { LiveGamepad, keysMapping } from "./live-gamepad";
 import { perfectoMapping } from "./gamepad-perfecto";
 import { tonnetzMapping } from "./gamepad-tonnetz";
 import { PerfState } from "./perf-state";
-import { chordName, DEGREE_NUMERAL, type Degree, type JoystickDirection } from "./harmony/perfecto";
-import type { Score, View } from "./types";
+import { PracticeState } from "./practice-state";
+import type { HandFilter } from "./steps";
+import {
+  chordName, degreeNumeral, PITCH_NAMES,
+  type Degree, type JoystickDirection, type PitchClass,
+} from "./harmony/perfecto";
+import { realize, transposeTo, type Chart } from "./harmony/progression";
+import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
+import type { Score } from "./types";
+import type { LiveSnapshot, Region, ViewModule } from "./view";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
@@ -45,16 +55,31 @@ const decodeText = (buf: ArrayBuffer): string => {
 
 const svg = document.getElementById("staff") as unknown as SVGSVGElement;
 let score: Score = Core.makeScore([]); // empty until loaded
-let view: View = StaffFull.render; // current projection
+// What the score MEANS, when it was generated from a Progression rather
+// than parsed from a file. Travels beside the score, never inside it —
+// see harmony/progression.ts. Null is the honest answer for a file.
+let chart: Chart | null = null;
+let view: ViewModule = StaffFull; // current projection
 let scrubbing = false;
 
 const clock = makeClock(() => score.duration);
 
 const fmt = (s: number) => s.toFixed(2);
 
-// the per-frame projection — pure function of (score, now())
+// The live performance state, read ONCE per frame and handed to every
+// consumer as a value. Reading it per-view would let two views in one frame
+// observe different LiveKeys states; reading it here cannot.
+const liveSnapshot = (): LiveSnapshot => ({
+  held: LiveKeys.held(),
+  perf: PerfState.snapshot(),
+  tonnetz: TonnetzState.snapshot(),
+  practice: PracticeState.snapshot(),
+});
+
+// the per-frame projection — now genuinely a pure function of the frame it
+// is handed, with no ambient state reached for behind the signature.
 clock.onFrame((t) => {
-  view(svg, score, t);
+  view.render(svg, { score, t, live: liveSnapshot() });
   AudioOut.at(score, t, clock.isPlaying());
   MidiOut.at(score, t, clock.isPlaying());
   if (!scrubbing && score.duration > 0) {
@@ -63,8 +88,9 @@ clock.onFrame((t) => {
   $("time").textContent = `${fmt(t)} / ${fmt(score.duration)}s`;
 });
 
-function loadScore(s: Score, label?: string): void {
+function loadScore(s: Score, label?: string, analysis: Chart | null = null): void {
   score = s;
+  chart = analysis;
   clock.seek(0);
   clock.pause();
   AudioOut.silence();
@@ -72,6 +98,10 @@ function loadScore(s: Score, label?: string): void {
   for (const id of ["play", "stop", "scrub"]) ($<HTMLButtonElement>(id)).disabled = false;
   $("play").textContent = "Play";
   $("status").textContent = label ? `${label} · ${score.notes.length} notes · ${fmt(score.duration)}s` : "";
+  // a lesson is about a score, so a new score is a new lesson.
+  if (view === Practice) PracticeState.begin(score, clock.seek, chart);
+  syncTransport();
+  syncBarInputs();
 }
 
 // --- inputs --------------------------------------------------------
@@ -97,6 +127,7 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
         (!looksXml && /\\(relative|fixed|score|new|version|tempo)\b/.test(txt));
       parsed = looksLily ? LilyIn.parse(txt) : MusicxmlIn.parse(txt);
     }
+    progression.value = ""; // a parsed file is not a progression
     loadScore(parsed, f.name);
   } catch (err) {
     $("status").textContent = "Couldn't read that file: " + (err as Error).message;
@@ -105,6 +136,7 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
 
 $("demo").addEventListener("click", () => {
   AudioOut.ensure();
+  progression.value = "";
   loadScore(demoScore(), "demo");
 });
 
@@ -151,7 +183,7 @@ gamepadBtn.addEventListener("click", () => {
   }
   try {
     AudioOut.ensure();
-    LiveGamepad.enable();
+    LiveGamepad.enable(clock);
     gamepadOn = true;
     gamepadBtn.textContent = "Disable gamepad";
     $("status").textContent = "Gamepad on · press a button on your controller to begin.";
@@ -209,7 +241,12 @@ $("stop").addEventListener("click", () => {
 
 const scrub = $<HTMLInputElement>("scrub");
 const doScrub = () => {
-  if (score.duration > 0) clock.seek((+scrub.value / 1000) * score.duration);
+  if (score.duration <= 0) return;
+  const t = (+scrub.value / 1000) * score.duration;
+  // in practice mode the cursor owns the clock, so scrubbing moves the
+  // CURSOR and lets it seek — otherwise the two would fight for `t`.
+  if (view === Practice) PracticeState.seekToTime(t);
+  else clock.seek(t);
 };
 scrub.addEventListener("input", () => {
   scrubbing = true;
@@ -221,15 +258,16 @@ scrub.addEventListener("change", () => {
 });
 
 // --- view toggle (one reference swap) ------------------------------
-const VIEWS: Record<string, View> = {
-  full: StaffFull.render,
-  std: StaffStd.render,
-  "std-keys": StaffPiano.renderKeys,
-  "std-roll": StaffPiano.renderRoll,
-  roll: PianoRoll.render,
-  tonnetz: Tonnetz.render,
-  both: Combo.render,
-  nashville: Nashville.render,
+const VIEWS: Record<string, ViewModule> = {
+  full: StaffFull,
+  std: StaffStd,
+  "std-keys": StaffPiano.keysView,
+  "std-roll": StaffPiano.rollView,
+  roll: PianoRoll,
+  tonnetz: Tonnetz,
+  both: Combo,
+  nashville: Nashville,
+  practice: Practice,
 };
 const gamepadHelpTonnetz = $<HTMLDetailsElement>("gamepad-help-tonnetz");
 const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
@@ -237,11 +275,153 @@ const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
 const handsWrap = $<HTMLLabelElement>("hands-wrap");
 const handsBox = $<HTMLInputElement>("hands");
 handsBox.addEventListener("change", () => StaffPiano.setHands(handsBox.checked));
+
+// --- practice mode controls ----------------------------------------
+// In practice mode the LEARNER is the transport: the cursor advances when
+// the right keys go down and seeks the clock to match, so Play/Stop would
+// be a second, disagreeing source of time. Disable them, and let the scrub
+// bar land on the nearest step instead of an arbitrary instant.
+const practiceWrap = $<HTMLSpanElement>("practice-wrap");
+const practiceHand = $<HTMLSelectElement>("practice-hand");
+
+// --- progressions: a lesson with no file behind it -------------------
+// A Progression is a SOURCE of a score, taking its place beside the MIDI
+// and MusicXML parsers rather than sitting next to practice mode as a
+// second engine — so everything downstream (steps, cursor, keyboard,
+// arrows, audio, MIDI-out, and every other view) works on it unchanged.
+// What it adds is the Chart: the analysis the notes alone cannot carry.
+const progression = $<HTMLSelectElement>("progression");
+const progRoot = $<HTMLSelectElement>("prog-root");
+
+// the picker is built from the repertoire, not typed out in the HTML — a
+// structure added to the catalogue appears here, and one that is not in it
+// cannot be selected.
+for (const family of FAMILIES) {
+  const group = document.createElement("optgroup");
+  group.label = family;
+  for (const p of REPERTOIRE.filter((x) => x.family === family)) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    group.appendChild(opt);
+  }
+  progression.appendChild(group);
+}
+for (const [pc, name] of PITCH_NAMES.entries()) {
+  const opt = document.createElement("option");
+  opt.value = String(pc);
+  opt.textContent = name;
+  progRoot.appendChild(opt);
+}
+
+/** Realize the chosen structure in the chosen key and hand it to the
+ *  cursor as a lesson. `about` goes to the status line, where it can wrap:
+ *  the harmony bar is a column of labels, not a place for a sentence. */
+function loadProgression(): void {
+  const base = progressionById(progression.value);
+  if (!base) return;
+  const p = transposeTo(base, Number(progRoot.value) as PitchClass);
+  const { notes, chart: analysis, barlines } = realize(p);
+  AudioOut.ensure();
+  loadScore(Core.makeScore(notes, barlines), undefined, analysis);
+  $("status").textContent = `${p.name} in ${PITCH_NAMES[p.home.root]} · ${p.about}`;
+}
+progression.addEventListener("change", () => {
+  if (progression.value) loadProgression();
+});
+progRoot.addEventListener("change", () => {
+  if (progression.value) loadProgression();
+});
+
+const showOther = $<HTMLInputElement>("show-other");
+const playOther = $<HTMLInputElement>("play-other");
+// stated in the negative, because that is what the box says: the arrows are
+// off unless you ask for them, so the checkbox that is ON by default has to
+// be the one that means "hide".
+const hideArrows = $<HTMLInputElement>("hide-arrows");
+practiceHand.addEventListener("change", () => PracticeState.setHand(practiceHand.value as HandFilter));
+showOther.addEventListener("change", () => PracticeState.setShowOther(showOther.checked));
+hideArrows.addEventListener("change", () => PracticeState.setShowArrows(!hideArrows.checked));
+playOther.addEventListener("change", () => {
+  AudioOut.ensure();
+  PracticeState.setPlayOther(playOther.checked);
+});
+
+// --- isolating bars ---------------------------------------------------
+// The inputs speak bar NUMBERS (from 1); the state speaks indices. The one
+// conversion lives in these two functions, in opposite directions, and
+// nowhere else. Either box empty means "from the first" / "to the last";
+// both empty means the whole piece.
+const barFrom = $<HTMLInputElement>("bar-from");
+const barTo = $<HTMLInputElement>("bar-to");
+
+/** Inputs -> state. */
+function applyBarInputs(): void {
+  const a = parseInt(barFrom.value, 10);
+  const b = parseInt(barTo.value, 10);
+  const hasA = Number.isFinite(a);
+  const hasB = Number.isFinite(b);
+  if (!hasA && !hasB) PracticeState.setRange(null);
+  else PracticeState.setRange({
+    from: (hasA ? a : 1) - 1,
+    to: (hasB ? b : score.bars.length) - 1,
+  });
+  syncBarInputs(); // ...and back, so the boxes show what was actually accepted
+}
+
+/** State -> inputs. Called after anything that can change the range —
+ *  a click on the page, a new score — so the boxes never lie about it. */
+function syncBarInputs(): void {
+  const { range } = PracticeState.snapshot();
+  barFrom.value = range ? String(range.from + 1) : "";
+  barTo.value = range ? String(range.to + 1) : "";
+  const max = String(Math.max(1, score.bars.length));
+  barFrom.max = max;
+  barTo.max = max;
+}
+
+barFrom.addEventListener("change", applyBarInputs);
+barTo.addEventListener("change", applyBarInputs);
+$("bar-all").addEventListener("click", () => {
+  PracticeState.setRange(null);
+  syncBarInputs();
+});
+$("step-back").addEventListener("click", () => PracticeState.step(-1));
+$("step-fwd").addEventListener("click", () => PracticeState.step(1));
+
+// Play/Stop mean nothing while the learner drives; the scrub still does.
+function syncTransport(): void {
+  const practising = view === Practice;
+  const loaded = score.notes.length > 0;
+  for (const id of ["play", "stop"]) $<HTMLButtonElement>(id).disabled = practising || !loaded;
+}
+
 $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   const val = (e.target as HTMLSelectElement).value;
-  view = VIEWS[val] ?? StaffFull.render;
+  view = VIEWS[val] ?? StaffFull;
   handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
+  practiceWrap.style.display = val === "practice" ? "" : "none";
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
+  // ...and forget which degree keys the Perfecto harness thinks are down.
+  // Practice mode ignores its keyup, so without this a degree held across
+  // the switch would look held forever, and the next release of any other
+  // degree would re-sound a chord into a lesson that is grading presses.
+  PerfState.release();
+  heldDegrees.length = 0;
+  // a lesson exists only while its view does — begin/end here rather than
+  // leaving a cursor listening to LiveKeys behind a view nobody is looking at.
+  if (val === "practice") {
+    AudioOut.ensure();
+    clock.pause();
+    PracticeState.begin(score, clock.seek, chart);
+    $("status").textContent = score.notes.length
+      ? "Practice · play the lit keys; click a bar on the page to drill it (shift-click extends) · ← → step"
+      : "Practice · load a score to begin.";
+  } else {
+    PracticeState.end();
+  }
+  syncTransport();
+  syncBarInputs();
   // the controller means different things per view: Nashville → Perfecto,
   // Tonnetz/Combo → lattice instrument, everything else → chromatic keyboard.
   LiveGamepad.setMapping(
@@ -262,45 +442,52 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
 // into an INPUT surface too. Tracked per-pointer so chords, multi-touch,
 // and glissando all work. The hit-test is pure coordinate math
 // (PianoRoll.pitchAt), so the per-frame innerHTML rebuild can't break it.
-const pointerPitch = new Map<number, number>(); // pointerId -> currently-pressed pitch
-// where the playable keyboard lives in `svg` right now, or null if the current
-// view has none. The roll view IS the keyboard (whole svg); the combo view
-// confines it to a bottom band; everything else has no keyboard to hit-test.
-const rollRegion = (): PianoRollRegion | null | undefined =>
-  view === PianoRoll.render ? undefined // undefined = the whole svg
-  : view === Combo.render ? Combo.rollRegion(svg)
-  : view === StaffPiano.renderKeys ? StaffPiano.keysRegion(svg)
-  : view === StaffPiano.renderRoll ? StaffPiano.rollRegion(svg)
-  : null; // null = no keyboard here
+// Each pointer owns its own voice, so a pointer-pressed C4 and a chord's C4
+// refcount independently: lifting the finger can't steal the chord's note.
+const pointerVoice = new Map<number, Voice>(); // pointerId -> its live voice
+// Where the playable keyboard lives in `svg` right now, or null if the current
+// view has none. The view answers for itself — this used to be a chain of
+// reference-identity comparisons against specific module exports, which meant
+// a new view silently had no keyboard and any decorator around a view broke
+// hit-testing without an error.
+const rollRegion = (): Region | null => view.keyboardRegion(svg, liveSnapshot());
 svg.addEventListener("pointerdown", (e) => {
+  // the page above the practice keyboard is a second input surface: a bar
+  // clicked there is isolated, and shift-click grows the range to reach it.
+  if (view === Practice) {
+    const bar = Practice.barAt(svg, e.clientX, e.clientY, liveSnapshot());
+    if (bar !== null) {
+      PracticeState.isolate(bar, e.shiftKey);
+      syncBarInputs();
+      e.preventDefault();
+      return;
+    }
+  }
   const region = rollRegion();
   if (region === null) return;
   AudioOut.ensure(); // first gesture unlocks the AudioContext
   const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY, region);
   if (p == null) return;
   svg.setPointerCapture(e.pointerId);
-  pointerPitch.set(e.pointerId, p);
-  LiveKeys.press(p);
+  pointerVoice.set(e.pointerId, LiveKeys.press(p));
   e.preventDefault();
 });
 svg.addEventListener("pointermove", (e) => {
-  if (!pointerPitch.has(e.pointerId)) return;
+  const prev = pointerVoice.get(e.pointerId);
+  if (!prev) return;
   const region = rollRegion();
   if (region === null) return;
-  const prev = pointerPitch.get(e.pointerId)!;
   const p = PianoRoll.pitchAt(svg, e.clientX, e.clientY, region);
-  if (p === prev) return;
+  if (p === prev.pitch) return;
   LiveKeys.release(prev); // slid off this key...
-  if (p == null) pointerPitch.delete(e.pointerId); // ...and off the keyboard
-  else {
-    LiveKeys.press(p);
-    pointerPitch.set(e.pointerId, p);
-  } // ...onto the next (gliss)
+  if (p == null) pointerVoice.delete(e.pointerId); // ...and off the keyboard
+  else pointerVoice.set(e.pointerId, LiveKeys.press(p)); // ...onto the next (gliss)
 });
 const endPointer = (e: PointerEvent) => {
-  if (!pointerPitch.has(e.pointerId)) return;
-  LiveKeys.release(pointerPitch.get(e.pointerId)!);
-  pointerPitch.delete(e.pointerId);
+  const v = pointerVoice.get(e.pointerId);
+  if (!v) return;
+  LiveKeys.release(v);
+  pointerVoice.delete(e.pointerId);
 };
 svg.addEventListener("pointerup", endPointer);
 svg.addEventListener("pointercancel", endPointer);
@@ -327,7 +514,7 @@ function perfStatus(): void {
   const s = PerfState.snapshot();
   const name = chordName(s.key, s.degree, s.joystickMode, s.joystickDirection);
   $("status").textContent =
-    `Perfecto · ${DEGREE_NUMERAL[s.degree]} ${name} · ${s.joystickMode}/${s.joystickDirection}` +
+    `Perfecto · ${degreeNumeral(s.key, s.degree)} ${name} · ${s.joystickMode}/${s.joystickDirection}` +
     ` · ${s.inversion} · oct ${s.octave}${s.voiceLeading ? " · VL" : ""}`;
 }
 // re-sound the current selection if (and only if) a chord is being held
@@ -340,6 +527,17 @@ const isTyping = (el: EventTarget | null): boolean => {
 
 window.addEventListener("keydown", (e) => {
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+  // In practice mode the arrow keys walk the cursor by hand — back to see a
+  // transition again, forward to skip one — and nothing else on the
+  // keyboard means anything. Not the harness below: it presses chords
+  // THROUGH LiveKeys, and the practice cursor grades everything that
+  // arrives there. A stray "1" would sound a C major triad and advance the
+  // lesson with it.
+  if (view === Practice) {
+    if (e.key === "ArrowLeft") { PracticeState.step(-1); e.preventDefault(); }
+    else if (e.key === "ArrowRight") { PracticeState.step(1); e.preventDefault(); }
+    return;
+  }
   const k = e.key.toLowerCase();
 
   if (k >= "1" && k <= "7") {
@@ -361,6 +559,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("keyup", (e) => {
+  if (view === Practice) return; // see keydown; the view change cleared us
   const k = e.key.toLowerCase();
   if (k < "1" || k > "7") return;
   const d = Number(k) as Degree;
@@ -371,14 +570,18 @@ window.addEventListener("keyup", (e) => {
 });
 
 // redraw on resize so the SVG tracks the viewport
-window.addEventListener("resize", () => view(svg, score, clock.now()));
+window.addEventListener("resize", () =>
+  view.render(svg, { score, t: clock.now(), live: liveSnapshot() }));
 
 /* a tiny built-in score so the thing runs with no file:
-   C-major arpeggio up then a triad, just to exercise the pipeline. */
+   C-major arpeggio up then a triad, just to exercise the pipeline. In
+   4/4 at one note a beat, so it has bars to isolate too. */
 function demoScore(): Score {
+  const BEAT = 0.35;
   const seq = [60, 64, 67, 72, 67, 64, 60, 62, 64, 65, 67, 69, 71, 72];
-  const notes = seq.map((pitch, i) => ({ pitch, onset: i * 0.35, duration: 0.33 }));
+  const notes = seq.map((pitch, i) => ({ pitch, onset: i * BEAT, duration: 0.33 }));
   // a sustained low triad underneath
-  [48, 52, 55].forEach((p) => notes.push({ pitch: p, onset: 0, duration: seq.length * 0.35 }));
-  return Core.makeScore(notes);
+  [48, 52, 55].forEach((p) => notes.push({ pitch: p, onset: 0, duration: seq.length * BEAT }));
+  const bars = Math.ceil(seq.length / 4);
+  return Core.makeScore(notes, Array.from({ length: bars + 1 }, (_, i) => i * 4 * BEAT));
 }

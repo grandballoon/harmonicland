@@ -1,18 +1,24 @@
 /* ====================================================================
    MIDI_IN — bytes -> score. A minimal Standard MIDI File reader:
    header + track chunks, variable-length deltas, note-on/off pairing,
-   tempo (set-tempo meta) -> seconds. Fills pitch + timing, lets Core
-   pick the default spelling. No dependency on any output.
+   tempo (set-tempo meta) -> seconds, time signature (meta 0x58) ->
+   barlines. Fills pitch + timing, lets Core pick the default spelling.
+   No dependency on any output.
    ==================================================================== */
 import { Core } from "../core";
-import type { Score, RawNote } from "../types";
+import type { Barline, Score, RawNote } from "../types";
 
 interface MidiEvent {
   tick: number;
-  kind: "tempo" | "on" | "off";
+  kind: "tempo" | "meter" | "key" | "bar" | "on" | "off";
   pitch?: number;
   vel?: number;
   usPerQ?: number;
+  /** meter and bar: the time signature, beats over unit. */
+  beats?: number;
+  unit?: number;
+  /** key and bar: sharps (+) or flats (−) on the circle of fifths. */
+  fifths?: number;
   track?: number; // 1-based; piano exports put the hands on separate tracks
 }
 
@@ -80,6 +86,17 @@ export function parse(bytes: ArrayBuffer): Score {
           // set tempo (3 bytes)
           const usPerQ = (dv.getUint8(p) << 16) | (dv.getUint8(p + 1) << 8) | dv.getUint8(p + 2);
           events.push({ tick, kind: "tempo", usPerQ });
+        } else if (type === 0x58 && mlen >= 2) {
+          // time signature: numerator, then the denominator as a power of
+          // two (2 = quarter, 3 = eighth). The remaining two bytes describe
+          // the metronome click and are not about where bars fall.
+          const num = dv.getUint8(p);
+          const den = 1 << dv.getUint8(p + 1);
+          if (num > 0) events.push({ tick, kind: "meter", beats: num, unit: den });
+        } else if (type === 0x59 && mlen >= 1) {
+          // key signature: a signed count of sharps (flats when negative);
+          // the mode byte after it says nothing about what gets printed.
+          events.push({ tick, kind: "key", fifths: dv.getInt8(p) });
         }
         p += mlen;
       } else if (status === 0xf0 || status === 0xf7) {
@@ -107,8 +124,39 @@ export function parse(bytes: ArrayBuffer): Score {
     p = end;
   }
 
-  // tick -> seconds using the tempo map (default 120bpm = 500000 us/q).
+  // Barlines are laid down in TICKS first, from the meter map, and then
+  // ride through the same tempo integration as the notes below — so a
+  // barline and the note on it land on the same second by construction,
+  // never by two conversions agreeing. Default 4/4 when the file says
+  // nothing, which is what every sequencer assumes too.
   events.sort((a, b) => a.tick - b.tick);
+  const endTick = events.reduce((m, e) => Math.max(m, e.tick), 0);
+  const meters = events.filter((e) => e.kind === "meter");
+  if (meters.length === 0 || meters[0].tick > 0)
+    meters.unshift({ tick: 0, kind: "meter", beats: 4, unit: 4 });
+  const keys = events.filter((e) => e.kind === "key");
+  const keyAt = (tick: number): number => {
+    let f = 0;
+    for (const k of keys) if (k.tick <= tick) f = k.fifths!;
+    return f;
+  };
+  for (let i = 0; i < meters.length; i++) {
+    const last = i === meters.length - 1;
+    const until = last ? endTick : meters[i + 1].tick;
+    const { beats, unit } = meters[i];
+    const barTicks = ((beats! * 4) / unit!) * division;
+    if (barTicks <= 0) continue;
+    const bar = (t: number): MidiEvent => ({ tick: t, kind: "bar", beats, unit, fifths: keyAt(t) });
+    let t = meters[i].tick;
+    for (; t < until; t += barTicks) events.push(bar(t));
+    // the closing post: the end of the final bar, which runs its full
+    // length past the last note-off rather than stopping at it.
+    if (last) events.push(bar(t));
+  }
+  events.sort((a, b) => a.tick - b.tick);
+  const barlines: Barline[] = [];
+
+  // tick -> seconds using the tempo map (default 120bpm = 500000 us/q).
   let usPerQ = 500000;
   let lastTick = 0;
   let seconds = 0;
@@ -124,6 +172,8 @@ export function parse(bytes: ArrayBuffer): Score {
     lastTick = ev.tick;
     if (ev.kind === "tempo") {
       usPerQ = ev.usPerQ!;
+    } else if (ev.kind === "bar") {
+      barlines.push({ at: seconds, beats: ev.beats, unit: ev.unit, fifths: ev.fifths });
     } else if (ev.kind === "on") {
       // stack note-ons of same key; pair LIFO on next off
       const key = (ev.track! << 7) | ev.pitch!;
@@ -133,16 +183,26 @@ export function parse(bytes: ArrayBuffer): Score {
       const stack = open.get((ev.track! << 7) | ev.pitch!);
       if (stack && stack.length) {
         const onset = stack.shift()!;
-        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset), staff: ev.track });
+        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset), stream: ev.track });
       }
     }
   }
   // close any hung notes at end
   for (const [key, stack] of open)
-    for (const onset of stack) notes.push({ pitch: key & 0x7f, onset, duration: 0.25, staff: key >> 7 });
+    for (const onset of stack) notes.push({ pitch: key & 0x7f, onset, duration: 0.25, stream: key >> 7 });
 
   if (!notes.length) throw new Error("No notes found in file.");
-  return Core.makeScore(notes);
+
+  // Resolve the hand HERE, in the only namespace that knows what these track
+  // numbers mean. A format-1 file leads with a tempo track that bears no
+  // notes, so track 1 is routinely empty and "track 1 = upper" would be
+  // wrong; skip the empty ones and let the lowest NOTE-BEARING track be the
+  // upper hand. (This is the normalization Core.upperStaff used to do
+  // downstream, guessing at a namespace it could not see.)
+  const lowest = Math.min(...notes.map((n) => n.stream!));
+  for (const n of notes) n.hand = n.stream === lowest ? "upper" : "lower";
+
+  return Core.makeScore(notes, barlines);
 }
 
 export const MidiIn = { parse };

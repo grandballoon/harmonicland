@@ -15,7 +15,7 @@
    never silently broken. A master compressor tames big chords.
    ==================================================================== */
 import { Core } from "../core";
-import type { Score, Note } from "../types";
+import type { Score, Note, NoteId } from "../types";
 
 interface Voice {
   src: OscillatorNode | AudioBufferSourceNode;
@@ -25,7 +25,7 @@ interface Voice {
 let ctx: AudioContext | null = null;
 let master: DynamicsCompressorNode | null = null;
 let muted = false; // silenced while an external synth (MIDI out) is driving sound
-const voices = new Map<Note, Voice>(); // score note(object) -> voice
+const voices = new Map<NoteId, Voice>(); // score note id -> voice
 const live = new Map<number, Voice>(); // pitch -> voice  (user-played keys)
 
 function freq(pitch: number): number {
@@ -112,13 +112,13 @@ function kill(v: Voice): void {
   v.src.stop(c.currentTime + 0.5);
 }
 function startVoice(n: Note): void {
-  voices.set(n, spawn(n.pitch));
+  voices.set(n.id, spawn(n.pitch));
 }
-function stopVoice(n: Note): void {
-  const v = voices.get(n);
+function stopVoice(id: NoteId): void {
+  const v = voices.get(id);
   if (!v) return;
   kill(v);
-  voices.delete(n);
+  voices.delete(id);
 }
 export function silence(): void {
   for (const n of [...voices.keys()]) stopVoice(n);
@@ -146,9 +146,12 @@ export function at(score: Score, t: number, playing: boolean): void {
     silence();
     return;
   }
-  const active = new Set(Core.activeAt(score, t));
-  for (const n of active) if (!voices.has(n)) startVoice(n);
-  for (const n of [...voices.keys()]) if (!active.has(n)) stopVoice(n);
+  // diff on NoteId: "the same note as last frame" is a property of the value,
+  // not of activeAt happening to return the score's own objects.
+  const active = Core.activeAt(score, t);
+  const activeIds = new Set(active.map((n) => n.id));
+  for (const n of active) if (!voices.has(n.id)) startVoice(n);
+  for (const id of [...voices.keys()]) if (!activeIds.has(id)) stopVoice(id);
 }
 
 // live key path — independent of the score and the clock. One sustained

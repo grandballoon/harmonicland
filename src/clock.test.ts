@@ -53,3 +53,73 @@ describe("makeClock", () => {
     expect(clock.now()).toBeCloseTo(0, 6);
   });
 });
+
+/* Finding 14: the clock claimed "exactly one timer in this whole program"
+   while live-gamepad ran a second, independent rAF — because onFrame had no
+   unsubscribe and tick no stop, so anything needing a per-frame callback had
+   to start its own loop. Both operations now exist, and the gamepad shares
+   this one. */
+describe("Clock frame lifecycle", () => {
+  // drive rAF by hand so the loop is observable without real frames
+  const frames: (() => void)[] = [];
+  const install = () =>
+    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((fn) => {
+      frames.push(() => fn(0));
+      return frames.length;
+    });
+  const advance = () => {
+    const due = frames.splice(0, frames.length);
+    for (const f of due) f();
+  };
+
+  afterEach(() => { frames.length = 0; });
+
+  it("drives every subscriber off one loop", () => {
+    install();
+    const clock = makeClock(() => 10);
+    const a = vi.fn();
+    const b = vi.fn();
+    clock.onFrame(a);
+    clock.onFrame(b);
+    advance();
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+    clock.stop();
+  });
+
+  it("onFrame returns an unsubscribe that actually detaches", () => {
+    install();
+    const clock = makeClock(() => 10);
+    const fn = vi.fn();
+    const off = clock.onFrame(fn);
+    advance();
+    expect(fn).toHaveBeenCalledTimes(1);
+    off();
+    advance();
+    expect(fn).toHaveBeenCalledTimes(1); // no further ticks
+    clock.stop();
+  });
+
+  it("tolerates a subscriber unsubscribing from inside its own callback", () => {
+    install();
+    const clock = makeClock(() => 10);
+    const other = vi.fn();
+    const off = clock.onFrame(() => off());
+    clock.onFrame(other);
+    expect(() => advance()).not.toThrow();
+    expect(other).toHaveBeenCalledTimes(1);
+    clock.stop();
+  });
+
+  it("stop() cancels the loop and drops the subscribers", () => {
+    install();
+    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
+    const clock = makeClock(() => 10);
+    const fn = vi.fn();
+    clock.onFrame(fn);
+    clock.stop();
+    expect(cancel).toHaveBeenCalled();
+    advance();
+    expect(fn).not.toHaveBeenCalled();
+  });
+});

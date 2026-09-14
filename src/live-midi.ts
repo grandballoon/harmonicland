@@ -11,7 +11,7 @@
    MidiNoteEvent is private here, exactly like MidiEvent in midi.ts: it's
    an input detail, not part of the types.ts model contract.
    ==================================================================== */
-import { LiveKeys } from "./live-keys";
+import { LiveKeys, type Voice } from "./live-keys";
 
 interface MidiNoteEvent {
   kind: "on" | "off";
@@ -34,12 +34,21 @@ export function decode(data: Uint8Array): MidiNoteEvent | null {
 let access: MIDIAccess | null = null;
 const attached = new Set<MIDIInput>();
 
+// the voices this device is holding, one per sounding pitch. A hardware
+// keyboard can only hold a pitch once, so pitch is the right key here — the
+// map exists so note-off releases OUR voice and not somebody else's.
+const sounding = new Map<number, Voice>();
+
 function onMessage(e: MIDIMessageEvent): void {
   if (!e.data) return;
   const ev = decode(e.data);
   if (!ev) return;
-  if (ev.kind === "on") LiveKeys.press(ev.pitch);
-  else LiveKeys.release(ev.pitch);
+  if (ev.kind === "on") {
+    if (!sounding.has(ev.pitch)) sounding.set(ev.pitch, LiveKeys.press(ev.pitch));
+  } else {
+    const v = sounding.get(ev.pitch);
+    if (v) { LiveKeys.release(v); sounding.delete(ev.pitch); }
+  }
 }
 
 // (re)attach the handler to every current input. Idempotent — assigning
@@ -72,7 +81,10 @@ function disable(): void {
   for (const input of attached) input.onmidimessage = null;
   attached.clear();
   if (access) access.onstatechange = null;
-  LiveKeys.releaseAll(); // panic / stuck-note guard
+  // panic / stuck-note guard: lift exactly the voices this device owns, so
+  // disabling MIDI input can't silence a chord some other surface is holding.
+  for (const v of sounding.values()) LiveKeys.release(v);
+  sounding.clear();
 }
 
 export const LiveMidi = { enable, disable };

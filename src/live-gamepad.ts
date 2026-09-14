@@ -14,8 +14,15 @@
    engine stays ignorant of both; it just hands each mapping a per-frame
    GamepadFrame (button down/up transitions + the held set + raw axes).
    Axes used to be ignored — the perfecto mapping needs them for the stick.
+
+   The poll runs on the CLOCK's frame, not a loop of its own. The Gamepad API
+   has no events so something must sample per frame, and the clock is exactly
+   that; this file grew its own rAF only because the clock had no way to share
+   one. Sharing it also means a button press lights its key on the frame it
+   happened, instead of racing the renderer for it.
    ==================================================================== */
-import { LiveKeys } from "./live-keys";
+import { LiveKeys, type Voice } from "./live-keys";
+import type { Clock } from "./types";
 
 interface GamepadButtonEvent {
   kind: "down" | "up";
@@ -58,19 +65,24 @@ const PITCH_MAP: Record<number, number> = {
 };
 
 // the default mapping: buttons straight to LiveKeys, the original behavior.
+// A button owns its voice, so releasing on button-up lifts exactly the press
+// that button made — never a note some other surface is holding.
+const buttonVoices = new Map<number, Voice>(); // button index -> its voice
+
 export const keysMapping: GamepadMapping = {
   onFrame(f) {
     for (const i of f.downs) {
       const p = PITCH_MAP[i];
-      if (p !== undefined) LiveKeys.press(p);
+      if (p !== undefined && !buttonVoices.has(i)) buttonVoices.set(i, LiveKeys.press(p));
     }
     for (const i of f.ups) {
-      const p = PITCH_MAP[i];
-      if (p !== undefined) LiveKeys.release(p);
+      const v = buttonVoices.get(i);
+      if (v) { LiveKeys.release(v); buttonVoices.delete(i); }
     }
   },
   reset() {
-    LiveKeys.releaseAll();
+    for (const v of buttonVoices.values()) LiveKeys.release(v);
+    buttonVoices.clear();
   },
 };
 
@@ -94,7 +106,7 @@ export function diff(prev: Set<number>, curr: Set<number>): GamepadButtonEvent[]
 }
 
 let mapping: GamepadMapping = keysMapping;
-let raf = 0;
+let unsubscribe: (() => void) | null = null; // set while polling
 const held = new Map<number, Set<number>>(); // gamepad index -> pressed buttons
 
 // swap the controller's meaning. Resets the outgoing mapping so no note or
@@ -126,23 +138,23 @@ function step(): void {
   }
   // drop state for pads that vanished mid-frame so a reconnect starts clean
   for (const idx of [...held.keys()]) if (!live.has(idx)) held.delete(idx);
-  raf = requestAnimationFrame(step);
 }
 
 // enable() needs no permission prompt, but the Gamepad API hides pads
 // until the user presses a button (a privacy gate), so the first frames
-// may simply see nothing — that's expected, not an error.
-function enable(): void {
+// may simply see nothing — that's expected, not an error. It takes the clock
+// because sampling input is per-frame work and the clock owns the frame.
+function enable(clock: Clock): void {
   if (!navigator.getGamepads) {
     throw new Error("The Gamepad API is not supported in this browser.");
   }
-  if (raf) return; // already polling — idempotent like attachAll()
-  raf = requestAnimationFrame(step);
+  if (unsubscribe) return; // already polling — idempotent like attachAll()
+  unsubscribe = clock.onFrame(step);
 }
 
 function disable(): void {
-  if (raf) cancelAnimationFrame(raf);
-  raf = 0;
+  unsubscribe?.();
+  unsubscribe = null;
   held.clear();
   mapping.reset(); // panic / stuck-note guard, same as live-midi
 }

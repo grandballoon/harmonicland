@@ -9,8 +9,9 @@
    cleanly — the roll just lives translated into the bottom band.
    ==================================================================== */
 import { Tonnetz } from "./tonnetz";
-import { PianoRoll, type Region } from "./piano-roll";
-import type { View } from "../types";
+import { PianoRoll } from "./piano-roll";
+import { glowFilter } from "./defs";
+import type { View, ViewModule, Region } from "../view";
 
 // The piano roll keeps a fixed-height band at the bottom (its keyboard is
 // ~96px plus some falling-note room); the Tonnetz takes ALL the height above
@@ -23,12 +24,13 @@ const layout = (W: number, H: number) => {
   return { W, H, topH: H - rollH, rollH };
 };
 
-const GLOW = `<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="3" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>`;
+// This view owns the filter, so it owns the id and the radius. The two bands
+// share one here, but nothing forces that any more: each layer is handed its
+// glowId, so giving the lattice a wider bloom than the roll is a one-line
+// change rather than an impossibility.
+const GLOW_ID = "comboGlow";
 
-export const render: View = (svg, score, t) => {
+export const render: View = (svg, { score, t, live }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   if (!W || !H) return;
@@ -38,25 +40,26 @@ export const render: View = (svg, score, t) => {
   // one shared glow filter, plus a clip per band so neither layer's glow or
   // lattice spills across the seam.
   const defs =
-    `<defs>${GLOW}` +
+    `<defs>${glowFilter(GLOW_ID)}` +
     `<clipPath id="comboTop"><rect x="0" y="0" width="${W}" height="${topH}"/></clipPath>` +
     `<clipPath id="comboRoll"><rect x="0" y="0" width="${W}" height="${rollH}"/></clipPath>` +
     `</defs>`;
 
-  const top = `<g clip-path="url(#comboTop)">${Tonnetz.markup(W, topH, score, t)}</g>`;
+  const top =
+    `<g clip-path="url(#comboTop)">${Tonnetz.markup(W, topH, score, t, { glowId: GLOW_ID, held: live.held, cursor: live.tonnetz.cursor })}</g>`;
   // the roll draws in its own 0..rollH space, then we translate it down; the
   // clip (no transform of its own) rides the same translated coordinates.
   const roll =
     `<g transform="translate(0,${topH})"><g clip-path="url(#comboRoll)">` +
-    `${PianoRoll.markup(W, rollH, score, t)}</g></g>`;
+    `${PianoRoll.markup(W, rollH, score, t, { glowId: GLOW_ID, held: live.held })}</g></g>`;
 
   svg.innerHTML = defs + top + roll;
 };
 
 // where the roll's keyboard sits within the svg, for pointer hit-testing.
-export const rollRegion = (svg: SVGSVGElement): Region => {
+const keyboardRegion = (svg: SVGSVGElement): Region => {
   const { W, topH, rollH } = layout(svg.clientWidth, svg.clientHeight);
   return { x: 0, y: topH, w: W, h: rollH };
 };
 
-export const Combo = { render, rollRegion };
+export const Combo: ViewModule = { render, keyboardRegion };

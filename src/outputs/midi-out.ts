@@ -11,7 +11,7 @@
    live-midi's decode(): (status | channel), pitch, velocity.
    ==================================================================== */
 import { Core } from "../core";
-import type { Score, Note } from "../types";
+import type { Score, Pitch, NoteId } from "../types";
 
 const NOTE_ON = 0x90;
 const NOTE_OFF = 0x80;
@@ -26,8 +26,18 @@ export function encode(kind: "on" | "off", pitch: number, vel = VELOCITY): numbe
 }
 
 let port: MIDIOutput | null = null;
-const sounding = new Set<Note>(); // score notes currently held note-on
-const livePitches = new Set<number>(); // user-played pitches (LiveKeys path)
+
+/** SCORE path. Invariant: the notes the PORT has note-on for, keyed by
+ *  NoteId and carrying the pitch each one needs its note-off sent on.
+ *  Deliberately empty when a port opens mid-playback — the port genuinely has
+ *  nothing on yet, and at()'s next frame will attack whatever is active. */
+const sounding = new Map<NoteId, Pitch>();
+
+/** LIVE path. Invariant: the pitches the USER is holding — a mirror of
+ *  LiveKeys, not of the wire — maintained whether or not a port is open, and
+ *  whenever `port` is open it has a matching note-on for exactly these.
+ *  enable() flushes the current hold to make the second half true. */
+const livePitches = new Set<number>();
 
 function send(kind: "on" | "off", pitch: number): void {
   port?.send(encode(kind, pitch));
@@ -47,6 +57,11 @@ async function enable(): Promise<MIDIOutput[]> {
   access.onstatechange = () => {
     if (!port || port.state === "disconnected") port = pick();
   };
+  // the port catches up to what the user is already holding. Without this,
+  // livePitches' invariant is false for every key pressed before enable(),
+  // and the dedupe guards in liveOn/liveOff turn that into a note the synth
+  // never sounds followed by a note-off for a note that was never on.
+  for (const p of livePitches) send("on", p);
   return [...access.outputs.values()];
 }
 
@@ -64,17 +79,18 @@ function at(score: Score, t: number, playing: boolean): void {
     silence();
     return;
   }
-  const active = new Set(Core.activeAt(score, t));
+  const active = Core.activeAt(score, t);
+  const activeIds = new Set(active.map((n) => n.id));
   for (const n of active) {
-    if (!sounding.has(n)) {
+    if (!sounding.has(n.id)) {
       send("on", n.pitch);
-      sounding.add(n);
+      sounding.set(n.id, n.pitch);
     }
   }
-  for (const n of [...sounding]) {
-    if (!active.has(n)) {
-      send("off", n.pitch);
-      sounding.delete(n);
+  for (const [id, pitch] of [...sounding]) {
+    if (!activeIds.has(id)) {
+      send("off", pitch);
+      sounding.delete(id);
     }
   }
 }
@@ -83,13 +99,15 @@ function at(score: Score, t: number, playing: boolean): void {
 // at(), so it deliberately leaves the live path alone — a Perfecto chord
 // triggered while the transport is paused must keep sounding.
 function silence(): void {
-  for (const n of sounding) send("off", n.pitch);
+  for (const pitch of sounding.values()) send("off", pitch);
   sounding.clear();
 }
 
 // live path — the exact mirror of AudioOut.liveOn/liveOff, driven by
 // LiveKeys.press/release. One note-on per held pitch, independent of the
-// score and the clock; guards against duplicate on/off like the audio side.
+// score, the clock, and whether a port is open; guards against duplicate
+// on/off like the audio side. LiveKeys already refcounts, so these see one
+// call per pitch-that-starts and one per pitch-that-stops.
 function liveOn(pitch: number): void {
   if (livePitches.has(pitch)) return;
   livePitches.add(pitch);

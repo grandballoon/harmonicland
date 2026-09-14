@@ -12,11 +12,13 @@
      <chord>      — note shares the previous note's onset, no advance
      <backup>/<forward> — move the cursor (multi-voice / multi-staff)
      <tie>        — merge tied notes into one sustained note
+     <measure>    — a barline at each one's start, and one at the end
+     <time>/<key> — the meter and key signature, carried on the barline
    Out of scope (kept isolated, like every limitation): timewise
    scores. Compressed .mxl arrives here already unwrapped by MxlIn.
    ==================================================================== */
 import { Core } from "../core";
-import type { Score, RawNote, Letter } from "../types";
+import type { Barline, Score, RawNote, Letter, Hand } from "../types";
 
 // letter name -> semitones above C, within an octave
 const STEP_SEMI: Record<Letter, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -45,10 +47,31 @@ export function parse(src: string): Score {
   const initialTempo = firstSound ? parseFloat(firstSound.getAttribute("tempo")!) || 120 : 120;
 
   const notes: RawNote[] = [];
+  // Barlines come from the FIRST part alone. Partwise MusicXML aligns
+  // measures across parts by definition, so any part would give the same
+  // answer and the first is simply the one that is always there; taking the
+  // union would let a part whose voices come up short invent extra bars.
+  const barlines: Barline[] = [];
 
   let partOrdinal = 0;
   for (const part of root.querySelectorAll(":scope > part")) {
     partOrdinal++;
+    // The hand is decided ONCE PER PART, in this part's own namespace, by
+    // asking whether the part is multi-staff — piano-style, where staff 1 is
+    // the upper hand and the rest are lower — or a single voice among several,
+    // where its ORDINAL decides. A part is multi-staff only if it actually has
+    // more than one staff: <attributes><staves> says so outright, and failing
+    // that, more than one distinct <staff> value does.
+    //
+    // Note that "declares any <staff> at all" is NOT the test. An SATB export
+    // gives every part a lone <staff>1</staff>, so that reading collapsed all
+    // four parts onto staff 1 — which is precisely what letting the <staff>
+    // namespace and the ordinal namespace coexist per note used to cost.
+    const declared = numOf(part, "attributes > staves", 1);
+    const distinct = new Set(
+      [...part.querySelectorAll("staff")].map((e) => e.textContent?.trim()),
+    ).size;
+    const multiStaff = declared > 1 || distinct > 1;
     let divisions = 1; // divisions per quarter note (from <attributes>)
     let tempo = initialTempo;
     let cursor = 0; // seconds from piece start
@@ -58,11 +81,20 @@ export function parse(src: string): Score {
     const secPerDiv = () => 60 / tempo / divisions;
 
     for (const measure of part.querySelectorAll(":scope > measure")) {
+      // the post is made first and filled in as the measure's <attributes>
+      // are met — they come inside the measure they govern.
+      const post: { at: number; beats?: number; unit?: number; fifths?: number } = { at: cursor };
+      if (partOrdinal === 1) barlines.push(post);
       for (const el of measure.children) {
         switch (el.nodeName) {
           case "attributes": {
             const d = numOf(el, ":scope > divisions", NaN);
             if (!Number.isNaN(d) && d > 0) divisions = d;
+            const beats = numOf(el, ":scope > time > beats", NaN);
+            const unit = numOf(el, ":scope > time > beat-type", NaN);
+            if (beats > 0 && unit > 0) Object.assign(post, { beats, unit });
+            const fifths = numOf(el, ":scope > key > fifths", NaN);
+            if (!Number.isNaN(fifths)) post.fifths = fifths;
             break;
           }
           case "sound":
@@ -118,12 +150,14 @@ export function parse(src: string): Score {
               break;
             }
 
-            // which staff (piano: 1 = right hand, 2 = left). A note states
-            // it via <staff>; a part without staves gets its ordinal, so
-            // two-part piano exports still split into two streams.
-            const staffNo = numOf(el, ":scope > staff", partOrdinal);
+            // provenance in this part's namespace, and the hand resolved from
+            // it by the rule chosen above for the whole part.
+            const stream = multiStaff ? numOf(el, ":scope > staff", 1) : partOrdinal;
+            const hand: Hand = stream === 1 ? "upper" : "lower";
 
-            const note: RawNote = { pitch, spelling, onset, duration: Math.max(0.02, durSec), staff: staffNo };
+            const note: RawNote = {
+              pitch, spelling, onset, duration: Math.max(0.02, durSec), hand, stream,
+            };
             notes.push(note);
             if (tieStart) open.set(pitch, note);
             break;
@@ -131,10 +165,12 @@ export function parse(src: string): Score {
         }
       }
     }
+    // the closing post: where the last measure's content left the cursor.
+    if (partOrdinal === 1) barlines.push({ at: cursor });
   }
 
   if (!notes.length) throw new Error("No pitched notes found in score.");
-  return Core.makeScore(notes);
+  return Core.makeScore(notes, barlines);
 }
 
 export const MusicxmlIn = { parse };

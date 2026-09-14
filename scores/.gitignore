@@ -1,0 +1,7 @@
+# Derived engravings and stray files. The score SOURCES (.midi, .musicxml,
+# .mxl, .ly) are tracked — losing them is what this directory being untracked
+# already cost us once.
+prelude.ps
+-.pdf
+Untitled.ipynb
+.ipynb_checkpoints/

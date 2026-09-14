@@ -69,3 +69,102 @@ describe("activeAt", () => {
     expect(n).toBe(score.notes[0]);
   });
 });
+
+/* Identity used to be OBJECT identity: activeAt returned score.notes members
+   because it .filter()s, and the audio voice map, the MIDI-out edge detector
+   and the piano roll all keyed on that. A defensive copy anywhere in the
+   chain would have re-attacked every note every frame with nothing failing.
+   It is now a property of the value. */
+describe("note identity", () => {
+  const s = Core.makeScore([
+    { pitch: 64, onset: 1, duration: 1 },
+    { pitch: 60, onset: 0, duration: 2 },
+    { pitch: 67, onset: 0, duration: 2 },
+  ]);
+
+  it("gives every note a distinct id", () => {
+    expect(new Set(s.notes.map((n) => n.id)).size).toBe(s.notes.length);
+  });
+
+  it("numbers ids from the post-sort index, so they follow onset order", () => {
+    expect(s.notes.map((n) => n.id)).toEqual([0, 1, 2]);
+    expect(s.notes.map((n) => n.onset)).toEqual([0, 0, 1]);
+  });
+
+  it("carries the id through activeAt, so consumers can diff frames on it", () => {
+    const at0 = Core.activeAt(s, 0).map((n) => n.id);
+    const at1 = Core.activeAt(s, 1.5).map((n) => n.id);
+    expect(at0.sort()).toEqual([0, 1]);           // the two onset-0 notes
+    expect(at1.sort()).toEqual([0, 1, 2]);        // ...still held, plus E4
+    // the same note across two frames is the same id — the whole point
+    expect(at1).toEqual(expect.arrayContaining(at0));
+  });
+
+  it("survives a defensive copy of the notes activeAt hands back", () => {
+    const copied = Core.activeAt(s, 0).map((n) => ({ ...n }));
+    expect(copied.map((n) => n.id)).toEqual(Core.activeAt(s, 0).map((n) => n.id));
+  });
+});
+
+describe("bars", () => {
+  const one = (dur: number) => [{ pitch: 60, onset: 0, duration: dur }];
+  const bars = (s: { bars: readonly { start: number; end: number }[] }) =>
+    s.bars.map((b) => [b.start, b.end]);
+
+  it("makes one bar of the whole piece when no barlines are given", () => {
+    // so a consumer never has to ask "does this score have bars" first
+    const s = Core.makeScore(one(3));
+    expect(s.bars).toEqual([{ index: 0, start: 0, end: 3, beats: 4, unit: 4, fifths: 0 }]);
+    expect(Core.makeScore([]).bars).toEqual([{ index: 0, start: 0, end: 0, beats: 4, unit: 4, fifths: 0 }]);
+  });
+
+  it("cuts fence posts into half-open bars, numbered densely", () => {
+    const s = Core.makeScore(one(4), [0, 1, 2, 3, 4]);
+    expect(bars(s)).toEqual([[0, 1], [1, 2], [2, 3], [3, 4]]);
+    expect(s.bars.map((b) => b.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("prepends a pickup bar when the first post is after 0", () => {
+    expect(bars(Core.makeScore(one(2.5), [0.5, 1.5, 2.5]))).toEqual([[0, 0.5], [0.5, 1.5], [1.5, 2.5]]);
+  });
+
+  it("continues the last bar's length until the piece is covered", () => {
+    // a note hanging past the final barline must still be IN a bar
+    expect(bars(Core.makeScore(one(2.5), [0, 1]))).toEqual([[0, 1], [1, 2], [2, 3]]);
+  });
+
+  it("drops duplicate and unordered posts rather than making empty bars", () => {
+    expect(bars(Core.makeScore(one(2), [1, 0, 1, 2]))).toEqual([[0, 1], [1, 2]]);
+  });
+
+  it("barAt names the bar containing a time, clamped at both ends", () => {
+    const s = Core.makeScore(one(3), [0, 1, 2, 3]);
+    expect(Core.barAt(s, 0).index).toBe(0);
+    expect(Core.barAt(s, 0.99).index).toBe(0);
+    expect(Core.barAt(s, 1).index).toBe(1); // half-open: the boundary is the NEXT bar
+    expect(Core.barAt(s, 2.5).index).toBe(2);
+    expect(Core.barAt(s, 99).index).toBe(2);
+    expect(Core.barAt(s, -1).index).toBe(0);
+  });
+});
+
+describe("meter and key on the barline", () => {
+  const one = [{ pitch: 60, onset: 0, duration: 4 }];
+  const sig = (s: { bars: readonly { beats: number; unit: number; fifths: number }[] }) =>
+    s.bars.map((b) => [b.beats, b.unit, b.fifths]);
+
+  it("assumes common time and no sharps or flats", () => {
+    expect(sig(Core.makeScore(one, [0, 2, 4]))).toEqual([[4, 4, 0], [4, 4, 0]]);
+  });
+
+  it("carries a stated meter and key forward until changed", () => {
+    const s = Core.makeScore(one, [{ at: 0, beats: 3, unit: 4, fifths: -2 }, 1.5, { at: 3, beats: 6, unit: 8 }, 4.5]);
+    expect(sig(s)).toEqual([[3, 4, -2], [3, 4, -2], [6, 8, -2]]);
+  });
+
+  it("gives a prepended pickup and appended bars the neighbouring signature", () => {
+    const s = Core.makeScore(one, [{ at: 1, beats: 2, unit: 4, fifths: 1 }, 2]);
+    expect(sig(s)).toEqual([[2, 4, 1], [2, 4, 1], [2, 4, 1], [2, 4, 1]]);
+    expect(s.bars.map((b) => b.start)).toEqual([0, 1, 2, 3]);
+  });
+});

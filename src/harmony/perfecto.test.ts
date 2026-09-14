@@ -3,8 +3,11 @@ import {
   computeVoicing,
   degreeQuality,
   chordName,
+  degreeNumeral,
+  PitchClass,
   type Key,
   type Degree,
+  type Inversion,
   type ComputeVoicingArgs,
 } from "./perfecto";
 
@@ -120,5 +123,87 @@ describe("chordName", () => {
   it("appends the joystick quality label off-center", () => {
     expect(chordName(C_MAJOR, 1, "default", "right")).toBe("C maj7");
     expect(chordName(C_MAJOR, 5, "extended", "upRight")).toBe("G dom9");
+  });
+});
+
+/* One rule for quality, everywhere. The readout used to name the center
+   chord from a hardcoded major-mode convention, so A natural minor's degree I
+   voiced A-C-E and printed "A maj" over a numeral of "I". Both the name and
+   the numeral now derive from degreeQuality, the same rule computeVoicing
+   picks its interval list with. */
+describe("quality has one owner", () => {
+  const A_MINOR: Key = { root: PitchClass.A, scale: "naturalMinor" };
+
+  it("names the center chord from the DETECTED quality, in any mode", () => {
+    expect(chordName(A_MINOR, 1, "default", "center")).toBe("A min");
+    expect(chordName(A_MINOR, 3, "default", "center")).toBe("C maj");
+    expect(chordName(A_MINOR, 2, "default", "center")).toBe("B dim");
+  });
+
+  it("cases the numeral from the same rule", () => {
+    expect(degreeNumeral(A_MINOR, 1)).toBe("i");
+    expect(degreeNumeral(A_MINOR, 3)).toBe("III");
+    expect(degreeNumeral(A_MINOR, 2)).toBe("ii°");
+  });
+
+  it("still reads the major mode the way it always did", () => {
+    expect(["I", "ii", "iii", "IV", "V", "vi", "vii°"]).toEqual(
+      ([1, 2, 3, 4, 5, 6, 7] as Degree[]).map((d) => degreeNumeral(C_MAJOR, d)),
+    );
+  });
+
+  it("agrees with the notes computeVoicing actually produces", () => {
+    for (const key of [C_MAJOR, A_MINOR]) {
+      for (const d of [1, 2, 3, 4, 5, 6, 7] as Degree[]) {
+        const { notes } = computeVoicing({
+          key, degree: d, joystickMode: "default", joystickDirection: "center",
+          inversion: "root", octave: 4, voiceLeading: false,
+        });
+        const third = notes[1] - notes[0];
+        const named = chordName(key, d, "default", "center").split(" ")[1];
+        expect(named).toBe(third >= 4 ? "maj" : notes[2] - notes[0] < 7 ? "dim" : "min");
+      }
+    }
+  });
+});
+
+/* Finding 13: with voice-leading on, the search used to loop over all three
+   inversions, so the requested one survived only as a tiebreak seed and the
+   inversion control did nothing — while the Nashville readout kept printing
+   it as if it applied. The inversion is now a constraint the search honors. */
+describe("inversion under voice-leading", () => {
+  const prev = { notes: [60, 64, 67] };
+  const voiced = (inversion: Inversion) =>
+    computeVoicing(args({ degree: 4, inversion, voiceLeading: true, previousVoicing: prev }));
+
+  it("still changes the voicing when voice-leading is on", () => {
+    const root = voiced("root").notes;
+    expect(voiced("first").notes).not.toEqual(root);
+    expect(voiced("second").notes).not.toEqual(root);
+  });
+
+  it("produces the requested inversion, octave-shifted at most one octave", () => {
+    for (const inv of ["root", "first", "second"] as Inversion[]) {
+      const plain = computeVoicing(args({ degree: 4, inversion: inv, voiceLeading: false })).notes;
+      const led = voiced(inv).notes;
+      // same chord shape (same pitch classes, same interval structure),
+      // only moved by whole octaves
+      const shift = led[0] - plain[0];
+      expect(Math.abs(shift) % 12).toBe(0);
+      expect(Math.abs(shift)).toBeLessThanOrEqual(12);
+      expect(led.map((n) => n - shift)).toEqual(plain);
+    }
+  });
+
+  it("still voice-leads — it picks the octave nearest the previous chord", () => {
+    const near = computeVoicing(args({
+      degree: 4, inversion: "root", voiceLeading: true,
+      previousVoicing: { notes: [60, 64, 67] },
+    })).notes;
+    const far = computeVoicing(args({
+      degree: 4, inversion: "root", voiceLeading: true,
+      previousVoicing: { notes: [24, 28, 31] },
+    })).notes;
+    expect(far[0]).toBeLessThan(near[0]); // followed the hand down an octave
   });
 });

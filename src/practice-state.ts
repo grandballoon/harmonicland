@@ -53,7 +53,7 @@
    cursor's, and the two meet only in `enter`.
    ==================================================================== */
 import { LiveKeys, type Voice } from "./live-keys";
-import { barAt } from "./core";
+import { barAt, clampRange } from "./core";
 import { entryAfter, entryAt, type Chart, type ChartEntry } from "./harmony/progression";
 import {
   makeSteps, movesBetween, otherHand, soundingIn, spanOf, stepAt,
@@ -212,15 +212,6 @@ const liveAuto = (): Voice[] => auto.filter(LiveKeys.isLive);
 
 /** The whole score as a span: every step, and `total` as its end. */
 const wholeSpan = (steps: Steps): Span => ({ first: 0, last: steps.steps.length });
-
-/** Clamp a range to the bars that exist, with `from <= to`, so a caller
- *  can say "bars 3 to 1" or "bar 40 of 12" and be understood. */
-const clampRange = (r: BarRange, bars: number): BarRange => {
-  const hi = Math.max(0, bars - 1);
-  const a = Math.max(0, Math.min(r.from, hi));
-  const b = Math.max(0, Math.min(r.to, hi));
-  return { from: Math.min(a, b), to: Math.max(a, b) };
-};
 
 // ---------------------------------------------------------------------
 // the other hand: sounding pitches at a step, and the diff-reconcile that

@@ -128,6 +128,14 @@ prose seams above, now compiler-checked. `VIEWS` is just `Record<string, View>`.
 ### Clock
 One `requestAnimationFrame` loop. Everything reads `now()`. **`seek()` *is*
 scrubbing.** There is exactly one timer in the program — do not add a second.
+
+The clock also owns the **playback loop** (`setLoop(range)` / `loop()`).
+The wrap happens inside `now()`, so no reader ever sees a time past the loop's end, and every view and sink loops without knowing loops exist.
+Where the edges may sit and where the ← → arrow keys land is `loop.ts`, a pure module; steps count in the same `Steps` practice mode does (a chord is one step), and edges sit on barlines.
+`main.ts` owns ONE bar selection shared by every view: in practice mode it confines the lesson (`PracticeState.setRange`), elsewhere it is the playback loop (`clock.setLoop(Core.barTime(...))`), and `applyBars` is the only place either is written.
+The bar-number boxes, the two draggable flags on the scrub bar, `[` and `]` on the bar under the playhead, and a click on a bar of the practice page all edit that selection, so they always agree.
+The Loop button switches playback round the selection on and off without forgetting the bars; practice mode hides it, since a lesson always goes round its bars.
+A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with
 Tone.js `Transport` (or the WebAudio clock) later without touching anything.
 

@@ -7,7 +7,7 @@
    nothing of tempo, ticks, or beats. Downstream, time is just seconds.
    ==================================================================== */
 import { pitchName } from "./pitch";
-import type { Bar, Barline, Pitch, Spelling, Note, NoteId, Score, RawNote } from "./types";
+import type { Bar, BarRange, Barline, Pitch, Spelling, Note, NoteId, Score, RawNote, TimeRange } from "./types";
 
 // spelling: pick a default from pitch (sharps, per pitch.ts's one name
 // table). Frozen into the value once, here-ish, so no output ever has to
@@ -92,6 +92,25 @@ export function barAt(score: Score, t: number): Bar {
   return bars[lo];
 }
 
+/** Clamp a range to the bars that exist, with `from <= to`, so a caller
+ *  can say "bars 3 to 1" or "bar 40 of 12" and be understood. */
+export function clampRange(r: BarRange, bars: number): BarRange {
+  const hi = Math.max(0, bars - 1);
+  const a = Math.max(0, Math.min(r.from, hi));
+  const b = Math.max(0, Math.min(r.to, hi));
+  return { from: Math.min(a, b), to: Math.max(a, b) };
+}
+
+/** The seconds a run of bars covers: from the first bar's start to the last
+ *  bar's end. Null is the whole piece, so "no bars chosen" and "all of it"
+ *  are one answer. The one conversion from bars to time — the practice
+ *  cursor's span and the playback loop both stand on it. */
+export function barTime(score: Score, range: BarRange | null): TimeRange {
+  if (range === null) return { start: 0, end: score.duration };
+  const r = clampRange(range, score.bars.length);
+  return { start: score.bars[r.from].start, end: score.bars[r.to].end };
+}
+
 // which notes are sounding at time t — used by every output, same query.
 // Callers key sets and maps on `n.id`; this returns the score's own Note
 // objects, but nothing depends on that any more.
@@ -99,4 +118,4 @@ export function activeAt(score: Score, t: number): Note[] {
   return score.notes.filter((n) => t >= n.onset && t < n.onset + n.duration);
 }
 
-export const Core = { makeScore, activeAt, defaultSpelling, barAt };
+export const Core = { makeScore, activeAt, defaultSpelling, barAt, clampRange, barTime };

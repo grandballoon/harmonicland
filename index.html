@@ -31,6 +31,8 @@
     --hand-r-dim:#20607f;   /* ...the same hands, receded: context, not a cue */
     --hand-l-dim:#5f3f80;
     --wrong:     #ff4d6d;   /* a key you played that the step didn't ask for */
+    --loop:      #7fd8b0;   /* the playback loop's edges (mint)        */
+    --loop-band: #2f5a4a;   /* ...and the stretch of track between them */
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -104,25 +106,80 @@
     text-transform: uppercase; padding-top: 10px; border-top: none;
   }
   .gamepad-panel tr:first-child.section-head td { padding-top: 2px; }
-  button:disabled { opacity: .4; cursor: default; }
+  button:disabled, input[type=number]:disabled { opacity: .4; cursor: default; }
   button.primary { background: var(--note); border-color: var(--note); color: #0b1020; font-weight: 600; }
   button.primary:hover { background: #6f8fff; }
   label.file input { display: none; }
 
   .scrub-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+
+  /* The scrub track is drawn by its container, not by the slider, so the
+     loop band can sit between the track and the thumb. --thumb is the ONE
+     statement of the thumb's size: the thumb, the band and the edges are
+     laid out from it here, and main.ts reads it back to hit-test a drag.
+     A thumb's centre travels from thumb/2 to 100% - thumb/2, so a fraction
+     f of the piece sits at calc(thumb/2 + (100% - thumb) * f). */
+  .scrub-track {
+    --thumb: 14px; --loop-a: 0; --loop-b: 1;
+    position: relative; flex: 1; height: 30px;
+    display: flex; align-items: center;
+  }
+  .scrub-track::before, .loop-band {
+    content: ""; position: absolute; top: 50%; height: 4px; margin-top: -2px;
+    border-radius: 4px; pointer-events: none;
+  }
+  .scrub-track::before { left: 0; right: 0; background: var(--grid); }
+  .loop-band {
+    display: none; background: var(--loop-band);
+    left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--loop-a));
+    width: calc((100% - var(--thumb)) * (var(--loop-b) - var(--loop-a)));
+  }
+  .scrub-track.looping .loop-band { display: block; }
+
   input[type=range] {
     -webkit-appearance: none; appearance: none;
-    flex: 1; height: 4px; border-radius: 4px; background: var(--grid);
+    position: relative; z-index: 1;
+    flex: 1; margin: 0; height: 4px; background: transparent;
     cursor: pointer;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    -webkit-appearance: none; width: var(--thumb); height: var(--thumb); border-radius: 50%;
     background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
   }
   input[type=range]::-moz-range-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
+    width: var(--thumb); height: var(--thumb); border-radius: 50%; box-sizing: border-box;
     background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
   }
+  input[type=range]::-moz-range-track { background: transparent; }
+
+  /* A loop edge is a small flag above the track with a hairline down
+     through it: the flag is the handle, the hairline marks the instant.
+     The start's flag points right, into the loop, and the end's left, so
+     the pair reads as brackets. Only the flag takes the pointer — the
+     hairline must not steal the thumb when the playhead sits on an edge. */
+  .loop-edge {
+    display: none; position: absolute; top: 0; z-index: 2;
+    width: 14px; height: 11px; cursor: ew-resize; touch-action: none;
+    opacity: .45; transition: opacity .12s;
+  }
+  .loop-edge.start { left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--loop-a) - 1px); }
+  .loop-edge.end   { left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--loop-b) - 13px); }
+  .loop-edge::before {
+    content: ""; position: absolute; top: 0; width: 9px; height: 8px; background: var(--loop);
+  }
+  .loop-edge.start::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+  .loop-edge.end::before { right: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+  .loop-edge::after {
+    content: ""; position: absolute; top: 0; height: 19px; width: 2px;
+    background: var(--loop); pointer-events: none;
+  }
+  .loop-edge.start::after { left: 0; }
+  .loop-edge.end::after { right: 0; }
+  .scrub-track.loop-enabled .loop-edge { display: block; }
+  .scrub-track.looping .loop-edge, .loop-edge:hover { opacity: 1; }
+
+  /* the Loop switch: lit in the edges' colour while looping */
+  #loop[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
   .time { color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 92px; text-align: right; }
 
   /* stage ------------------------------------------------------------- */
@@ -217,10 +274,38 @@
   </details>
 
   <div class="scrub-wrap">
-    <input id="scrub" type="range" min="0" max="1000" value="0" disabled>
+    <!-- The loop's edges ride the scrub bar, on barlines. Drag them, or
+         press [ and ] in a bar; the bar boxes beside it move with them. -->
+    <div class="scrub-track" id="scrub-track">
+      <div class="loop-band"></div>
+      <input id="scrub" type="range" min="0" max="1000" value="0" disabled>
+      <div class="loop-edge start" id="loop-start" title="Loop start — drag, or press [ on a note"></div>
+      <div class="loop-edge end" id="loop-end" title="Loop end — drag, or press ] on a note"></div>
+    </div>
     <span class="time" id="time">0.00 / 0.00s</span>
   </div>
 
+  <!-- Isolate a bar, or a run of bars, and loop it — in every view. Bar
+       NUMBERS here, as a musician counts them (from 1); the state counts
+       from 0 and only main.ts adds the one. Empty means the whole piece.
+       The flags on the scrub bar are the same selection, and so is a click
+       on a bar of the practice page (shift-click extends). Loop switches
+       playback round the bars on and off; a lesson always goes round them,
+       so practice mode hides it. -->
+  <span class="practice-controls" id="bars-wrap">
+    <span class="toggle bar-range" title="Loop only these bars — or drag the flags on the scrub bar, or press [ and ] in a bar">
+      bars
+      <input type="number" id="bar-from" min="1" step="1" placeholder="all" aria-label="First bar" disabled>
+      <span class="dash">–</span>
+      <input type="number" id="bar-to" min="1" step="1" placeholder="all" aria-label="Last bar" disabled>
+      <button id="bar-all" title="Select the whole piece again" disabled>all</button>
+      <button id="loop" aria-pressed="false" disabled title="Go round the selected bars when playing">Loop</button>
+    </span>
+    <span class="step-pair">
+      <button id="step-back" title="Back one step (←)" disabled>◀</button>
+      <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>
+    </span>
+  </span>
   <label class="toggle">
     <select id="view">
       <option value="full">Full range (88-key)</option>
@@ -266,21 +351,6 @@
     <label class="toggle" title="Hide the arcs drawn from the keys under your fingers to the keys this step asks for">
       <input type="checkbox" id="hide-arrows" checked> hide arrows
     </label>
-    <!-- Isolate a bar, or a run of bars, and loop it. Bar NUMBERS here, as a
-         musician counts them (from 1); the state counts from 0 and only
-         main.ts adds the one. Empty means the whole piece. Clicking a bar on
-         the page does the same thing, and shift-click extends. -->
-    <span class="toggle bar-range" title="Practise only these bars, looping — or click a bar on the page (shift-click to extend)">
-      bars
-      <input type="number" id="bar-from" min="1" step="1" placeholder="all" aria-label="First bar">
-      <span class="dash">–</span>
-      <input type="number" id="bar-to" min="1" step="1" placeholder="all" aria-label="Last bar">
-      <button id="bar-all" title="Practise the whole piece again">all</button>
-    </span>
-    <span class="step-pair">
-      <button id="step-back" title="Back one step (←)">◀</button>
-      <button id="step-fwd" title="Forward one step (→)">▶</button>
-    </span>
   </span>
   <span class="status" id="status"></span>
 </div>

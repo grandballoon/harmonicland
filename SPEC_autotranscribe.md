@@ -1,0 +1,1 @@
+This file details the specification for automatic transcription of audio files and video links into sheet music and other formats usable by this application.

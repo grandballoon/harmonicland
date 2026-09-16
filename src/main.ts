@@ -30,6 +30,9 @@ import { PerfState } from "./perf-state";
 import { PracticeState } from "./practice-state";
 import { StepModel, type HandFilter, type Step } from "./steps";
 import { Loop, type Edge } from "./loop";
+import { Sections, describeBars } from "./sections";
+import { localSectionStore } from "./section-store";
+import { mountSectionsPanel } from "./sections-panel";
 import {
   chordName, degreeNumeral, PITCH_NAMES,
   type Degree, type JoystickDirection, type PitchClass,
@@ -103,7 +106,8 @@ clock.onFrame((t) => {
   $("time").textContent = `${fmt(t)} / ${fmt(score.duration)}s`;
 });
 
-function loadScore(s: Score, label?: string, analysis: Chart | null = null): void {
+/** `key` is the score's identity for its saved sections (see sections.ts). */
+function loadScore(s: Score, key: string, label?: string, analysis: Chart | null = null): void {
   score = s;
   chart = analysis;
   steps = StepModel.makeSteps(score, "both").steps;
@@ -111,6 +115,7 @@ function loadScore(s: Score, label?: string, analysis: Chart | null = null): voi
   // a bar selection is a stretch of ONE score
   selection = null;
   looping = false;
+  sectionsPanel.setScore(key, score.bars.length);
   clock.seek(0);
   clock.pause();
   AudioOut.silence();
@@ -147,7 +152,7 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
       parsed = looksLily ? LilyIn.parse(txt) : MusicxmlIn.parse(txt);
     }
     progression.value = ""; // a parsed file is not a progression
-    loadScore(parsed, f.name);
+    loadScore(parsed, Sections.keyForBytes(new Uint8Array(buf)), f.name);
   } catch (err) {
     $("status").textContent = "Couldn't read that file: " + (err as Error).message;
   }
@@ -156,7 +161,7 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
 $("demo").addEventListener("click", () => {
   AudioOut.ensure();
   progression.value = "";
-  loadScore(demoScore(), "demo");
+  loadScore(demoScore(), "demo", "demo");
 });
 
 // --- live MIDI input (hardware keyboard -> LiveKeys) ----------------
@@ -317,17 +322,18 @@ function applyBars(): void {
 
   // Positions travel as fractions in CSS variables; the stylesheet turns
   // them into pixels, since only it knows the thumb size.
-  const enabled = d > 0 && !practising;
+  // A lesson always goes round its bars, so in practice mode the band is
+  // lit whenever there are bars to go round, and the Loop switch is hidden.
+  const enabled = d > 0;
+  const going = practising ? selection !== null : looping;
   scrubTrack.classList.toggle("loop-enabled", enabled);
-  scrubTrack.classList.toggle("looping", enabled && looping);
+  scrubTrack.classList.toggle("looping", enabled && going);
   loopBtn.disabled = !enabled;
-  loopBtn.setAttribute("aria-pressed", String(enabled && looping));
+  loopBtn.setAttribute("aria-pressed", String(enabled && looping && !practising));
+  sectionsPanel.setSelection(selection);
   scrubTrack.style.setProperty("--loop-a", String(d > 0 ? span.start / d : 0));
   scrubTrack.style.setProperty("--loop-b", String(d > 0 ? span.end / d : 1));
 }
-
-const describeBars = (r: BarRange | null): string =>
-  r === null ? "the whole piece" : r.from === r.to ? `bar ${r.from + 1}` : `bars ${r.from + 1}–${r.to + 1}`;
 
 /** Choose bars. Choosing bars is asking to loop them, so it switches looping
  *  on — unless `loop` says otherwise, as "all" does: widening to the whole
@@ -401,10 +407,25 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
     const bar = Loop.snapBar(score.bars, frac * score.duration, edge, selection);
     const next = Loop.withBar(selection, edge, bar, score.bars.length);
     const cur = selection ?? { from: 0, to: score.bars.length - 1 };
-    if (looping && next.from === cur.from && next.to === cur.to) return; // a wobble, not a move
+    // a wobble, not a move — unless it is the drag that switches looping on
+    if ((looping || view === Practice) && next.from === cur.from && next.to === cur.to) return;
     selectBars(next);
   });
 }
+
+// --- saved sections -------------------------------------------------
+// A score broken into named runs of bars, kept per score in localStorage.
+// Loading one IS selecting its bars, so it loops here and confines a lesson
+// in practice mode by the same path as every other bar control — and the
+// hand being practised is left exactly as it was.
+const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), (s) => {
+  AudioOut.ensure();
+  selectBars(s.range);
+  const what = s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range);
+  $("status").textContent = view === Practice
+    ? `Practice · ${what} · play the lit keys · ← → step`
+    : `Looping ${what} · ← → step through it · Play goes round it`;
+});
 
 // --- view toggle (one reference swap) ------------------------------
 const VIEWS: Record<string, ViewModule> = {
@@ -472,7 +493,8 @@ function loadProgression(): void {
   const p = transposeTo(base, Number(progRoot.value) as PitchClass);
   const { notes, chart: analysis, barlines } = realize(p);
   AudioOut.ensure();
-  loadScore(Core.makeScore(notes, barlines), undefined, analysis);
+  // keyed by structure, not key: transposing moves no barline
+  loadScore(Core.makeScore(notes, barlines), `progression:${base.id}`, undefined, analysis);
   $("status").textContent = `${p.name} in ${PITCH_NAMES[p.home.root]} · ${p.about}`;
 }
 progression.addEventListener("change", () => {
@@ -650,14 +672,16 @@ const isTyping = (el: EventTarget | null): boolean => {
 window.addEventListener("keydown", (e) => {
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
   // In practice mode the arrow keys walk the cursor by hand — back to see a
-  // transition again, forward to skip one — and nothing else on the
-  // keyboard means anything. Not the harness below: it presses chords
-  // THROUGH LiveKeys, and the practice cursor grades everything that
-  // arrives there. A stray "1" would sound a C major triad and advance the
+  // transition again, forward to skip one — [ and ] mark the bar the
+  // cursor stands in, and nothing else on the keyboard means anything.
+  // Not the harness below: it presses chords THROUGH LiveKeys, and the
+  // practice cursor grades everything that arrives there. A stray "1" would sound a C major triad and advance the
   // lesson with it.
   if (view === Practice) {
     if (e.key === "ArrowLeft") { PracticeState.step(-1); e.preventDefault(); }
     else if (e.key === "ArrowRight") { PracticeState.step(1); e.preventDefault(); }
+    else if ((e.key === "[" || e.key === "]") && !e.repeat && score.notes.length > 0)
+      markBar(e.key === "[" ? "start" : "end"); // the clock stands on the cursor's step
     return;
   }
   if (steps.length > 0) {

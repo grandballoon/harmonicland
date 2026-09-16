@@ -27,6 +27,10 @@ src/
   outputs/  staff-full.ts  staff-std.ts  staff-piano.ts  piano-roll.ts
             tonnetz.ts  combo.ts  nashville.ts  audio.ts  midi-out.ts
   live-keys.ts      held-pitch set; press/release; the live-input seam
+  loop.ts           where loop edges sit and where a step lands (pure)
+  sections.ts       saved sections: named bar ranges per score (pure)
+  section-store.ts  sections in localStorage, keyed by score content
+  sections-panel.ts the Sections dropdown (owns its DOM; hands back a range)
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module
@@ -134,7 +138,13 @@ The wrap happens inside `now()`, so no reader ever sees a time past the loop's e
 Where the edges may sit and where the ← → arrow keys land is `loop.ts`, a pure module; steps count in the same `Steps` practice mode does (a chord is one step), and edges sit on barlines.
 `main.ts` owns ONE bar selection shared by every view: in practice mode it confines the lesson (`PracticeState.setRange`), elsewhere it is the playback loop (`clock.setLoop(Core.barTime(...))`), and `applyBars` is the only place either is written.
 The bar-number boxes, the two draggable flags on the scrub bar, `[` and `]` on the bar under the playhead, and a click on a bar of the practice page all edit that selection, so they always agree.
-The Loop button switches playback round the selection on and off without forgetting the bars; practice mode hides it, since a lesson always goes round its bars.
+The Loop button switches playback round the selection on and off without forgetting the bars; practice mode hides it, since a lesson always goes round its bars, but keeps the flags, and `[` `]` mark the bar the cursor stands in.
+
+**Saved sections.** A score can be broken into named runs of bars and kept (`sections.ts`).
+A section is bars, not seconds, so the same one loops in the falling-notes views and confines a lesson in practice mode with no tempo to convert.
+It deliberately does not remember a hand: the hand is chosen per sitting, and loading a section leaves it as it was.
+Loading one is just `selectBars(range)`, the same path a dragged flag takes.
+Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with
 Tone.js `Transport` (or the WebAudio clock) later without touching anything.

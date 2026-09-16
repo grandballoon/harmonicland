@@ -63,14 +63,14 @@
     border-bottom: 1px solid var(--line-acc);
     background: var(--panel);
   }
-  button, label.file, select, input[type=number], #gamepad-help > summary {
+  button, label.file, select, input[type=number], details.dropdown > summary {
     font: inherit; color: var(--ink);
     background: #1d242e; border: 1px solid var(--line-acc);
     padding: 7px 13px; border-radius: 6px; cursor: pointer;
     transition: border-color .12s, background .12s;
   }
-  button:hover, label.file:hover, select:hover, input[type=number]:hover, #gamepad-help > summary:hover { border-color: #46566a; }
-  button:focus-visible, label.file:focus-within, select:focus-visible, input[type=number]:focus-visible, #gamepad-help > summary:focus-visible {
+  button:hover, label.file:hover, select:hover, input[type=number]:hover, details.dropdown > summary:hover { border-color: #46566a; }
+  button:focus-visible, label.file:focus-within, select:focus-visible, input[type=number]:focus-visible, details.dropdown > summary:focus-visible {
     outline: 2px solid var(--note); outline-offset: 1px;
   }
   /* the bar-range inputs: two short numbers that read as one control */
@@ -80,19 +80,41 @@
   .step-pair { display: inline-flex; gap: 4px; }
   .step-pair button { padding-left: 11px; padding-right: 11px; }
 
-  /* gamepad help dropdown ---------------------------------------------- */
-  #gamepad-help { position: relative; }
-  #gamepad-help > summary { list-style: none; user-select: none; white-space: nowrap; }
-  #gamepad-help > summary::-webkit-details-marker { display: none; }
-  #gamepad-help > summary::before { content: "▸ "; color: var(--ink-dim); }
-  #gamepad-help[open] > summary::before { content: "▾ "; }
+  /* dropdowns: a summary styled as a button over a floating panel ------ */
+  details.dropdown { position: relative; }
+  details.dropdown > summary { list-style: none; user-select: none; white-space: nowrap; }
+  details.dropdown > summary::-webkit-details-marker { display: none; }
+  details.dropdown > summary::before { content: "▸ "; color: var(--ink-dim); }
+  details.dropdown[open] > summary::before { content: "▾ "; }
 
-  .gamepad-panel {
+  .dropdown-panel {
     position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
     background: var(--panel); border: 1px solid var(--line-acc);
     border-radius: 8px; padding: 10px 14px; min-width: 300px;
     box-shadow: 0 8px 24px rgba(0,0,0,.55);
   }
+
+  /* saved sections: one row per named run of bars ------------------------ */
+  .sections-count:not(:empty) { margin-left: 6px; color: var(--loop); font-variant-numeric: tabular-nums; }
+  .sections-panel { min-width: 360px; display: flex; flex-direction: column; gap: 10px; }
+  .sections-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sections-actions .toggle { gap: 6px; }
+  .sections-actions input[type=number] { width: 3.6em; }
+  .sections-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+  .section-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
+  .section-row + .section-row { border-top: 1px solid var(--grid); }
+  .section-load { min-width: 8.5em; padding: 5px 10px; text-align: left; font-variant-numeric: tabular-nums; }
+  .section-row.current .section-load { color: var(--loop); border-color: var(--loop); }
+  .section-name {
+    flex: 1; min-width: 0; font: inherit; color: var(--ink);
+    background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px 8px;
+  }
+  .section-name::placeholder { color: var(--ink-dim); }
+  .section-name:hover { border-color: var(--line-acc); }
+  .section-name:focus { outline: none; border-color: var(--note); background: #1d242e; }
+  .section-remove { padding: 5px 9px; color: var(--ink-dim); }
+  .section-remove:hover { color: var(--wrong); border-color: var(--wrong); }
+  .sections-empty { margin: 0; color: var(--ink-dim); font-size: 12px; max-width: 360px; }
   .gamepad-panel table { border-collapse: collapse; width: 100%; }
   .gamepad-panel tr + tr > td { border-top: 1px solid var(--grid); }
   .gamepad-panel td { padding: 4px 8px; font-size: 12px; vertical-align: middle; }
@@ -222,9 +244,9 @@
   <button id="gamepad">Enable gamepad</button>
   <button id="midiout">Enable MIDI out</button>
 
-  <details id="gamepad-help-tonnetz" style="display:none">
+  <details id="gamepad-help-tonnetz" class="dropdown" style="display:none">
     <summary>Gamepad map</summary>
-    <div class="gamepad-panel">
+    <div class="dropdown-panel gamepad-panel">
       <table>
         <tbody>
           <tr class="section-head"><td colspan="2">Sound</td></tr>
@@ -244,9 +266,9 @@
     </div>
   </details>
 
-  <details id="gamepad-help-nashville" style="display:none">
+  <details id="gamepad-help-nashville" class="dropdown" style="display:none">
     <summary>Gamepad map</summary>
-    <div class="gamepad-panel">
+    <div class="dropdown-panel gamepad-panel">
       <table>
         <tbody>
           <tr class="section-head"><td colspan="2">Root chord</td></tr>
@@ -291,7 +313,8 @@
        The flags on the scrub bar are the same selection, and so is a click
        on a bar of the practice page (shift-click extends). Loop switches
        playback round the bars on and off; a lesson always goes round them,
-       so practice mode hides it. -->
+       so practice mode hides it. Sections saves the selected bars under a
+       name, per score, and loads them back into the same selection. -->
   <span class="practice-controls" id="bars-wrap">
     <span class="toggle bar-range" title="Loop only these bars — or drag the flags on the scrub bar, or press [ and ] in a bar">
       bars
@@ -301,6 +324,22 @@
       <button id="bar-all" title="Select the whole piece again" disabled>all</button>
       <button id="loop" aria-pressed="false" disabled title="Go round the selected bars when playing">Loop</button>
     </span>
+    <!-- Rows are built by sections-panel.ts from what is saved for the
+         loaded score; this is only the frame they go in. -->
+    <details id="sections" class="dropdown">
+      <summary title="Save the selected bars, split the score into chunks, and load them back">Sections<span class="sections-count"></span></summary>
+      <div class="dropdown-panel sections-panel">
+        <div class="sections-actions">
+          <button class="section-save" disabled>Save selected bars</button>
+          <span class="toggle">or split every
+            <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
+            bars <button class="section-split">Split</button>
+          </span>
+        </div>
+        <ul class="sections-list"></ul>
+        <p class="sections-empty"></p>
+      </div>
+    </details>
     <span class="step-pair">
       <button id="step-back" title="Back one step (←)" disabled>◀</button>
       <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>

@@ -146,6 +146,19 @@ describe("bars", () => {
     expect(Core.barAt(s, 99).index).toBe(2);
     expect(Core.barAt(s, -1).index).toBe(0);
   });
+
+  it("clampRange orders a backwards range and pulls it inside the bars that exist", () => {
+    expect(Core.clampRange({ from: 3, to: 1 }, 5)).toEqual({ from: 1, to: 3 });
+    expect(Core.clampRange({ from: -2, to: 40 }, 5)).toEqual({ from: 0, to: 4 });
+  });
+
+  it("barTime spans a run of bars in seconds, and null is the whole piece", () => {
+    const s = Core.makeScore(one(3), [0, 1, 2, 3]);
+    expect(Core.barTime(s, { from: 1, to: 1 })).toEqual({ start: 1, end: 2 });
+    expect(Core.barTime(s, { from: 0, to: 2 })).toEqual({ start: 0, end: 3 });
+    expect(Core.barTime(s, { from: 2, to: 9 })).toEqual({ start: 2, end: 3 });
+    expect(Core.barTime(s, null)).toEqual({ start: 0, end: 3 });
+  });
 });
 
 describe("meter and key on the barline", () => {

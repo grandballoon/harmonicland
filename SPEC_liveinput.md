@@ -1,0 +1,1 @@
+This file details the behavioral (not technical) specification for live input without a MIDI connection—i.e., realtime identification of notes played on a piano by microphone only.

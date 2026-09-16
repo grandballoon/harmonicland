@@ -112,6 +112,14 @@ export interface BarRange {
   readonly to: number;
 }
 
+/** A stretch of score time in seconds, `start` inclusive and `end`
+ *  exclusive — the playback loop. Seconds, not bars or steps, because the
+ *  clock is what honours it and seconds are the clock's only unit. */
+export interface TimeRange {
+  readonly start: number;
+  readonly end: number;
+}
+
 /** A score: notes sorted by onset, the total duration, and its bars. */
 export interface Score {
   readonly notes: readonly Note[];
@@ -155,4 +163,13 @@ export interface Clock {
   /** Cancel the rAF loop. Together with onFrame's unsubscribe this makes the
    *  clock's lifecycle a contract rather than a single-use-per-page accident. */
   stop(): void;
+  /** Confine playback to a loop, or free it with null. While playing, time
+   *  that reaches `end` comes back round to `start`; play() from outside
+   *  the loop enters it at `start`. Owned HERE, not by a subscriber seeking
+   *  on overshoot, so no frame ever observes a time past the loop's end.
+   *  An empty or out-of-score range is clamped, and one with nothing left
+   *  is null. */
+  setLoop(range: TimeRange | null): void;
+  /** The loop as accepted — after clamping — or null. */
+  loop(): TimeRange | null;
 }

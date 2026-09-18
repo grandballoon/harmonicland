@@ -333,7 +333,7 @@ A view's layout may legitimately depend on live state: practice mode gives up a 
 That failure is silent — a hit-test disagreeing with the pixels produces no error, just wrong notes near the edge — which is why the parameter is in the type rather than the region being recomputed from a global.
 Views whose geometry is a function of size alone simply ignore it, which is itself a statement.
 
-Every renderer now exports one: `StaffFull`, `StaffStd`, `PianoRoll`, `Tonnetz`, `Combo`, `Nashville`, `Practice`, and `StaffPiano.keysView` / `StaffPiano.rollView` — nine in all, which `view-purity.test.ts` asserts.
+Every renderer now exports one: `StaffStd`, `PianoRoll`, `Tonnetz`, `Combo`, `Nashville`, `Practice`, and `StaffPiano.keysView` / `StaffPiano.rollView` — eight in all, which `view-purity.test.ts` asserts.
 The two `StaffPiano` flavors each carry their own region function, which closes the old trap where `renderKeys` and `renderRoll` were distinguishable only because `stacked(...)` happened to be called twice.
 
 ---
@@ -1306,7 +1306,7 @@ It is now **exported**, with `PianoRoll.geometry(W, H)` as its public constructo
 An overlay drawn above the keys — practice mode's arrows and next-step bars — must point at the same lanes the keys are drawn in, and the only alternative was a second copy of this math; `pitchAt` already established that this module owns the geometry in both directions.
 
 `Region` used to live here; it is in `view.ts` now, because `ViewModule.keyboardRegion` names it.
-Each view answers the keyboard question for itself: the full-screen roll returns the whole svg, `Combo` and the two `StaffPiano` flavors return a bottom band computed from the same band-height function their renderer used, `Practice` returns its bottom band narrowed by `chartBandW(W, live.practice.chart !== null)` — the same function its markup lays out against — and `StaffFull` / `StaffStd` / `Tonnetz` / `Nashville` return `null`.
+Each view answers the keyboard question for itself: the full-screen roll returns the whole svg, `Combo` and the two `StaffPiano` flavors return a bottom band computed from the same band-height function their renderer used, `Practice` returns its bottom band narrowed by `chartBandW(W, live.practice.chart !== null)` — the same function its markup lays out against — and `StaffStd` / `Tonnetz` / `Nashville` return `null`.
 
 ### `Cell` and `Role` — module-private, `src/outputs/tonnetz.ts`
 

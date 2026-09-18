@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { keysBandH, rollBandH } from "./staff-piano";
 import { PianoRoll, KEYB } from "./piano-roll";
-import { StaffStd } from "./staff-std";
+import { StaffPiano } from "./staff-piano";
+import { StaffBars } from "./staff-bars";
+import { makeSteps } from "../steps";
 import { Core } from "../core";
 
 const score = Core.makeScore([{ pitch: 60, onset: 0, duration: 1 }]);
@@ -34,58 +36,49 @@ describe("the stacked layers' markup", () => {
     expect(PianoRoll.markup(800, 400, score, 0.5, { glowId: G, held: NONE })).toContain('rx="2.5"');
   });
 
-  it("staff markup is region-sized and carries the sounding notehead", () => {
-    const staff = StaffStd.markup(800, 400, score, 0.5, { glowId: G });
+  it("the staff is the engraved page, lit where the score sounds", () => {
+    const staff = StaffPiano.page(800, 400, score, 0.5, G);
     expect(staff).toContain("<ellipse"); // the notehead
     expect(staff).toContain("var(--note-lit)"); // lit at t=0.5
-    expect(StaffStd.markup(0, 400, score, 0.5, { glowId: G })).toBe(""); // degenerate region
+    expect(staff).toContain("var(--playhead)"); // the rule through its column
+    // the same markup practice draws for the bar, with the same step lit
+    const { steps } = makeSteps(score, "both");
+    expect(staff).toBe(StaffBars.markup(800, 400, score, {
+      glowId: G, focus: { from: 0, to: 0 }, range: null, current: steps[0], hand: "both", showOther: true,
+    }));
+  });
+
+  it("the page goes dark when nothing sounds, and is a blank staff before a score loads", () => {
+    const quiet = StaffPiano.page(800, 400, score, 1.5, G);
+    expect(quiet).toContain("<ellipse"); // the note is still on the page...
+    expect(quiet).not.toContain("var(--note-lit)"); // ...but not lit
+    const blank = StaffPiano.page(800, 400, Core.makeScore([]), 0, G);
+    expect(blank).toContain("var(--staff-line)");
+    expect(blank).not.toContain("<ellipse");
   });
 });
 
 describe("hand coloring", () => {
-  // the parser has already resolved the hand; the renderers just read it
+  // the parser has already resolved the hand; the roll just reads it
   const both = Core.makeScore([
     { pitch: 72, onset: 0, duration: 1, hand: "upper" },
     { pitch: 48, onset: 0, duration: 1, hand: "lower" },
   ]);
 
-  it("hues staff and roll by hand when on, not at all when off", () => {
-    for (const on of [
-      StaffStd.markup(800, 400, both, 0.5, { glowId: G, hands: true }),
-      PianoRoll.markup(800, 400, both, 0.5, { glowId: G, held: NONE, hands: true }),
-    ]) {
-      expect(on).toContain("var(--hand-r)");
-      expect(on).toContain("var(--hand-l)");
-    }
-    for (const off of [
-      StaffStd.markup(800, 400, both, 0.5, { glowId: G }),
-      PianoRoll.markup(800, 400, both, 0.5, { glowId: G, held: NONE }),
-    ]) {
-      expect(off).not.toContain("var(--hand-");
-    }
+  it("hues the roll by hand when on, not at all when off", () => {
+    const on = PianoRoll.markup(800, 400, both, 0.5, { glowId: G, held: NONE, hands: true });
+    expect(on).toContain("var(--hand-r)");
+    expect(on).toContain("var(--hand-l)");
+    expect(PianoRoll.markup(800, 400, both, 0.5, { glowId: G, held: NONE })).not.toContain("var(--hand-");
   });
 
   it("ignores raw stream provenance — only `hand` colors a note", () => {
     // stream numbering varies by source (MIDI tracks may start at 2 behind a
     // tempo track), which is exactly why renderers no longer look at it.
-    const tracked = Core.makeScore([
-      { pitch: 72, onset: 0, duration: 1, hand: "upper", stream: 2 },
-      { pitch: 48, onset: 0, duration: 1, hand: "lower", stream: 3 },
-    ]);
-    const staff = StaffStd.markup(800, 400, tracked, 0.5, { glowId: G, hands: true });
-    expect(staff).toContain("var(--hand-r)");
-    expect(staff).toContain("var(--hand-l)");
-  });
-
-  it("does not color by stream when the parser resolved no hand", () => {
     const streamed = Core.makeScore([
       { pitch: 72, onset: 0, duration: 1, stream: 1 },
       { pitch: 48, onset: 0, duration: 1, stream: 2 },
     ]);
-    expect(StaffStd.markup(800, 400, streamed, 0.5, { glowId: G, hands: true })).not.toContain("var(--hand-");
-  });
-
-  it("scores without hand data render unchanged with the toggle on", () => {
-    expect(StaffStd.markup(800, 400, score, 0.5, { glowId: G, hands: true })).not.toContain("var(--hand-");
+    expect(PianoRoll.markup(800, 400, streamed, 0.5, { glowId: G, held: NONE, hands: true })).not.toContain("var(--hand-");
   });
 });

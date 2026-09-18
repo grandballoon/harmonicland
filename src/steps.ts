@@ -157,6 +157,22 @@ export function stepAt(steps: readonly Step[], t: number): number {
   return i === -1 ? steps.length : i;
 }
 
+/** The step a PLAYING score is in at `t` — the last one begun at or before
+ *  it — cut down to the notes still sounding at `t`, or null when nothing
+ *  of it is (before the first step, in a rest, past the end). How a view
+ *  driven by the clock lights the same page the practice cursor does: its
+ *  "now" is what is sounding, not what was last struck. */
+export function stepSounding(steps: readonly Step[], t: number): Step | null {
+  const next = stepAt(steps, t);
+  const i = next < steps.length && steps[next].at === t ? next : next - 1;
+  if (i < 0) return null;
+  const s = steps[i];
+  const on = (n: Note): boolean => n.onset <= t && endOf(n) > t;
+  const attack = s.attack.filter(on);
+  const sustain = s.sustain.filter(on);
+  return attack.length || sustain.length ? { ...s, attack, sustain } : null;
+}
+
 /** The steps that begin inside a run of bars: every step whose `at` falls
  *  in [bars[from].start, bars[to].end). Both edges are the same `stepAt`
  *  a scrub uses, so "isolate bar 3" and "scrub to the start of bar 3" land
@@ -241,4 +257,4 @@ function pairSorted(a: readonly Pitch[], b: readonly Pitch[]): [number, number][
   return pairs;
 }
 
-export const StepModel = { makeSteps, movesBetween, inHand, otherHand, soundingIn, stepAt, spanOf };
+export const StepModel = { makeSteps, movesBetween, inHand, otherHand, soundingIn, stepAt, stepSounding, spanOf };

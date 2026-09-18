@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Core } from "./core";
-import { GROUP_SEC, makeSteps, movesBetween, otherHand, spanOf, stepAt } from "./steps";
+import { GROUP_SEC, makeSteps, movesBetween, otherHand, spanOf, stepAt, stepSounding } from "./steps";
 import type { Hand, RawNote, Score } from "./types";
 
 /* steps.ts re-cuts a score along an axis nothing else in this program uses.
@@ -186,6 +186,29 @@ describe("stepAt", () => {
 
   it("returns the finished index past the last step", () => {
     expect(stepAt(steps, 99)).toBe(steps.length);
+  });
+});
+
+describe("stepSounding", () => {
+  // a C held for two beats under a D then, after a rest, an E
+  const { steps } = makeSteps(scoreOf(n(48, 0, 2), n(62, 0), n(64, 1, 0.5)), "both");
+
+  it("is the last step begun at or before t, cut to what sounds at t", () => {
+    expect(pitches(stepSounding(steps, 0)!.attack)).toEqual([48, 62]);
+    // the D has stopped; the C still sounds, still struck in this step
+    expect(pitches(stepSounding(steps, 0.7)!.attack)).toEqual([48]);
+    const e = stepSounding(steps, 1.2)!;
+    expect(e.index).toBe(1);
+    expect(pitches(e.attack)).toEqual([64]);
+    expect(pitches(e.sustain)).toEqual([48]);
+  });
+
+  it("is null before the first step, in silence, and past the end", () => {
+    const { steps: gap } = makeSteps(scoreOf(n(60, 1), n(62, 3)), "both");
+    expect(stepSounding(gap, 0.5)).toBeNull();
+    expect(stepSounding(gap, 2)).toBeNull();
+    expect(stepSounding(gap, 99)).toBeNull();
+    expect(stepSounding([], 0)).toBeNull();
   });
 });
 

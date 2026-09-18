@@ -1,11 +1,11 @@
 /* ====================================================================
    PIANO_ROLL — score -> t -> svg. The "Synthesia" view, and a clean
-   third output: it is StaffFull rotated a quarter turn. Pitch runs along
+   output: the keyboard as the axis. Pitch runs along
    the X axis as a literal piano keyboard at the bottom; time runs DOWN
    the Y axis. Notes fall toward the keyboard and the key lights up at the
    instant the note's leading edge reaches the strike line. Same
    (svg, score, t) signature as the staves, so the toggle is one swap.
-   Like StaffFull it reads `pitch` only and ignores `spelling` — the
+   It reads `pitch` only and ignores `spelling` — the
    keyboard is the physical-key view, not the notation view.
    ==================================================================== */
 import { Core } from "../core";

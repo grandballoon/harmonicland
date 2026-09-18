@@ -88,18 +88,6 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  header {
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--line-acc);
-    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  }
-  header h1 {
-    margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .02em;
-  }
-  header .sub { color: var(--ink-dim); font-size: 12px; }
-  header .sub a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
-  header .sub a:hover { color: var(--ink); }
-
   /* controls ---------------------------------------------------------- */
   .controls {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -317,6 +305,9 @@
     background: transparent;
   }
   .tray-panel .sections-panel { min-width: 0; }
+  .tray-credits { color: var(--ink-dim); font-size: 12px; }
+  .tray-credits a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+  .tray-credits a:hover { color: var(--ink); }
   /* the practice controls travel as one group, so they wrap as one */
   .practice-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   /* the progression picker carries long names; the key beside it is two
@@ -326,13 +317,6 @@
 </style>
 </head>
 <body>
-
-<header>
-  <h1>Notation Animator</h1>
-  <span class="sub">data-first · one model, projected three ways · piano:
-    <a href="https://sfzinstruments.github.io/pianos/salamander/">Salamander</a>
-    by Alexander Holm (CC&nbsp;BY)</span>
-</header>
 
 <!-- The top row holds only what is used while reading: play/pause, where
      you are (the scrubber), which bars (the range, and whether to loop
@@ -489,7 +473,6 @@
       <span class="tray-label">view</span>
       <label class="toggle">
         <select id="view">
-          <option value="full">Full range (88-key)</option>
           <option value="std">Grand staff</option>
           <option value="std-keys">Grand staff + keys</option>
           <option value="std-roll">Grand staff + falling notes</option>
@@ -503,7 +486,7 @@
       <label class="toggle" title="Draw on light paper, like sheet music">
         <input type="checkbox" id="paper" checked> light
       </label>
-      <label class="toggle" id="hands-wrap" style="display:none" title="Color notes by staff: right hand blue, left hand violet">
+      <label class="toggle" id="hands-wrap" style="display:none" title="Color the keys and falling notes by hand: right hand blue, left hand violet">
         <input type="checkbox" id="hands"> <span class="hand-r">R</span>/<span class="hand-l">L</span> hands
       </label>
     </div>
@@ -540,6 +523,13 @@
       <label class="toggle" title="Show every bar of the piece as sheet music, in place of the keyboard">
         <input type="checkbox" id="whole-score"> whole score
       </label>
+    </div>
+    <!-- The sampled piano is CC BY: its attribution has to stay on the page. -->
+    <div class="tray-row">
+      <span class="tray-label">credits</span>
+      <span class="tray-credits">piano:
+        <a href="https://sfzinstruments.github.io/pianos/salamander/">Salamander</a>
+        by Alexander Holm (CC&nbsp;BY)</span>
     </div>
   </div>
 </details>

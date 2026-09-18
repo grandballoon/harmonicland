@@ -1,6 +1,6 @@
 /* ====================================================================
    STAFF_STD — the real grand staff. Same (svg, score, t) signature as
-   StaffFull, so the toggle is one reference swap. The key difference:
+   every view, so the toggle is one reference swap. The key point:
    vertical position is a function of DIATONIC STEP (letter name), NOT
    pitch number. This is where `spelling` earns its keep — C# and Db are
    the same key but sit on different rows, and accidentals are drawn.
@@ -84,9 +84,8 @@ export function notehead(
   return out;
 }
 
-// the full-screen view measures the (outer) svg itself and sets innerHTML;
-// stacked views (staff-piano) instead ask for markup() at an exact W×H so
-// they can place the staff inside a clipped <g> of their own single svg.
+// the view measures the svg itself and sets innerHTML; markup() draws at an
+// exact W×H, so a test can render it without a DOM.
 export const render: View = (svg, { score, t }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
@@ -100,18 +99,13 @@ export const render: View = (svg, { score, t }) => {
  *  MarkupOpts for why `glowId` is required rather than assumed. */
 export interface MarkupOpts {
   glowId: string;
-  hands?: boolean;
 }
 
 // the staff as a markup string for a W×H region (origin at 0,0); no <defs> —
-// the caller defines the glow filter and names it. With `hands` on, noteheads are
-// hued by hand (upper = --hand-r, lower = --hand-l) instead of the
-// resting/sounding pair; sounding is then carried by glow + full opacity.
-// `n.hand` is read straight off the note — the parser already resolved it in
-// the namespace it understood, so there is nothing left to normalize here.
+// the caller defines the glow filter and names it.
 export const markup = (W: number, H: number, score: Score, t: number, o: MarkupOpts): string => {
   if (!W || !H) return "";
-  const { glowId, hands = false } = o;
+  const { glowId } = o;
   const midY = H / 2; // middle C lives here
   const playX = W * PLAYHEAD_X;
 
@@ -127,10 +121,7 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
     const x = playX + (n.onset - t) * PPS;
     if (x + R < CLEF_W || x - R > W) continue; // cull (leave room for clefs)
     const lit = t >= n.onset && t < n.onset + n.duration;
-    const handed = hands && n.hand !== undefined;
-    const fill = handed
-      ? n.hand === "upper" ? "var(--hand-r)" : "var(--hand-l)"
-      : lit ? "var(--note-lit)" : "var(--note)";
+    const fill = lit ? "var(--note-lit)" : "var(--note)";
     out += notehead(n, x, midY, fill, lit ? 1 : 0.85, glowAttr(glowId, lit));
   }
 

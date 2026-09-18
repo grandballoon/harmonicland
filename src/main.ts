@@ -10,7 +10,6 @@ import { MidiIn } from "./inputs/midi";
 import { MusicxmlIn } from "./inputs/musicxml";
 import { MxlIn } from "./inputs/mxl";
 import { LilyIn } from "./inputs/lily";
-import { StaffFull } from "./outputs/staff-full";
 import { StaffStd } from "./outputs/staff-std";
 import { PianoRoll } from "./outputs/piano-roll";
 import { StaffPiano } from "./outputs/staff-piano";
@@ -66,7 +65,7 @@ let score: Score = Core.makeScore([]); // empty until loaded
 // than parsed from a file. Travels beside the score, never inside it —
 // see harmony/progression.ts. Null is the honest answer for a file.
 let chart: Chart | null = null;
-let view: ViewModule = StaffFull; // current projection
+let view: ViewModule = Practice; // current projection; applyView sets it at startup
 let scrubbing = false;
 // The score cut into steps for the transport's arrow keys — all hands,
 // because watching a score is not practising one hand of it. Rebuilt per
@@ -449,7 +448,6 @@ const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), loca
 
 // --- view toggle (one reference swap) ------------------------------
 const VIEWS: Record<string, ViewModule> = {
-  full: StaffFull,
   std: StaffStd,
   "std-keys": StaffPiano.keysView,
   "std-roll": StaffPiano.rollView,
@@ -577,7 +575,7 @@ viewSelect.addEventListener("change", () => {
 /** Switch to the view the selector names, and everything that goes with
  *  it. Run on every change, and once at startup for the selector's default. */
 function applyView(val: string): void {
-  view = VIEWS[val] ?? StaffFull;
+  view = VIEWS[val] ?? Practice;
   handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
   practiceWrap.style.display = val === "practice" ? "" : "none";
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard

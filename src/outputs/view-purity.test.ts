@@ -5,7 +5,6 @@ import { Nashville } from "./nashville";
 import { Tonnetz } from "./tonnetz";
 import { PianoRoll } from "./piano-roll";
 import { StaffStd } from "./staff-std";
-import { StaffFull } from "./staff-full";
 import { Combo } from "./combo";
 import { StaffPiano } from "./staff-piano";
 import { Practice } from "./practice";
@@ -118,13 +117,13 @@ describe("every view answers where its keyboard is", () => {
     practice: PracticeState.snapshot(),
   };
   const VIEWS: Record<string, ViewModule> = {
-    StaffFull, StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice,
+    StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice,
     "StaffPiano.keysView": StaffPiano.keysView,
     "StaffPiano.rollView": StaffPiano.rollView,
   };
 
-  it("covers all nine views", () => {
-    expect(Object.keys(VIEWS)).toHaveLength(9);
+  it("covers all eight views", () => {
+    expect(Object.keys(VIEWS)).toHaveLength(8);
   });
 
   it.each(Object.keys(VIEWS))("%s returns a region or an explicit null", (name) => {

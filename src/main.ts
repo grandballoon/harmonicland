@@ -17,7 +17,7 @@ import { StaffPiano } from "./outputs/staff-piano";
 import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
-import { Practice } from "./outputs/practice";
+import { Practice, type Scroller } from "./outputs/practice";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
 import { LiveKeys, type Voice } from "./live-keys";
@@ -41,6 +41,9 @@ import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
 import type { BarRange, Score } from "./types";
 import type { LiveSnapshot, Region, ViewModule } from "./view";
+// the piece the app opens on — bundled, so it loads the same way from the
+// dev server and from the deployed site
+import openingScoreUrl from "../scores/chopin_prelude_4.midi?url";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
@@ -92,18 +95,26 @@ const liveSnapshot = (): LiveSnapshot => ({
 // the per-frame projection — now genuinely a pure function of the frame it
 // is handed, with no ambient state reached for behind the signature.
 clock.onFrame((t) => {
-  view.render(svg, { score, t, live: liveSnapshot() });
+  const live = liveSnapshot();
+  syncScoreScroll(live);
+  view.render(svg, { score, t, live });
   const sounding = clock.isPlaying() || auditioning;
   AudioOut.at(score, t, sounding);
   MidiOut.at(score, t, sounding);
   // the clock pauses itself at the end of the piece, so the button reads
   // the clock rather than remembering what it was last clicked into.
-  const label = clock.isPlaying() ? "Pause" : "Play";
-  if (playBtn.textContent !== label) playBtn.textContent = label;
+  const playing = String(clock.isPlaying());
+  if (playBtn.dataset.playing !== playing) {
+    playBtn.dataset.playing = playing;
+    const label = clock.isPlaying() ? "Pause" : "Play";
+    playBtn.title = label;
+    playBtn.setAttribute("aria-label", label);
+  }
   if (!scrubbing && score.duration > 0) {
     $<HTMLInputElement>("scrub").value = String((t / score.duration) * 1000);
   }
-  $("time").textContent = `${fmt(t)} / ${fmt(score.duration)}s`;
+  $("time-now").textContent = fmt(t);
+  $("time-total").textContent = `${fmt(score.duration)}s`;
 });
 
 /** `key` is the score's identity for its saved sections (see sections.ts). */
@@ -120,7 +131,7 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   clock.pause();
   AudioOut.silence();
   MidiOut.silence();
-  for (const id of ["play", "stop", "scrub"]) ($<HTMLButtonElement>(id)).disabled = false;
+  for (const id of ["play", "scrub"]) ($<HTMLButtonElement>(id)).disabled = false;
   $("status").textContent = label ? `${label} · ${score.notes.length} notes · ${fmt(score.duration)}s` : "";
   // a lesson is about a score, so a new score is a new lesson.
   if (view === Practice) PracticeState.begin(score, clock.seek, chart);
@@ -157,6 +168,20 @@ $<HTMLInputElement>("file").addEventListener("change", async (e) => {
     $("status").textContent = "Couldn't read that file: " + (err as Error).message;
   }
 });
+
+/** Open on Chopin's Prelude in E minor, Op. 28 No. 4, unless the reader
+ *  has already loaded something of their own by the time it arrives. */
+async function loadOpeningScore(): Promise<void> {
+  try {
+    const res = await fetch(openingScoreUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = await res.arrayBuffer();
+    if (score.notes.length > 0) return;
+    loadScore(MidiIn.parse(buf), Sections.keyForBytes(new Uint8Array(buf)), "Chopin · Prelude in E minor, Op. 28 No. 4");
+  } catch (err) {
+    $("status").textContent = "Couldn't load the opening score: " + (err as Error).message;
+  }
+}
 
 $("demo").addEventListener("click", () => {
   AudioOut.ensure();
@@ -245,20 +270,15 @@ midiOutBtn.addEventListener("click", async () => {
 });
 
 // --- transport controls -------------------------------------------
-// The play button's label follows the clock in the frame loop above.
+// One play/pause button. Its glyph follows the clock in the frame loop
+// above. Pausing leaves the playhead where it is; the scrubber, the bar
+// range and ◀ ▶ are how to move it.
 const playBtn = $<HTMLButtonElement>("play");
 playBtn.addEventListener("click", () => {
   AudioOut.ensure();
   auditioning = false;
   if (clock.isPlaying()) clock.pause();
-  else clock.play(); // enters the loop, if there is one
-});
-$("stop").addEventListener("click", () => {
-  auditioning = false;
-  clock.pause();
-  clock.seek(clock.loop()?.start ?? 0); // back to the top of what is playing
-  AudioOut.silence();
-  MidiOut.silence();
+  else clock.play(); // enters the loop, if there is one; restarts from the end
 });
 
 const scrub = $<HTMLInputElement>("scrub");
@@ -464,7 +484,7 @@ applyTheme();
 // the right keys go down and seeks the clock to match, so Play/Stop would
 // be a second, disagreeing source of time. Disable them, and let the scrub
 // bar land on the nearest step instead of an arbitrary instant.
-const practiceWrap = $<HTMLSpanElement>("practice-wrap");
+const practiceWrap = $<HTMLDivElement>("practice-wrap");
 const practiceHand = $<HTMLSelectElement>("practice-hand");
 
 // --- progressions: a lesson with no file behind it -------------------
@@ -523,9 +543,11 @@ const playOther = $<HTMLInputElement>("play-other");
 // off unless you ask for them, so the checkbox that is ON by default has to
 // be the one that means "hide".
 const hideArrows = $<HTMLInputElement>("hide-arrows");
+const wholeScore = $<HTMLInputElement>("whole-score");
 practiceHand.addEventListener("change", () => PracticeState.setHand(practiceHand.value as HandFilter));
 showOther.addEventListener("change", () => PracticeState.setShowOther(showOther.checked));
 hideArrows.addEventListener("change", () => PracticeState.setShowArrows(!hideArrows.checked));
+wholeScore.addEventListener("change", () => PracticeState.setWholeScore(wholeScore.checked));
 playOther.addEventListener("change", () => {
   AudioOut.ensure();
   PracticeState.setPlayOther(playOther.checked);
@@ -535,15 +557,26 @@ playOther.addEventListener("change", () => {
 function syncTransport(): void {
   const practising = view === Practice;
   const loaded = score.notes.length > 0;
-  for (const id of ["play", "stop"]) $<HTMLButtonElement>(id).disabled = practising || !loaded;
+  playBtn.disabled = practising || !loaded;
   for (const id of ["bar-from", "bar-to", "bar-all", "step-back", "step-fwd"])
     $<HTMLInputElement | HTMLButtonElement>(id).disabled = !loaded;
   // a lesson always goes round its bars, so there is nothing to switch
   loopBtn.style.display = practising ? "none" : "";
 }
 
-$<HTMLSelectElement>("view").addEventListener("change", (e) => {
-  const val = (e.target as HTMLSelectElement).value;
+const viewSelect = $<HTMLSelectElement>("view");
+viewSelect.addEventListener("change", () => {
+  // the choice is a gesture, so it may unlock sound for the lesson it begins
+  if (viewSelect.value === "practice") AudioOut.ensure();
+  applyView(viewSelect.value);
+  // a closed <select> keeps focus and would swallow the arrow keys that
+  // step the playhead in the view just chosen.
+  viewSelect.blur();
+});
+
+/** Switch to the view the selector names, and everything that goes with
+ *  it. Run on every change, and once at startup for the selector's default. */
+function applyView(val: string): void {
   view = VIEWS[val] ?? StaffFull;
   handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
   practiceWrap.style.display = val === "practice" ? "" : "none";
@@ -558,7 +591,6 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   // a lesson exists only while its view does — begin/end here rather than
   // leaving a cursor listening to LiveKeys behind a view nobody is looking at.
   if (val === "practice") {
-    AudioOut.ensure();
     clock.pause();
     PracticeState.begin(score, clock.seek, chart);
     $("status").textContent = score.notes.length
@@ -569,9 +601,6 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   }
   syncTransport();
   applyBars(); // a lesson begun above starts unconfined; hand it the bars
-  // a closed <select> keeps focus and would swallow the arrow keys that
-  // step the playhead in the view just chosen.
-  (e.target as HTMLSelectElement).blur();
   // the controller means different things per view: Nashville → Perfecto,
   // Tonnetz/Combo → lattice instrument, everything else → chromatic keyboard.
   LiveGamepad.setMapping(
@@ -585,7 +614,7 @@ $<HTMLSelectElement>("view").addEventListener("change", (e) => {
   gamepadHelpNashville.style.display = isNashville ? "" : "none";
   if (!isTonnetz) gamepadHelpTonnetz.removeAttribute("open");
   if (!isNashville) gamepadHelpNashville.removeAttribute("open");
-});
+}
 
 // --- playable keyboard (piano-roll view only) ----------------------
 // The keyboard is an OUTPUT surface; hit-testing pointer events turns it
@@ -601,19 +630,104 @@ const pointerVoice = new Map<number, Voice>(); // pointerId -> its live voice
 // a new view silently had no keyboard and any decorator around a view broke
 // hit-testing without an error.
 const rollRegion = (): Region | null => view.keyboardRegion(svg, liveSnapshot());
+/** The practice page is a second input surface: a bar clicked there is
+ *  isolated, and shift-click grows the range to reach it. True when the
+ *  pointer was on a bar and the selection took it. */
+function pickBar(e: MouseEvent): boolean {
+  if (view !== Practice) return false;
+  const bar = Practice.barAt(svg, e.clientX, e.clientY, liveSnapshot());
+  if (bar === null) return false;
+  // only the lesson knows how shift-click extends its range, so ask it,
+  // then adopt the answer as the one selection every view shares.
+  PracticeState.isolate(bar, e.shiftKey);
+  selectBars(PracticeState.snapshot().range);
+  return true;
+}
+
+// --- the music's scroller -------------------------------------------
+// The whole score's sheets and the practice page's strip are drawn in the
+// svg like everything else, but scrolled by a native scroller laid over
+// them — down the sheets, across the strip — so the wheel, the trackpad's
+// momentum, touch and the scrollbar all behave as they do on any page. Its
+// position, less the view's origin, is copied into PracticeState, which is
+// how the view learns the offset.
+const scoreScroll = $<HTMLDivElement>("score-scroll");
+const scoreSpacer = scoreScroll.firstElementChild as HTMLDivElement;
+/** What the scroller is laid over now, or null while it is hidden. */
+let scrolling: Scroller | null = null;
+const scrollPos = (): number => (scrolling?.axis === "x" ? scoreScroll.scrollLeft : scoreScroll.scrollTop);
+function setScrollPos(v: number): void {
+  if (scrolling?.axis === "x") scoreScroll.scrollLeft = v;
+  else scoreScroll.scrollTop = v;
+}
+/** Copy the scroller's position into the lesson, as the view's offset. */
+function publishScroll(): void {
+  if (!scrolling) return;
+  const offset = scrollPos() - scrolling.origin;
+  if (scrolling.axis === "x") PracticeState.setPan(offset);
+  else PracticeState.setScroll(offset);
+}
+scoreScroll.addEventListener("scroll", publishScroll);
+// a mouse wheel only turns vertically, and a strip that scrolls only across
+// would ignore it; turn it into the axis there is
+scoreScroll.addEventListener("wheel", (e) => {
+  if (scrolling?.axis !== "x" || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+  scoreScroll.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+// a click, not a pointerdown: a finger that lands on a bar to scroll the
+// music must not isolate it. A click only fires when the pointer did not
+// scroll.
+scoreScroll.addEventListener("click", (e) => { pickBar(e); });
+
+/** The step the scroller last followed, or null to follow afresh. */
+let followed: number | null = null;
+let scrollBox = "";
+
+/** Lay the scroller over the music, size what it scrolls, and follow the
+ *  cursor: when the learner's step moves out of sight, scroll back to it.
+ *  Only when the step MOVES, so a reader who scrolls away to look ahead
+ *  is left there until they play on. */
+function syncScoreScroll(live: LiveSnapshot): void {
+  const sc = view === Practice ? Practice.scroller(svg, live) : null;
+  if (!sc) {
+    scoreScroll.hidden = true;
+    scrolling = null;
+    followed = null;
+    scrollBox = "";
+    return;
+  }
+  scrolling = sc;
+  const { region: r, axis, length, origin } = sc;
+  const box = `${axis},${r.x},${r.y},${r.w},${r.h},${length},${origin}`;
+  if (box !== scrollBox) {
+    // the content changed under the scroller — a resize, or the page turned
+    // to other bars — so put it back at the offset the view is drawing
+    scrollBox = box;
+    const offset = axis === "x" ? live.practice.pan : live.practice.scroll;
+    scoreScroll.dataset.axis = axis;
+    Object.assign(scoreScroll.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+    Object.assign(scoreSpacer.style, axis === "x"
+      ? { width: `${length}px`, height: "1px" }
+      : { width: "", height: `${length}px` });
+    scoreScroll.hidden = false;
+    setScrollPos(origin + offset);
+    publishScroll();
+  }
+  const at = live.practice.index;
+  if (followed === at || !sc.sight) return;
+  followed = at;
+  const pos = scrollPos();
+  if (pos < sc.sight[0] - 1 || pos > sc.sight[1] + 1) {
+    setScrollPos(sc.home);
+    publishScroll();
+  }
+}
+
 svg.addEventListener("pointerdown", (e) => {
-  // the page above the practice keyboard is a second input surface: a bar
-  // clicked there is isolated, and shift-click grows the range to reach it.
-  if (view === Practice) {
-    const bar = Practice.barAt(svg, e.clientX, e.clientY, liveSnapshot());
-    if (bar !== null) {
-      // only the lesson knows how shift-click extends its range, so ask it,
-      // then adopt the answer as the one selection every view shares.
-      PracticeState.isolate(bar, e.shiftKey);
-      selectBars(PracticeState.snapshot().range);
-      e.preventDefault();
-      return;
-    }
+  if (pickBar(e)) {
+    e.preventDefault();
+    return;
   }
   const region = rollRegion();
   if (region === null) return;
@@ -682,7 +796,18 @@ const isTyping = (el: EventTarget | null): boolean => {
   return t.tagName === "SELECT" || t.tagName === "TEXTAREA";
 };
 
+// The tray folds every control not needed while reading behind one corner
+// indicator. Escape closes it from anywhere — including from a control in
+// it, whose focus would otherwise be left inside a closed panel.
+const tray = $<HTMLDetailsElement>("tray");
+
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && tray.open) {
+    tray.open = false;
+    tray.querySelector("summary")!.focus();
+    e.preventDefault();
+    return;
+  }
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
   // In practice mode the arrow keys walk the cursor by hand — back to see a
   // transition again, forward to skip one — [ and ] mark the bar the
@@ -755,3 +880,8 @@ function demoScore(): Score {
   const bars = Math.ceil(seq.length / 4);
   return Core.makeScore(notes, Array.from({ length: bars + 1 }, (_, i) => i * 4 * BEAT));
 }
+
+// --- startup ---------------------------------------------------------
+// last, so every control and panel the view and the score touch exists
+applyView(viewSelect.value);
+void loadOpeningScore();

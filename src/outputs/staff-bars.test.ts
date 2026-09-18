@@ -71,6 +71,30 @@ describe("layout", () => {
   });
 });
 
+describe("panning", () => {
+  it("rests on the focus, and slides the rest of the piece through the window", () => {
+    const focus = { from: 0, to: 0 };
+    const { range, focus: sight } = StaffBars.panSpan(W, four, focus, "both", true);
+    expect(range[0]).toBe(0); // nothing before the first bar
+    expect(range[1]).toBeGreaterThan(0);
+    expect(sight[0]).toBeLessThanOrEqual(0);
+    expect(sight[1]).toBeGreaterThanOrEqual(0);
+    const bars = (pan: number) => StaffBars.layout(W, four, focus, four.notes, pan).placed.map((p) => p.eb.bar.index);
+    expect(bars(0)).toEqual([0, 1]);
+    expect(bars(range[1])).toContain(3);
+    expect(bars(range[1])).not.toContain(0);
+  });
+
+  it("tears every bar at the window, wherever it is panned to", () => {
+    const page = StaffBars.layout(W, four, { from: 1, to: 1 }, four.notes, 150);
+    const [L, R] = page.view!;
+    for (const p of page.placed) {
+      expect(p.visible[0]).toBeGreaterThanOrEqual(L);
+      expect(p.visible[1]).toBeLessThanOrEqual(R);
+    }
+  });
+});
+
 describe("hit-testing", () => {
   it("names the bar under x by what is visible there", () => {
     const seen: (number | null)[] = [];
@@ -159,6 +183,15 @@ describe("what is engraved", () => {
     expect(count(svg, /<path d="M[\d.-]+,[\d.-]+ Q/g)).toBe(1); // one tie, joining the two heads
     const firstOnly = StaffBars.markup(W, H, across, { ...opts, focus: { from: 0, to: 0 } });
     expect(count(firstOnly, /<path d="M[\d.-]+,[\d.-]+ Q/g)).toBe(1); // a tie to the torn next bar
+  });
+
+  it("ends the piece on a final barline, and the staff with it", () => {
+    const FINAL = /<rect [^>]*width="4" [^>]*fill="var\(--grid-oct\)"/g;
+    expect(count(page(3), FINAL)).toBe(1);
+    expect(count(page(1), FINAL)).toBe(0);
+    // with nothing torn off to the right, no staff line runs past the end
+    const staffEnds = [...page(3).matchAll(/x2="([\d.]+)" y2="[\d.]+" stroke="var\(--staff-line\)"/g)].map((m) => +m[1]);
+    expect(Math.max(...staffEnds)).toBeLessThan(W - 8);
   });
 
   it("is deterministic", () => {

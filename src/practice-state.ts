@@ -74,6 +74,18 @@ export interface PracticeSnapshot {
    *  thing to read at the moment you are trying to find a key, and a
    *  learner who wants it can say so. */
   showArrows: boolean;
+  /** Show the whole score as sheet music instead of the bars being worked
+   *  on above a keyboard? Presentation only, like `showArrows`: the cursor,
+   *  the grading and the range are the same either way. */
+  wholeScore: boolean;
+  /** How far down the whole score is scrolled, in pixels. The scroller that
+   *  owns it lives in the DOM (main.ts); it is copied here so the view that
+   *  draws the sheets at this offset stays a function of its snapshot. */
+  scroll: number;
+  /** How far along the piece the page is panned, in pixels from where it
+   *  rests on the bars being worked on — positive toward the end. Copied
+   *  from its scroller in the DOM the way `scroll` is. */
+  pan: number;
   /** The score the lesson is on — null when inactive. Carried here rather
    *  than read off the frame so the steps below and the sheet a view draws
    *  can never be cut from two different scores. */
@@ -153,7 +165,14 @@ const cfg = {
   showOther: true,
   playOther: true,
   showArrows: false,
+  wholeScore: false,
 };
+
+/** Not a preference and not lesson state: where the reader has scrolled
+ *  to. Outlives a lesson for the same reason the toggles do — changing
+ *  hands must not throw the reader back to the first sheet. */
+let scroll = 0;
+let pan = 0;
 
 interface Session {
   score: Score;
@@ -425,6 +444,19 @@ function setShowArrows(on: boolean): void {
   cfg.showArrows = on;
 }
 
+function setWholeScore(on: boolean): void {
+  cfg.wholeScore = on;
+}
+
+function setScroll(y: number): void {
+  scroll = Math.max(0, y);
+}
+
+/** Negative is toward the start of the piece: the rest is mid-strip. */
+function setPan(x: number): void {
+  pan = x;
+}
+
 function setPlayOther(on: boolean): void {
   cfg.playOther = on;
   if (session) reconcileOther(on ? otherAt(step(session.index)) : new Set());
@@ -468,6 +500,9 @@ const snapshot = (): PracticeSnapshot => {
     showOther: cfg.showOther,
     playOther: cfg.playOther,
     showArrows: cfg.showArrows,
+    wholeScore: cfg.wholeScore,
+    scroll,
+    pan,
     score: session?.score ?? null,
     range: session?.range ?? null,
     focus,
@@ -498,6 +533,9 @@ export const PracticeState = {
   setShowOther,
   setPlayOther,
   setShowArrows,
+  setWholeScore,
+  setScroll,
+  setPan,
   setRange,
   isolate,
   step: stepBy,

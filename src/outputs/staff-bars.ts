@@ -3,9 +3,9 @@
    noteheads under a playhead, an instant per note; this engraves them —
    stems, flags, beams, rests, dots, ties, a key signature and a time
    signature — from what engrave.ts derives per bar, and lays the bars
-   out the way a page does: by rhythm, not by the clock. Nothing scrolls.
-   It is the page open on the stand while the learner works on the bars
-   it shows.
+   out the way a page does: by rhythm, not by the clock. Nothing moves
+   under a playhead. It is the page open on the stand while the learner
+   works on the bars it shows.
 
    What the page shows, and how it is told apart — by KIND, never shade:
 
@@ -14,15 +14,24 @@
      no hands) — the hand's hue on the dark field, black ink on paper; the
      hand not being practised wears its dim token, the same rule the
      practice keyboard follows.
-   - the CONTEXT: the bar before and the bar after, engraved at the same
-     scale and CLIPPED to a margin either side, so the last few notes of
-     the previous bar and the first few of the next are visible, torn at
-     the edge, in ink-dim. Where the passage comes from and goes to.
+   - the CONTEXT: every other bar of the piece, engraved at the same
+     scale either side of the focus and seen through a WINDOW between the
+     signatures and the right margin, in ink-dim. At rest the window
+     shows the last few notes of the previous bar and the first few of
+     the next, torn at its edges — where the passage comes from and goes
+     to. PANNED (`pan`, pixels from rest; a scroller owns it, as with the
+     whole score) it slides along the strip to any bar of the piece, the
+     clef and signatures staying put like the edge of a stand.
    - the CURSOR: the current step's heads in the strike gold with a glow,
      and a playhead-coloured rule through their column, so the page and
      the keyboard say "now" in one colour.
    - the RANGE, when bars are isolated, on a faint panel — a mark of a
      different kind from any note's hue.
+
+   The page is built of LINES: `placeLine` decides a line's x's and
+   `drawLine` draws it. This page is one line — the whole piece as one
+   strip, windowed by `panTo`; staff-score.ts sets the whole piece as a
+   column of lines with no window, so the two pages draw a bar alike.
 
    Every staff line, clef, ledger, position and accidental glyph comes
    from staff-std.ts; every value, rest, beam and printed accidental from
@@ -73,6 +82,9 @@ export interface BarsOpts {
   /** Engrave the hand not being practised? Off, it is left off the page
    *  the same way it is left off the keyboard. */
   showOther: boolean;
+  /** How far along the strip the window is panned, in pixels from rest —
+   *  positive toward the end of the piece. Absent is at rest. */
+  pan?: number;
 }
 
 /** One bar with its pixels decided. */
@@ -96,6 +108,37 @@ export interface PageLayout {
   readonly first: Bar;
   /** Width the signatures take before the first bar. */
   readonly preludeW: number;
+  /** Does the line open with a time signature, or only the key? */
+  readonly time: boolean;
+  /** Where the staff lines stop: the margin when a torn bar runs off the
+   *  edge, else the line's own closing barline. */
+  readonly end: number;
+  /** Does the line close the piece? It ends on a final barline. */
+  readonly final: boolean;
+  /** The window the line is seen through, [left, right): a bar that runs
+   *  past either side is torn there. Null on a line with nothing either
+   *  side of its bars, which is drawn whole. */
+  readonly view: readonly [number, number] | null;
+}
+
+/** One line of bars to place — the unit both the single-line page and the
+ *  whole-score page are made of. */
+export interface LineSpec {
+  /** The bars engraved in full, in order. */
+  readonly bars: readonly EngravedBar[];
+  /** The bars either side of them, in order, set at the same scale as
+   *  context and seen through the line's window. Empty on a line that is
+   *  all there is. */
+  readonly before: readonly EngravedBar[];
+  readonly after: readonly EngravedBar[];
+  /** Open with the time signature as well as the key? The first line of a
+   *  piece does; a later line restates only the key, as a printed page does. */
+  readonly time: boolean;
+  /** The most the columns may be stretched past their natural width. A line
+   *  that must fill the width passes Infinity; a piece's short last line
+   *  stops at ordinary spacing rather than being pulled across the page. */
+  readonly maxScale: number;
+  readonly final: boolean;
 }
 
 /** The natural (unscaled) width of a column, from the time it spans to
@@ -107,7 +150,8 @@ const colW = (span: number, accidentals: boolean): number =>
 
 const keyW = (fifths: number): number => (fifths === 0 ? 0 : Math.abs(fifths) * KEY_ACC_W + 6);
 
-const naturalW = (eb: EngravedBar): number => {
+/** A bar's width at a scale of 1, before a line stretches it to fit. */
+export const naturalW = (eb: EngravedBar): number => {
   let w = LEAD;
   eb.columns.forEach((c, i) => {
     const next = i + 1 < eb.columns.length ? eb.columns[i + 1].q : eb.quarters;
@@ -118,46 +162,157 @@ const naturalW = (eb: EngravedBar): number => {
 
 const clampBar = (bars: readonly Bar[], i: number): number => Math.max(0, Math.min(i, bars.length - 1));
 
+const handNotes = new WeakMap<Score, Map<HandFilter, readonly Note[]>>();
+
 /** Which notes go on the page: the practised hand always, the other hand
- *  only when asked for. */
-const visibleNotes = (score: Score, hand: HandFilter, showOther: boolean): readonly Note[] =>
-  showOther ? score.notes : score.notes.filter((n) => inHand(n, hand));
+ *  only when asked for. The same arguments give the same array, so the
+ *  layouts below can be memoized on it. */
+export function visibleNotes(score: Score, hand: HandFilter, showOther: boolean): readonly Note[] {
+  if (showOther) return score.notes;
+  let byHand = handNotes.get(score);
+  if (!byHand) handNotes.set(score, (byHand = new Map()));
+  let notes = byHand.get(hand);
+  if (!notes) byHand.set(hand, (notes = score.notes.filter((n) => inHand(n, hand))));
+  return notes;
+}
 
 interface Sig { key: boolean; time: boolean; w: number }
 const NO_SIG: Sig = { key: false, time: false, w: 0 };
 
-/** Decide every x on the page. One function, so `markup` and `barAt`
- *  cannot disagree about where a bar is. */
-export function layout(W: number, score: Score, focus: BarRange, notes: readonly Note[]): PageLayout {
-  const bars = score.bars;
-  const from = clampBar(bars, focus.from);
-  const to = Math.max(from, clampBar(bars, focus.to));
-  const hasPrev = from > 0;
-  const hasNext = to < bars.length - 1;
-  const ebs = engrave(notes, bars, hasPrev ? from - 1 : from, hasNext ? to + 1 : to);
-  const first = bars[from];
+const SIG_X = CLEF_W + 4;
+const preludeOf = (first: Bar, time: boolean): number => keyW(first.fifths) + (time ? TIME_W : 0) + PAD / 2;
 
-  const sigX = CLEF_W + 4;
-  const preludeW = keyW(first.fifths) + TIME_W + PAD / 2;
-  const usable = Math.max(1, W - PAD - sigX - preludeW);
-  const ctxL = hasPrev ? usable * CTX_FRAC : 0;
-  const ctxR = hasNext ? usable * CTX_FRAC : 0;
+/** The width a line opening on `first` has for its bars, after the clef,
+ *  the signatures and the right margin — what a line breaker fills. */
+export const roomFor = (W: number, first: Bar, time: boolean): number =>
+  Math.max(1, W - PAD - SIG_X - preludeOf(first, time));
 
-  // inline signature changes between focus bars take unscaled room; the
-  // columns share what is left, scaled to fit.
-  const focusEbs = ebs.filter((e) => e.bar.index >= from && e.bar.index <= to);
-  const sigs: Sig[] = focusEbs.map((eb, i) => {
-    if (i === 0) return NO_SIG;
-    const prev = focusEbs[i - 1].bar;
-    const key = eb.bar.fifths !== prev.fifths;
-    const time = eb.bar.beats !== prev.beats || eb.bar.unit !== prev.unit;
-    return { key, time, w: (key ? keyW(eb.bar.fifths) + 4 : 0) + (time ? TIME_W : 0) };
+/** A memo of one entry: the last answer, kept while its key holds. A
+ *  cache, never a source of truth — the page redraws every frame and
+ *  engraving the whole piece each time would be waste. */
+function memo1<K extends readonly unknown[], V>(f: (...k: K) => V): (...k: K) => V {
+  let last: { key: K; value: V } | null = null;
+  return (...key: K) => {
+    if (last && last.key.every((k, i) => k === key[i])) return last.value;
+    last = { key, value: f(...key) };
+    return last.value;
+  };
+}
+
+const engraveAll = memo1((notes: readonly Note[], bars: readonly Bar[]) =>
+  engrave(notes, bars, 0, bars.length - 1));
+
+/** The single-line page's strip, at rest: the focus bars fitted to the
+ *  width, and every other bar of the piece either side of them. */
+const strip = memo1((W: number, score: Score, from: number, to: number, notes: readonly Note[]): PageLayout => {
+  const ebs = engraveAll(notes, score.bars);
+  return placeLine(W, {
+    bars: ebs.slice(from, to + 1),
+    before: ebs.slice(0, from),
+    after: ebs.slice(to + 1),
+    time: true,
+    maxScale: Infinity,
+    final: true,
   });
+});
+
+const focusOf = (bars: readonly Bar[], focus: BarRange): [number, number] => {
+  const from = clampBar(bars, focus.from);
+  return [from, Math.max(from, clampBar(bars, focus.to))];
+};
+
+/** Decide every x on the single-line page, seen through its window at
+ *  `pan`. One function, so `markup` and `barAt` cannot disagree about
+ *  where a bar is. */
+export function layout(W: number, score: Score, focus: BarRange, notes: readonly Note[], pan = 0): PageLayout {
+  const [from, to] = focusOf(score.bars, focus);
+  return panTo(strip(W, score, from, to, notes), pan);
+}
+
+/** How far a line's window can pan: from the piece's first bar at the
+ *  window's left edge to its last at the right — and always through 0,
+ *  the rest, even when the strip is shorter than the window. */
+const panRange = (page: PageLayout): [number, number] => {
+  const [L, R] = page.view ?? [0, 0];
+  const { placed } = page;
+  return [Math.min(0, placed[0].x0 - L), Math.max(0, placed[placed.length - 1].x1 - R)];
+};
+
+/** The page's pan, for a scroller: how far it can go, and the pans at
+ *  which every focus bar is wholly inside the window — outside those, the
+ *  bars being worked on are out of sight and a follower brings them back
+ *  to rest. */
+export function panSpan(
+  W: number, score: Score, focus: BarRange, hand: HandFilter, showOther: boolean,
+): { range: [number, number]; focus: [number, number] } {
+  const [from, to] = focusOf(score.bars, focus);
+  const page = strip(W, score, from, to, visibleNotes(score, hand, showOther));
+  const [L, R] = page.view ?? [0, W];
+  const inFocus = page.placed.filter((p) => !p.context);
+  return {
+    range: panRange(page),
+    focus: [inFocus[inFocus.length - 1].x1 - R, inFocus[0].x0 - L],
+  };
+}
+
+/** A line seen through its window panned `pan` pixels from rest: the bars
+ *  the window reaches, moved into place and torn at its edges. A line
+ *  with no window is returned as it is. */
+export function panTo(page: PageLayout, pan: number): PageLayout {
+  if (!page.view) return page;
+  const [L, R] = page.view;
+  const [lo, hi] = panRange(page);
+  const d = Math.max(lo, Math.min(hi, pan));
+  const placed = page.placed
+    .filter((p) => p.x1 - d > L && p.x0 - d < R)
+    .map((p): PlacedBar => ({
+      ...p,
+      x0: p.x0 - d,
+      x1: p.x1 - d,
+      colX: p.colX.map((x) => x - d),
+      visible: [Math.max(L, p.x0 - d), Math.min(R, p.x1 - d)],
+    }));
+  // the staves run to the margin while music runs off it; they stop at a
+  // barline only where the strip itself ends inside the window
+  const last = placed[placed.length - 1];
+  const ends = last !== undefined && last.eb === page.placed[page.placed.length - 1].eb && last.x1 <= R + 0.5;
+  return { ...page, placed, final: page.final && ends, end: ends ? last.x1 : R + PAD };
+}
+
+/** The key or time a bar changes to from the one before it, and the room
+ *  saying so takes. */
+const sigBetween = (prev: Bar, bar: Bar): Sig => {
+  const key = bar.fifths !== prev.fifths;
+  const time = bar.beats !== prev.beats || bar.unit !== prev.unit;
+  return { key, time, w: (key ? keyW(bar.fifths) + 4 : 0) + (time ? TIME_W : 0) };
+};
+
+/** Decide every x on one line of bars, at rest: its own bars fitted to the
+ *  width between the margins the context leaves, and the context chained
+ *  on either side at the same scale. */
+export function placeLine(W: number, spec: LineSpec): PageLayout {
+  const first = spec.bars[0].bar;
+  const sigX = SIG_X;
+  const preludeW = preludeOf(first, spec.time);
+  const usable = roomFor(W, first, spec.time);
+  const ctxL = spec.before.length ? usable * CTX_FRAC : 0;
+  const ctxR = spec.after.length ? usable * CTX_FRAC : 0;
+  // the window starts where the signatures' ink does, not their air, so a
+  // torn bar's accidentals are not cut off short of it
+  const view: [number, number] | null = spec.before.length || spec.after.length
+    ? [sigX + preludeW - PAD / 2, W - PAD]
+    : null;
+
+  // inline signature changes take unscaled room; the columns of the line's
+  // own bars share what is left, scaled to fit. The first bar's key and
+  // time are the line's opening signatures, so it prints none of its own.
+  const focusEbs = spec.bars;
+  const sigs: Sig[] = focusEbs.map((eb, i) => (i === 0 ? NO_SIG : sigBetween(focusEbs[i - 1].bar, eb.bar)));
   const natural = focusEbs.reduce((s, e) => s + naturalW(e), 0);
   const sigW = sigs.reduce((s, x) => s + x.w, 0);
-  const scale = Math.max(0.05, (usable - ctxL - ctxR - sigW) / natural);
+  const scale = Math.min(spec.maxScale, Math.max(0.05, (usable - ctxL - ctxR - sigW) / natural));
 
-  const place = (eb: EngravedBar, x0: number, sig: Sig, context: boolean, clip: [number, number]): PlacedBar => {
+  const place = (eb: EngravedBar, x0: number, sig: Sig, context: boolean): PlacedBar => {
     const colX: number[] = [];
     let x = x0 + sig.w + LEAD * scale;
     eb.columns.forEach((c, i) => {
@@ -168,26 +323,39 @@ export function layout(W: number, score: Score, focus: BarRange, notes: readonly
     const x1 = x0 + sig.w + naturalW(eb) * scale;
     return {
       eb, x0, x1, colX, context, sig: { key: sig.key, time: sig.time },
-      visible: [Math.max(clip[0], x0), Math.min(clip[1], x1)],
+      visible: view ? [Math.max(view[0], x0), Math.min(view[1], x1)] : [x0, x1],
     };
   };
+  const widthOf = (eb: EngravedBar, sig: Sig): number => sig.w + naturalW(eb) * scale;
 
   const placed: PlacedBar[] = [];
   const focusX0 = sigX + preludeW + ctxL;
   let x = focusX0;
   focusEbs.forEach((eb, i) => {
-    const p = place(eb, x, sigs[i], false, [x, W]);
+    const p = place(eb, x, sigs[i], false);
     placed.push(p);
     x = p.x1;
   });
   const focusX1 = x;
-  if (hasPrev) {
-    const eb = ebs[0];
-    const w = naturalW(eb) * scale;
-    placed.unshift(place(eb, focusX0 - w, NO_SIG, true, [sigX + preludeW, focusX0]));
+  // the context either side, chained outward from the line's own bars
+  let prev = focusEbs[focusEbs.length - 1].bar;
+  for (const eb of spec.after) {
+    const p = place(eb, x, sigBetween(prev, eb.bar), true);
+    placed.push(p);
+    x = p.x1;
+    prev = eb.bar;
   }
-  if (hasNext) placed.push(place(ebs[ebs.length - 1], focusX1, NO_SIG, true, [focusX1, W - PAD]));
-  return { placed, sigX, first, preludeW };
+  x = focusX0;
+  for (let i = spec.before.length - 1; i >= 0; i--) {
+    const eb = spec.before[i];
+    const sig = i > 0 ? sigBetween(spec.before[i - 1].bar, eb.bar) : NO_SIG;
+    x -= widthOf(eb, sig);
+    placed.unshift(place(eb, x, sig, true));
+  }
+  return {
+    placed, sigX, first, preludeW, time: spec.time, final: spec.final, view,
+    end: spec.after.length ? W : focusX1,
+  };
 }
 
 // --- colour ---------------------------------------------------------------
@@ -329,14 +497,25 @@ const tieArc = (x1: number, x2: number, y: number, dir: 1 | -1, s: Style): strin
 /** How many beams a value carries: an eighth one, a sixteenth two. */
 const beamLevels = (c: Chord): number => (c.value.base === 8 ? 0 : c.value.base === 16 ? 1 : 2);
 
+/** How a line is drawn: everything in BarsOpts but which bars and where
+ *  the window is — a placed line already knows both. */
+export type LineOpts = Omit<BarsOpts, "focus" | "pan">;
+
+/** The single-line page: the focus bars, with the rest of the piece
+ *  either side of them, seen through the window at `pan`. */
 export function markup(W: number, H: number, score: Score, o: BarsOpts): string {
   if (!W || !H || score.bars.length === 0) return "";
+  return drawLine(H, layout(W, score, o.focus, visibleNotes(score, o.hand, o.showOther), o.pan), o);
+}
+
+/** One placed line of bars as markup, its staves centred in 0..H. The one
+ *  drawing both pages share: the single-line page is one of these, and the
+ *  whole score is a column of them. */
+export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
   const midY = H / 2;
   const top = midY - STAFF_REACH;
   const bottom = midY + STAFF_REACH;
   const yOf = (pos: number) => yOfPos(midY, pos);
-  const notes = visibleNotes(score, o.hand, o.showOther);
-  const page = layout(W, score, o.focus, notes);
   const now = new Set(o.current ? soundingIn(o.current).map((n) => n.id) : []);
   const attack = new Set(o.current ? o.current.attack.map((n) => n.id) : []);
 
@@ -348,7 +527,15 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
       : { fill: handDim(n.hand), opacity: 0.92, glow: "", rank: 1 };
   };
 
+  // the music is drawn in the window, the staves and signatures around it;
+  // a bar running past the window's edge is torn there — clipped, not
+  // culled, so a head half off the edge is drawn half
   let out = "";
+  let staff = "";
+  if (page.view) {
+    const [va, vb] = page.view;
+    staff += `<defs><clipPath id="${o.glowId}-page"><rect x="${va}" y="0" width="${Math.max(0, vb - va)}" height="${H}"/></clipPath></defs>`;
+  }
 
   // the isolated bars, as a panel under everything
   if (o.range) {
@@ -361,11 +548,13 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
     }
   }
 
-  out += staves(W, midY);
+  const panel = out;
+  out = "";
+  staff += staves(page.end, midY);
 
   // opening signatures, once, before the first bar
-  out += keySigGlyph(page.sigX, midY, page.first.fifths);
-  out += timeSigGlyph(page.sigX + keyW(page.first.fifths), midY, page.first);
+  staff += keySigGlyph(page.sigX, midY, page.first.fifths);
+  if (page.time) staff += timeSigGlyph(page.sigX + keyW(page.first.fifths), midY, page.first);
 
   const drawn: Drawn[] = [];
   let cursorX: number | null = null;
@@ -439,7 +628,9 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
         if (h.acc) g += `<text x="${x - R - 10}" y="${y + 4}" font-size="15" ${attrs(s)} font-family="serif">${ACC[h.acc]}</text>`;
         if (c.value.dots) g += dotGlyph(hx, y, pos, s);
         drawn.push({ head: h, x: hx, y, dir, style: s });
-        if (attack.has(h.note.id) && !p.context && cursorX === null) cursorX = x;
+        // the head the step STRIKES — not a tied continuation of it, which
+        // on the whole-score page may sit on the next line
+        if (attack.has(h.note.id) && !h.tiedFrom && !p.context && cursorX === null) cursorX = x;
         topY = Math.min(topY, y);
         botY = Math.max(botY, y);
         prevPos = pos;
@@ -497,21 +688,16 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
         size: 10, weight: p.context ? 500 : 700, anchor: "start",
         fill: p.context ? "var(--ink-dim)" : "var(--ink)",
       });
-    // the closing barline of the last bar on the page
-    if (pi === page.placed.length - 1)
+    // the closing barline of the last bar on the page — thin-thick, the
+    // final barline, when it is the end of the piece
+    if (pi === page.placed.length - 1 && page.final)
+      out += `<line x1="${p.x1 - 7}" y1="${top}" x2="${p.x1 - 7}" y2="${bottom}" stroke="var(--grid-oct)" stroke-width="1.5"/>` +
+        `<rect x="${p.x1 - 4}" y="${top}" width="4" height="${bottom - top}" fill="var(--grid-oct)"/>`;
+    else if (pi === page.placed.length - 1)
       out += `<line x1="${p.x1}" y1="${top}" x2="${p.x1}" y2="${bottom}" ` +
         `stroke="${p.context ? "var(--grid)" : "var(--grid-oct)"}" stroke-width="${p.context ? 1 : 1.5}"/>`;
 
-    // a context bar is torn at the margin: clipped, not culled, so a head
-    // half off the edge is drawn half
-    if (p.context) {
-      const id = `${o.glowId}-clip${eb.bar.index}`;
-      const [va, vb] = p.visible;
-      out += `<defs><clipPath id="${id}"><rect x="${va}" y="0" width="${Math.max(0, vb - va)}" height="${H}"/></clipPath></defs>` +
-        `<g clip-path="url(#${id})">${g}</g>`;
-    } else {
-      out += g;
-    }
+    out += g;
   });
 
   // ties, after every head has its place: to the next head of the same
@@ -530,7 +716,8 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
   if (cursorX !== null)
     out += `<line x1="${cursorX}" y1="${top}" x2="${cursorX}" y2="${bottom}" stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
 
-  return out;
+  const inView = (m: string): string => (page.view && m ? `<g clip-path="url(#${o.glowId}-page)">${m}</g>` : m);
+  return inView(panel) + staff + inView(out);
 }
 
 /** Which bar a point in the page's local space is over, or null off any
@@ -540,14 +727,14 @@ export function markup(W: number, H: number, score: Score, o: BarsOpts): string 
  *  Context bars count, by their visible part: a click on the bar before
  *  the focus is how the learner widens it. */
 export function barAt(
-  W: number, score: Score, focus: BarRange, localX: number, hand: HandFilter = "both", showOther = true,
+  W: number, score: Score, focus: BarRange, localX: number, hand: HandFilter = "both", showOther = true, pan = 0,
 ): number | null {
   if (!W || score.bars.length === 0) return null;
-  for (const p of layout(W, score, focus, visibleNotes(score, hand, showOther)).placed) {
+  for (const p of layout(W, score, focus, visibleNotes(score, hand, showOther), pan).placed) {
     const [a, b] = p.visible;
     if (localX >= a && localX < b) return p.eb.bar.index;
   }
   return null;
 }
 
-export const StaffBars = { markup, barAt, layout };
+export const StaffBars = { markup, barAt, layout, panSpan, panTo, placeLine, drawLine, roomFor, naturalW, visibleNotes };

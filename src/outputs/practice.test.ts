@@ -516,7 +516,7 @@ describe("the page", () => {
     // ...and with both bars in focus it is a note of the lesson
     const both = page(Practice.markup(W, H, snap({ focus: { from: 0, to: 1 } }), NONE))!;
     expect(heads(both, "var(--ink-dim)")).toBe(0);
-    expect(heads(both, "var(--hand-r)")).toBe(1);
+    expect(heads(both, "var(--page-r)")).toBe(1);
   });
 
   it("wears the dim hand token for the hand not being practised", () => {

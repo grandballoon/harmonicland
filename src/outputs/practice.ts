@@ -153,7 +153,7 @@ const handHue = (h: Hand | undefined): string =>
 const otherDimHue = (hand: PracticeSnapshot["hand"]): string =>
   hand === "upper" ? "var(--hand-l-dim)"
   : hand === "lower" ? "var(--hand-r-dim)"
-  : "var(--grid-oct)";
+  : "var(--note-dim)";
 
 /** The attacks this step asked for that you have already played — exactly
  *  the complement of `pending` within `current.attack`. Steady gold: you

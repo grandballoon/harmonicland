@@ -56,13 +56,13 @@ export function staves(W: number, midY: number): string {
   const bassLines = [-2, -4, -6, -8, -10]; // A3 F3 D3 B2 G2
   for (const pos of [...trebleLines, ...bassLines]) {
     const y = yOf(pos);
-    out += `<line x1="${CLEF_W}" y1="${y}" x2="${W}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
+    out += `<line x1="${CLEF_W}" y1="${y}" x2="${W}" y2="${y}" stroke="var(--staff-line)" stroke-width="1"/>`;
   }
   // middle-C ledger stub near the left, position 0, drawn faint full-width
   out += `<line x1="0" y1="${yOf(0)}" x2="${W}" y2="${yOf(0)}" stroke="var(--grid-oct)" stroke-width="0.6" stroke-dasharray="2 6" opacity="0.5"/>`;
   // treble G-clef curls around G4 (pos +4); bass F-clef dots around F3 (pos -4)
-  out += `<text x="10" y="${yOf(4) + 13}" font-size="46" fill="var(--ink-dim)" font-family="serif">\u{1D11E}</text>`;
-  out += `<text x="12" y="${yOf(-4) + 8}" font-size="40" fill="var(--ink-dim)" font-family="serif">\u{1D122}</text>`;
+  out += `<text x="10" y="${yOf(4) + 13}" font-size="46" fill="var(--glyph)" font-family="serif">\u{1D11E}</text>`;
+  out += `<text x="12" y="${yOf(-4) + 8}" font-size="40" fill="var(--glyph)" font-family="serif">\u{1D122}</text>`;
   return out;
 }
 
@@ -145,7 +145,7 @@ export function ledgers(pos: number, x: number, midY: number): string {
   const yOf = (p: number) => yOfPos(midY, p);
   let s = "";
   const w = 9;
-  const line = (p: number) => `<line x1="${x - w}" y1="${yOf(p)}" x2="${x + w}" y2="${yOf(p)}" stroke="var(--grid)" stroke-width="1"/>`;
+  const line = (p: number) => `<line x1="${x - w}" y1="${yOf(p)}" x2="${x + w}" y2="${yOf(p)}" stroke="var(--staff-line)" stroke-width="1"/>`;
   // middle gap: position 0 (middle C) needs its own ledger when used
   if (pos === 0 || pos === 1 || pos === -1) {
     if (pos === 0) s += line(0);

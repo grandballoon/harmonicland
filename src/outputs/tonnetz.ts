@@ -27,6 +27,7 @@
    ==================================================================== */
 import { Core } from "../core";
 import { pitchClassAt, triadName } from "../harmony/tonnetz-lattice";
+import { QUALITY_COLOR } from "../harmony/perfecto";
 import { PITCH_NAMES } from "../pitch";
 import { glowFilter, glowAttr } from "./defs";
 import type { Score, Pitch } from "../types";
@@ -114,8 +115,7 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
     const verts = [root, third, fifth];
     if (!verts.some((c) => onScreen(c))) return;
     const poly = verts.map((c) => `${X(c)},${Y(c)}`).join(" ");
-    const tint = quality === "maj" ? "var(--note-lit)" : "var(--note)";
-    fills += `<polygon points="${poly}" fill="${tint}" opacity="0.2"/>`;
+    fills += `<polygon points="${poly}" fill="${QUALITY_COLOR[quality]}" opacity="0.2"/>`;
     const gx = (X(root) + X(third) + X(fifth)) / 3;
     const gy = (Y(root) + Y(third) + Y(fifth)) / 3;
     labels += `<text x="${gx}" y="${gy + 4}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">${triadName(pc(root), quality)}</text>`;

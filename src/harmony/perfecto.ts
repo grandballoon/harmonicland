@@ -247,7 +247,7 @@ export function degreeNumeral(key: Key, degree: Degree): string {
 // kind of fact — the vocabulary this harmony is displayed in.
 export const QUALITY_COLOR: Record<ChordQuality, string> = {
   maj: "var(--note-lit)", // warm: the bright, stable one
-  min: "var(--note)",     // cool
+  min: "var(--minor)",    // cool
   dim: "var(--playhead)", // tension
 };
 

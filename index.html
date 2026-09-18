@@ -39,6 +39,7 @@
     --page-r:    #4ac1ff;   /* the engraved page's notes, by hand      */
     --page-l:    #c77dff;
     --minor:     #5b7fff;   /* minor chords: the cool half of the quality pair */
+    --desk:      #080a0e;   /* behind the sheets of the whole score    */
   }
 
   /* ---- paper: the light scheme ----------------------------------------
@@ -75,6 +76,7 @@
     --page-r:    #141414;
     --page-l:    #141414;
     --minor:     #4a76e8;
+    --desk:      #e4ddcd;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -175,7 +177,7 @@
   button.primary:hover { background: #6f8fff; }
   label.file input { display: none; }
 
-  .scrub-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+  .scrub-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; }
 
   /* The scrub track is drawn by its container, not by the slider, so the
      loop band can sit between the track and the thumb. --thumb is the ONE
@@ -244,17 +246,77 @@
 
   /* the Loop switch: lit in the edges' colour while looping */
   #loop[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
-  .time { color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 92px; text-align: right; }
+  /* the times hang under the track, just below the thumb, in the row's
+     bottom padding — positioned, so they add nothing to the row's height */
+  .time {
+    position: absolute; left: 0; right: 0; top: calc(50% + 8px);
+    display: flex; justify-content: space-between; pointer-events: none;
+    color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 10px; line-height: 12px;
+  }
+
+  /* icon buttons: a 16px glyph inside the text buttons' own line box, so
+     they stand exactly as tall as their neighbours */
+  button.icon-btn { padding-left: 10px; padding-right: 10px; }
+  button.icon-btn svg { width: 16px; height: 16px; vertical-align: -3px; }
+  #play[data-playing="true"] .i-play, #play[data-playing="false"] .i-pause { display: none; }
 
   /* stage ------------------------------------------------------------- */
   #stage { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
   #staff { width: 100%; height: 100%; display: block; touch-action: none; }
+  /* The music's scroller: transparent, laid over the whole score's sheets
+     or the practice page's strip by main.ts. It holds nothing but a spacer
+     as long as the music, so the browser gives it a real scrollbar, wheel,
+     trackpad and touch; the svg under it draws the music at its offset. */
+  #score-scroll { position: absolute; overflow-x: hidden; overflow-y: auto; scrollbar-color: var(--grid-oct) transparent; }
+  #score-scroll[data-axis="x"] { overflow-x: auto; overflow-y: hidden; }
+  #score-scroll[hidden] { display: none; }
 
   .toggle { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 12px; }
   .toggle .hand-r { color: var(--hand-r); font-weight: 600; }
   .toggle .hand-l { color: var(--hand-l); font-weight: 600; }
 
-  .status { color: var(--ink-dim); font-size: 12px; }
+  /* the status shares the top row with the scrubber: one line, clipped */
+  .status {
+    color: var(--ink-dim); font-size: 12px;
+    flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* the tray: an indicator in the window's bottom-right corner, over a
+     panel that opens upward. Everything in it keeps its own styling. ------ */
+  details.tray { position: fixed; right: 14px; bottom: 14px; z-index: 30; }
+  details.tray > summary {
+    list-style: none; user-select: none; cursor: pointer;
+    font: inherit; font-size: 12px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line-acc); border-radius: 999px;
+    padding: 6px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    opacity: .82; transition: opacity .12s, border-color .12s;
+  }
+  details.tray > summary::-webkit-details-marker { display: none; }
+  details.tray > summary::before { content: "▴ "; color: var(--ink-dim); }
+  details.tray[open] > summary::before { content: "▾ "; }
+  details.tray > summary:hover, details.tray[open] > summary { opacity: 1; border-color: #46566a; }
+  details.tray > summary:focus-visible { outline: 2px solid var(--note); outline-offset: 1px; }
+  .tray-panel {
+    position: absolute; right: 0; bottom: calc(100% + 8px);
+    width: min(660px, calc(100vw - 28px)); max-height: 72vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line-acc); border-radius: 10px;
+    padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  }
+  .tray-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tray-row + .tray-row { border-top: 1px solid var(--grid); padding-top: 10px; }
+  .tray-label {
+    flex: 0 0 5.5em; color: var(--ink-dim); font-size: 11px;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  /* a dropdown in the tray opens inline, on a row of its own, instead of
+     floating: floating from the bottom of the window it would open offscreen */
+  .tray-row details.dropdown[open] { flex-basis: 100%; }
+  .tray-panel .dropdown-panel {
+    position: static; margin-top: 8px; min-width: 0; box-shadow: none;
+    background: transparent;
+  }
+  .tray-panel .sections-panel { min-width: 0; }
   /* the practice controls travel as one group, so they wrap as one */
   .practice-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   /* the progression picker carries long names; the key beside it is two
@@ -272,71 +334,19 @@
     by Alexander Holm (CC&nbsp;BY)</span>
 </header>
 
+<!-- The top row holds only what is used while reading: play/pause, where
+     you are (the scrubber), which bars (the range, and whether to loop
+     them), and the step buttons. Every
+     other control lives in the tray at the window's bottom right, so the
+     stage keeps the height for the music. -->
 <div class="controls">
-  <label class="file" tabindex="0">
-    <!-- no `accept` filter: macOS pickers grey out extensions they can't map
-         to a registered file type (.musicxml, .ly), and the loader dispatches
-         on file CONTENT anyway — filtering here only blocks valid files. -->
-    Load file<input id="file" type="file">
-  </label>
-  <button id="demo">Load demo</button>
-  <button id="play" class="primary" disabled>Play</button>
-  <button id="stop" disabled>Stop</button>
-  <button id="midi">Enable MIDI</button>
-  <button id="gamepad">Enable gamepad</button>
-  <button id="midiout">Enable MIDI out</button>
-
-  <details id="gamepad-help-tonnetz" class="dropdown" style="display:none">
-    <summary>Gamepad map</summary>
-    <div class="dropdown-panel gamepad-panel">
-      <table>
-        <tbody>
-          <tr class="section-head"><td colspan="2">Sound</td></tr>
-          <tr><td class="btn">RT</td><td class="desc">Hold to trigger &amp; sustain cursor triad</td></tr>
-          <tr class="section-head"><td colspan="2">Neo-Riemannian transforms</td></tr>
-          <tr><td class="btn">A</td><td class="desc">P — Parallel (swap major ↔ minor, keep root+fifth)</td></tr>
-          <tr><td class="btn">B</td><td class="desc">R — Relative (keep root+third, move fifth)</td></tr>
-          <tr><td class="btn">X</td><td class="desc">L — Leading-tone exchange (keep third+fifth)</td></tr>
-          <tr class="section-head"><td colspan="2">Navigate lattice</td></tr>
-          <tr><td class="btn">↑ / ↓</td><td class="desc">Step major third up / down</td></tr>
-          <tr><td class="btn">→ / ←</td><td class="desc">Step fifth up / down</td></tr>
-          <tr class="section-head"><td colspan="2">Octave &amp; home</td></tr>
-          <tr><td class="btn">RB / LB</td><td class="desc">Octave up / down</td></tr>
-          <tr><td class="btn">Y</td><td class="desc">Home — return cursor to C major</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </details>
-
-  <details id="gamepad-help-nashville" class="dropdown" style="display:none">
-    <summary>Gamepad map</summary>
-    <div class="dropdown-panel gamepad-panel">
-      <table>
-        <tbody>
-          <tr class="section-head"><td colspan="2">Root chord</td></tr>
-          <tr><td class="btn">RT</td><td class="desc">Hold to play &amp; sustain the root chord (I)</td></tr>
-          <tr class="section-head"><td colspan="2">Numbered chords (right stick)</td></tr>
-          <tr><td class="btn">↗</td><td class="desc">ii — second degree</td></tr>
-          <tr><td class="btn">→</td><td class="desc">iii — third degree</td></tr>
-          <tr><td class="btn">↘</td><td class="desc">IV — fourth degree</td></tr>
-          <tr><td class="btn">↙</td><td class="desc">V — fifth degree</td></tr>
-          <tr><td class="btn">←</td><td class="desc">vi — sixth degree</td></tr>
-          <tr><td class="btn">↖</td><td class="desc">vii° — seventh degree</td></tr>
-          <tr class="section-head"><td colspan="2">Coloration (left stick)</td></tr>
-          <tr><td class="btn">stick</td><td class="desc">Tilt to morph the chord color (see wheel in view)</td></tr>
-          <tr class="section-head"><td colspan="2">Also: classic button layout</td></tr>
-          <tr><td class="btn">A B X Y</td><td class="desc">Degrees I ii iii IV</td></tr>
-          <tr><td class="btn">↑ → ↓</td><td class="desc">Degrees V vi vii°</td></tr>
-          <tr class="section-head"><td colspan="2">Shape</td></tr>
-          <tr><td class="btn">LB / RB</td><td class="desc">Coloration mode: default → extended → chromatic</td></tr>
-          <tr><td class="btn">d-pad ←</td><td class="desc">Cycle inversion (root / 1st / 2nd)</td></tr>
-          <tr><td class="btn">L3 / R3</td><td class="desc">Octave down / up (press the stick)</td></tr>
-          <tr><td class="btn">LT</td><td class="desc">Toggle voice-leading</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </details>
-
+  <!-- One button that says what it will do: play when paused, pause when
+       playing. main.ts sets data-playing from the clock every frame, and
+       the CSS shows the matching glyph. -->
+  <button id="play" class="primary icon-btn" data-playing="false" aria-label="Play" title="Play" disabled>
+    <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9.5-5.5z" fill="currentColor"/></svg>
+    <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor"/></svg>
+  </button>
   <div class="scrub-wrap">
     <!-- The loop's edges ride the scrub bar, on barlines. Drag them, or
          press [ and ] in a bar; the bar boxes beside it move with them. -->
@@ -346,7 +356,8 @@
       <div class="loop-edge start" id="loop-start" title="Loop start — drag, or press [ on a note"></div>
       <div class="loop-edge end" id="loop-end" title="Loop end — drag, or press ] on a note"></div>
     </div>
-    <span class="time" id="time">0.00 / 0.00s</span>
+    <!-- under the track, in the row's padding: it adds no height -->
+    <span class="time"><span id="time-now">0.00</span><span id="time-total">0.00s</span></span>
   </div>
 
   <!-- Isolate a bar, or a run of bars, and loop it — in every view. Bar
@@ -355,8 +366,9 @@
        The flags on the scrub bar are the same selection, and so is a click
        on a bar of the practice page (shift-click extends). Loop switches
        playback round the bars on and off; a lesson always goes round them,
-       so practice mode hides it. Sections saves the selected bars under a
-       name, per score, and loads them back into the same selection. -->
+       so practice mode hides it. Sections, in the tray, saves the selected
+       bars under a name, per score, and loads them back into the same
+       selection. -->
   <span class="practice-controls" id="bars-wrap">
     <span class="toggle bar-range" title="Loop only these bars — or drag the flags on the scrub bar, or press [ and ] in a bar">
       bars
@@ -364,84 +376,173 @@
       <span class="dash">–</span>
       <input type="number" id="bar-to" min="1" step="1" placeholder="all" aria-label="Last bar" disabled>
       <button id="bar-all" title="Select the whole piece again" disabled>all</button>
-      <button id="loop" aria-pressed="false" disabled title="Go round the selected bars when playing">Loop</button>
+      <button id="loop" class="icon-btn" aria-pressed="false" aria-label="Loop" disabled title="Go round the selected bars when playing">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.3 9.2A5.5 5.5 0 1 1 11.9 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.6 1.3v3.4H9.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </span>
-    <!-- Rows are built by sections-panel.ts from what is saved for the
-         loaded score; this is only the frame they go in. -->
-    <details id="sections" class="dropdown">
-      <summary title="Save the selected bars, split the score into chunks, and load them back">Sections<span class="sections-count"></span></summary>
-      <div class="dropdown-panel sections-panel">
-        <div class="sections-actions">
-          <button class="section-save" disabled>Save selected bars</button>
-          <span class="toggle">or split every
-            <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
-            bars <button class="section-split">Split</button>
-          </span>
-        </div>
-        <ul class="sections-list"></ul>
-        <p class="sections-empty"></p>
-      </div>
-    </details>
     <span class="step-pair">
       <button id="step-back" title="Back one step (←)" disabled>◀</button>
       <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>
     </span>
-  </span>
-  <label class="toggle">
-    <select id="view">
-      <option value="full">Full range (88-key)</option>
-      <option value="std">Grand staff</option>
-      <option value="std-keys">Grand staff + keys</option>
-      <option value="std-roll">Grand staff + falling notes</option>
-      <option value="roll">Piano roll</option>
-      <option value="tonnetz">Tonnetz (harmonic lattice)</option>
-      <option value="both">Tonnetz + piano roll</option>
-      <option value="nashville">Nashville (chord coloration)</option>
-      <option value="practice">Practice (step by step)</option>
-    </select>
-  </label>
-  <label class="toggle" title="Draw on light paper, like sheet music">
-    <input type="checkbox" id="paper" checked> light
-  </label>
-  <label class="toggle" id="hands-wrap" style="display:none" title="Color notes by staff: right hand blue, left hand violet">
-    <input type="checkbox" id="hands"> <span class="hand-r">R</span>/<span class="hand-l">L</span> hands
-  </label>
-  <span class="practice-controls" id="practice-wrap" style="display:none">
-    <!-- A structure to practise INSTEAD of a file. The options are built
-         from harmony/repertoire.ts at startup, so this element carries the
-         empty choice only — a list typed out here would be a second copy
-         of the catalogue, kept in sync by hand. -->
-    <label class="toggle" title="Practise a chord progression instead of a loaded score">
-      <select id="progression">
-        <option value="">— from loaded score —</option>
-      </select>
-    </label>
-    <label class="toggle" title="Transpose the progression">
-      <select id="prog-root" title="Key"></select>
-    </label>
-    <label class="toggle" title="Which hand the steps come from">
-      <select id="practice-hand">
-        <option value="both">Hands together</option>
-        <option value="upper">Right hand</option>
-        <option value="lower">Left hand</option>
-      </select>
-    </label>
-    <label class="toggle" title="Show the other hand's keys, dimmed">
-      <input type="checkbox" id="show-other" checked> show other
-    </label>
-    <label class="toggle" title="Play the other hand for you as you advance">
-      <input type="checkbox" id="play-other" checked> play other
-    </label>
-    <label class="toggle" title="Hide the arcs drawn from the keys under your fingers to the keys this step asks for">
-      <input type="checkbox" id="hide-arrows" checked> hide arrows
-    </label>
   </span>
   <span class="status" id="status"></span>
 </div>
 
 <div id="stage">
   <svg id="staff" preserveAspectRatio="none"></svg>
+  <div id="score-scroll" hidden><div></div></div>
 </div>
+
+<!-- The tray: every control not needed while reading, folded behind one
+     indicator in the window's bottom-right corner. It opens upward over
+     the stage and stays open until toggled or Escape, so a setting can
+     be changed while watching its effect. Its dropdowns open inline,
+     inside it, rather than floating off the edge of the window. It sits
+     OUTSIDE #stage on purpose: the stage restates every colour token for
+     paper, and the tray is page chrome, which keeps the chrome's colours. -->
+<details id="tray" class="tray">
+  <summary title="Score, sections, devices and view settings (Esc closes)">Controls</summary>
+  <div class="tray-panel">
+    <div class="tray-row">
+      <span class="tray-label">score</span>
+      <label class="file" tabindex="0">
+        <!-- no `accept` filter: macOS pickers grey out extensions they can't map
+             to a registered file type (.musicxml, .ly), and the loader dispatches
+             on file CONTENT anyway — filtering here only blocks valid files. -->
+        Load file<input id="file" type="file">
+      </label>
+      <button id="demo">Load demo</button>
+      <!-- Rows are built by sections-panel.ts from what is saved for the
+           loaded score; this is only the frame they go in. -->
+      <details id="sections" class="dropdown">
+        <summary title="Save the selected bars, split the score into chunks, and load them back">Sections<span class="sections-count"></span></summary>
+        <div class="dropdown-panel sections-panel">
+          <div class="sections-actions">
+            <button class="section-save" disabled>Save selected bars</button>
+            <span class="toggle">or split every
+              <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
+              bars <button class="section-split">Split</button>
+            </span>
+          </div>
+          <ul class="sections-list"></ul>
+          <p class="sections-empty"></p>
+        </div>
+      </details>
+    </div>
+    <div class="tray-row">
+      <span class="tray-label">devices</span>
+      <button id="midi">Enable MIDI</button>
+      <button id="gamepad">Enable gamepad</button>
+      <button id="midiout">Enable MIDI out</button>
+      <details id="gamepad-help-tonnetz" class="dropdown" style="display:none">
+        <summary>Gamepad map</summary>
+        <div class="dropdown-panel gamepad-panel">
+          <table>
+            <tbody>
+              <tr class="section-head"><td colspan="2">Sound</td></tr>
+              <tr><td class="btn">RT</td><td class="desc">Hold to trigger &amp; sustain cursor triad</td></tr>
+              <tr class="section-head"><td colspan="2">Neo-Riemannian transforms</td></tr>
+              <tr><td class="btn">A</td><td class="desc">P — Parallel (swap major ↔ minor, keep root+fifth)</td></tr>
+              <tr><td class="btn">B</td><td class="desc">R — Relative (keep root+third, move fifth)</td></tr>
+              <tr><td class="btn">X</td><td class="desc">L — Leading-tone exchange (keep third+fifth)</td></tr>
+              <tr class="section-head"><td colspan="2">Navigate lattice</td></tr>
+              <tr><td class="btn">↑ / ↓</td><td class="desc">Step major third up / down</td></tr>
+              <tr><td class="btn">→ / ←</td><td class="desc">Step fifth up / down</td></tr>
+              <tr class="section-head"><td colspan="2">Octave &amp; home</td></tr>
+              <tr><td class="btn">RB / LB</td><td class="desc">Octave up / down</td></tr>
+              <tr><td class="btn">Y</td><td class="desc">Home — return cursor to C major</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details id="gamepad-help-nashville" class="dropdown" style="display:none">
+        <summary>Gamepad map</summary>
+        <div class="dropdown-panel gamepad-panel">
+          <table>
+            <tbody>
+              <tr class="section-head"><td colspan="2">Root chord</td></tr>
+              <tr><td class="btn">RT</td><td class="desc">Hold to play &amp; sustain the root chord (I)</td></tr>
+              <tr class="section-head"><td colspan="2">Numbered chords (right stick)</td></tr>
+              <tr><td class="btn">↗</td><td class="desc">ii — second degree</td></tr>
+              <tr><td class="btn">→</td><td class="desc">iii — third degree</td></tr>
+              <tr><td class="btn">↘</td><td class="desc">IV — fourth degree</td></tr>
+              <tr><td class="btn">↙</td><td class="desc">V — fifth degree</td></tr>
+              <tr><td class="btn">←</td><td class="desc">vi — sixth degree</td></tr>
+              <tr><td class="btn">↖</td><td class="desc">vii° — seventh degree</td></tr>
+              <tr class="section-head"><td colspan="2">Coloration (left stick)</td></tr>
+              <tr><td class="btn">stick</td><td class="desc">Tilt to morph the chord color (see wheel in view)</td></tr>
+              <tr class="section-head"><td colspan="2">Also: classic button layout</td></tr>
+              <tr><td class="btn">A B X Y</td><td class="desc">Degrees I ii iii IV</td></tr>
+              <tr><td class="btn">↑ → ↓</td><td class="desc">Degrees V vi vii°</td></tr>
+              <tr class="section-head"><td colspan="2">Shape</td></tr>
+              <tr><td class="btn">LB / RB</td><td class="desc">Coloration mode: default → extended → chromatic</td></tr>
+              <tr><td class="btn">d-pad ←</td><td class="desc">Cycle inversion (root / 1st / 2nd)</td></tr>
+              <tr><td class="btn">L3 / R3</td><td class="desc">Octave down / up (press the stick)</td></tr>
+              <tr><td class="btn">LT</td><td class="desc">Toggle voice-leading</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+    <div class="tray-row">
+      <span class="tray-label">view</span>
+      <label class="toggle">
+        <select id="view">
+          <option value="full">Full range (88-key)</option>
+          <option value="std">Grand staff</option>
+          <option value="std-keys">Grand staff + keys</option>
+          <option value="std-roll">Grand staff + falling notes</option>
+          <option value="roll">Piano roll</option>
+          <option value="tonnetz">Tonnetz (harmonic lattice)</option>
+          <option value="both">Tonnetz + piano roll</option>
+          <option value="nashville">Nashville (chord coloration)</option>
+          <option value="practice" selected>Practice (step by step)</option>
+        </select>
+      </label>
+      <label class="toggle" title="Draw on light paper, like sheet music">
+        <input type="checkbox" id="paper" checked> light
+      </label>
+      <label class="toggle" id="hands-wrap" style="display:none" title="Color notes by staff: right hand blue, left hand violet">
+        <input type="checkbox" id="hands"> <span class="hand-r">R</span>/<span class="hand-l">L</span> hands
+      </label>
+    </div>
+    <div class="tray-row" id="practice-wrap" style="display:none">
+      <span class="tray-label">practice</span>
+      <!-- A structure to practise INSTEAD of a file. The options are built
+           from harmony/repertoire.ts at startup, so this element carries the
+           empty choice only — a list typed out here would be a second copy
+           of the catalogue, kept in sync by hand. -->
+      <label class="toggle" title="Practise a chord progression instead of a loaded score">
+        <select id="progression">
+          <option value="">— from loaded score —</option>
+        </select>
+      </label>
+      <label class="toggle" title="Transpose the progression">
+        <select id="prog-root" title="Key"></select>
+      </label>
+      <label class="toggle" title="Which hand the steps come from">
+        <select id="practice-hand">
+          <option value="both">Hands together</option>
+          <option value="upper">Right hand</option>
+          <option value="lower">Left hand</option>
+        </select>
+      </label>
+      <label class="toggle" title="Show the other hand's keys, dimmed">
+        <input type="checkbox" id="show-other" checked> show other
+      </label>
+      <label class="toggle" title="Play the other hand for you as you advance">
+        <input type="checkbox" id="play-other" checked> play other
+      </label>
+      <label class="toggle" title="Hide the arcs drawn from the keys under your fingers to the keys this step asks for">
+        <input type="checkbox" id="hide-arrows" checked> hide arrows
+      </label>
+      <label class="toggle" title="Show every bar of the piece as sheet music, in place of the keyboard">
+        <input type="checkbox" id="whole-score"> whole score
+      </label>
+    </div>
+  </div>
+</details>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

@@ -1,8 +1,8 @@
 /* ====================================================================
    PRACTICE — the step-by-step view. The one projection here that is not
    a picture of the score: it is a picture of ONE MOMENT of it, plus the
-   move to the next one, and nothing else. No staff, no falling notes, no
-   scroll. What you see is what your hands should be doing.
+   move to the next one, and nothing else. No falling notes, no playhead
+   sweeping the page. What you see is what your hands should be doing.
 
    Four bands, bottom-up:
 
@@ -50,7 +50,12 @@
      torn off at the margins for context and the current step's notes lit
      in the same gold as the keys.
      It shows the isolated range when there is one and otherwise the bar
-     the cursor is in, so it turns its own pages. A click on a bar here
+     the cursor is in, so it turns its own pages. The rest of the piece
+     lies either side of them, and the page PANS along it — the
+     snapshot's `pan`, set by a native scroller main.ts lays over the page
+     the way it does over the whole score, which brings the page back to
+     rest when the learner plays on with the bars in hand out of sight.
+     A click on a bar here
      isolates it — `barAt` is the hit-test, and it reads the same layout
      `markup` drew, the way `keyboardRegion` does for the keys. On a
      viewport too short to hold it with the readout and keys, it stands
@@ -70,12 +75,28 @@
    the keyboard gives up the column the bar occupies, so the hit-test has
    to know whether the column is there. See view.ts, note 3.
 
+   THE WHOLE SCORE is the other way to lay the view out, on a toggle
+   (`wholeScore`): the header stays, and everything under it — page,
+   readout, arrows, keyboard — gives way to the whole piece on sheets of
+   paper (staff-score.ts), the current step still lit in gold and a click
+   on a bar still isolating it. It is the view for reading from the page
+   while playing a real keyboard, so the on-screen one goes: with no keys
+   drawn, `keyboardRegion` answers null. `scoreShown` is the one predicate
+   `markup`, `keyboardRegion`, `barAt` and `scroller` all ask.
+
+   The sheets scroll. The scroll position is the snapshot's `scroll`, set
+   by a native scroller main.ts lays over the region `scroller` names; the
+   view only draws at that offset, so it stays a pure function. The page
+   above the keys pans the same way, across instead of down: `scroller`
+   names whichever of the two is showing, and on which axis.
+
    Like Nashville, this is a pure function of a snapshot. It imports
    PracticeState's TYPE and never the singleton, so it can be rendered
    off-screen, twice, or from a fabricated moment in a test.
    ==================================================================== */
 import { PianoRoll, KEYB, type KeyStyle } from "./piano-roll";
 import { StaffBars } from "./staff-bars";
+import { StaffScore } from "./staff-score";
 import { Core } from "../core";
 import { glowFilter, glowAttr, text } from "./defs";
 import { isWhite, pitchLabel, PITCH_NAMES } from "../pitch";
@@ -142,6 +163,15 @@ export const sheetBandH = (H: number, arrows: boolean): number => {
   const avail = H - SHEET_TOP - rollBandH(H) - (arrows ? ARROW_H : 0) - READOUT_MIN;
   return avail < SHEET_MIN ? 0 : Math.min(SHEET_MAX, avail);
 };
+
+/** Is the view showing the whole score? Asked for, and a lesson to show. */
+const scoreShown = (s: PracticeSnapshot): boolean =>
+  s.wholeScore && s.active && s.score !== null && s.total > 0;
+
+/** The bar the cursor stands in, or where the lesson ended — what the
+ *  whole score scrolls to follow. */
+const cursorBar = (s: PracticeSnapshot): number =>
+  s.current ? Core.barAt(s.score!, s.current.at).index : s.focus.to;
 
 const handHue = (h: Hand | undefined): string =>
   h === "lower" ? "var(--hand-l)" : h === "upper" ? "var(--hand-r)" : "var(--note)";
@@ -517,6 +547,20 @@ export const markup = (
   const barW = chartBandW(W, s.chart !== null);
   const mainW = W - barW;
 
+  // the whole piece as sheet music: the header, the page, and the harmony
+  // bar beside it when there is one — no readout, no arrows, no keys.
+  // The sheets scroll under the header, so they are clipped to the region
+  // below it.
+  if (scoreShown(s))
+    return `<defs>${glowFilter(GLOW_ID)}<clipPath id="${GLOW_ID}-sheets">` +
+      `<rect x="0" y="0" width="${mainW}" height="${H - SHEET_TOP}"/></clipPath></defs>` +
+      header(mainW, s) +
+      `<g transform="translate(0,${SHEET_TOP})"><g clip-path="url(#${GLOW_ID}-sheets)">` +
+      StaffScore.markup(mainW, H - SHEET_TOP, s.scroll, s.score!, {
+        glowId: GLOW_ID, range: s.range, current: s.current, hand: s.hand, showOther: s.showOther,
+      }) + `</g></g>` +
+      harmonyBar(mainW, W, H, s);
+
   const band = rollBandH(H);
   const rollTop = H - band;
   const styles = keyStyles(s);
@@ -528,7 +572,7 @@ export const markup = (
     ? `<g transform="translate(0,${SHEET_TOP})">` +
       StaffBars.markup(mainW, sheetH, s.score!, {
         glowId: GLOW_ID, focus: s.focus, range: s.range, current: s.current,
-        hand: s.hand, showOther: s.showOther,
+        hand: s.hand, showOther: s.showOther, pan: s.pan,
       }) + `</g>`
     : "";
 
@@ -615,28 +659,12 @@ export function whereLabel(s: PracticeSnapshot): string {
   return `${bars} · step ${s.index - first + 1} / ${within}`;
 }
 
-/** Everything between the page and the arrow band: where you are, and in
- *  words what the colours are already saying. `top` is where the page
- *  ends (0 when there is none) and `bandH` is the strip the arrows
- *  reserve — zero when they are switched off — so the words centre in
- *  whatever gap is actually free rather than sitting high above an empty
- *  band. Words because a chord you cannot yet find on the keyboard is a
- *  chord you need told to you. */
-function readout(W: number, top: number, bottom: number, s: PracticeSnapshot, bandH: number): string {
+/** The line across the top: where you are, which hand, and a hairline
+ *  rule of progress under both. Shared by both layouts. */
+function header(W: number, s: PracticeSnapshot): string {
   const HAND_LABEL = { both: "hands together", upper: "right hand", lower: "left hand" };
-  // centred in the free space, but never riding up over the header rule
-  // at y=48.
-  const mid = Math.max(84, top + Math.max(0, bottom - bandH - top) / 2 + 8);
-  let out = "";
-
-  // no lesson, or a lesson with nothing in it — the same thing to a reader,
-  // and "Piece complete" for a score that was never loaded is a lie.
-  if (!s.active || s.total === 0) {
-    return text(W / 2, mid, "Load a score to practise.", { size: 16, fill: "var(--ink-dim)" });
-  }
-
   const done = s.current === null;
-  out += text(24, 34, whereLabel(s), {
+  let out = text(24, 34, whereLabel(s), {
     size: 13, weight: 700, anchor: "start", fill: done && s.range === null ? "var(--key-press)" : "var(--ink)",
   });
   // the label wears the colour of the hand you are PLAYING, which is the
@@ -648,14 +676,37 @@ function readout(W: number, top: number, bottom: number, s: PracticeSnapshot, ba
 
   // a hairline progress rule under the header — progress through the
   // isolated bars when there are some, else through the piece. With the
-  // page above, this is no longer the only hint of the whole; it is the
-  // one that says how far through THIS you are.
+  // page below, this is not the only hint of the whole; it is the one that
+  // says how far through THIS you are.
   const barY = 48;
   const { first, last } = s.span;
   const frac = last > first ? (s.index - first) / (last - first) : 0;
   out += `<line x1="24" y1="${barY}" x2="${W - 24}" y2="${barY}" stroke="var(--grid)" stroke-width="2"/>`;
   if (frac > 0)
     out += `<line x1="24" y1="${barY}" x2="${24 + (W - 48) * frac}" y2="${barY}" stroke="var(--note-lit)" stroke-width="2"/>`;
+  return out;
+}
+
+/** Everything between the page and the arrow band: where you are, and in
+ *  words what the colours are already saying. `top` is where the page
+ *  ends (0 when there is none) and `bandH` is the strip the arrows
+ *  reserve — zero when they are switched off — so the words centre in
+ *  whatever gap is actually free rather than sitting high above an empty
+ *  band. Words because a chord you cannot yet find on the keyboard is a
+ *  chord you need told to you. */
+function readout(W: number, top: number, bottom: number, s: PracticeSnapshot, bandH: number): string {
+  // centred in the free space, but never riding up over the header rule
+  // at y=48.
+  const mid = Math.max(84, top + Math.max(0, bottom - bandH - top) / 2 + 8);
+
+  // no lesson, or a lesson with nothing in it — the same thing to a reader,
+  // and "Piece complete" for a score that was never loaded is a lie.
+  if (!s.active || s.total === 0) {
+    return text(W / 2, mid, "Load a score to practise.", { size: 16, fill: "var(--ink-dim)" });
+  }
+
+  const done = s.current === null;
+  let out = header(W, s);
 
   // a range with no steps in it — a bar of rests, or of the other hand
   // only — is not "complete"; it is nothing to do, and says so.
@@ -714,8 +765,10 @@ export const render: View = (svg, { live }) => {
 // by clicking, which is also what makes the advance rule testable by hand.
 // It stops where the harmony bar starts, from the same `chartBandW` the
 // drawing does: a region wider than the keys it describes would silently
-// sound the wrong note near the right-hand edge.
-const keyboardRegion = (svg: SVGSVGElement, live: LiveSnapshot): Region => {
+// sound the wrong note near the right-hand edge. The whole-score layout
+// draws no keys, so it has none to offer.
+const keyboardRegion = (svg: SVGSVGElement, live: LiveSnapshot): Region | null => {
+  if (scoreShown(live.practice)) return null;
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   const band = rollBandH(H);
@@ -725,7 +778,8 @@ const keyboardRegion = (svg: SVGSVGElement, live: LiveSnapshot): Region => {
 /** Which bar of the page a client-space point is over, or null when it is
  *  not on the page — the page's counterpart to PianoRoll.pitchAt. Reads
  *  the page's place and size from the same `sheetBandH` and `chartBandW`
- *  the drawing used, so the bar under the pointer is the bar drawn there.
+ *  the drawing used, so the bar under the pointer is the bar drawn there;
+ *  on the whole score, from the same region `markup` handed StaffScore.
  *  The svg's viewBox tracks its pixel size 1:1, so client offset is user
  *  units. */
 function barAt(svg: SVGSVGElement, clientX: number, clientY: number, live: LiveSnapshot): number | null {
@@ -733,13 +787,73 @@ function barAt(svg: SVGSVGElement, clientX: number, clientY: number, live: LiveS
   if (!s.active || !s.score || s.total === 0) return null;
   const W = svg.clientWidth;
   const H = svg.clientHeight;
-  const sheetH = sheetBandH(H, s.showArrows);
-  if (sheetH === 0) return null;
   const r = svg.getBoundingClientRect();
   const x = clientX - r.left;
   const y = clientY - r.top - SHEET_TOP;
-  if (y < 0 || y > sheetH) return null;
-  return StaffBars.barAt(W - chartBandW(W, s.chart !== null), s.score, s.focus, x, s.hand, s.showOther);
+  const mainW = W - chartBandW(W, s.chart !== null);
+  if (scoreShown(s))
+    return x >= mainW || y < 0 ? null
+      : StaffScore.barAt(mainW, s.score, s.hand, s.showOther, x, y + s.scroll);
+  const sheetH = sheetBandH(H, s.showArrows);
+  if (sheetH === 0 || y < 0 || y > sheetH) return null;
+  return StaffBars.barAt(mainW, s.score, s.focus, x, s.hand, s.showOther, s.pan);
+}
+
+/** What scrolls, and how, for a native scroller laid over it. Positions
+ *  are the scroller's own — scrollTop or scrollLeft — and the snapshot's
+ *  offset (`scroll` or `pan`) is the position less `origin`. */
+export interface Scroller {
+  /** The region of the svg the scrolling music fills. */
+  region: Region;
+  /** Down the whole score's sheets, or across the page's strip. */
+  axis: "x" | "y";
+  /** Everything that scrolls, along the axis, in pixels. */
+  length: number;
+  /** The position at which the view's offset is 0. */
+  origin: number;
+  /** The positions at which the cursor is in sight, or null when there is
+   *  none to follow. */
+  sight: [number, number] | null;
+  /** Where to scroll to when the learner plays on out of sight. */
+  home: number;
+}
+
+/** Where the music scrolls: the whole score down its sheets, or the page
+ *  across the piece. Null when neither is showing, and there is nothing
+ *  to scroll. */
+function scroller(svg: SVGSVGElement, live: LiveSnapshot): Scroller | null {
+  const s = live.practice;
+  if (!s.active || !s.score || s.total === 0) return null;
+  const W = svg.clientWidth;
+  const H = svg.clientHeight;
+  const w = W - chartBandW(W, s.chart !== null);
+  if (scoreShown(s)) {
+    const h = Math.max(0, H - SHEET_TOP);
+    const line = StaffScore.lineSpan(w, s.score, s.hand, s.showOther, cursorBar(s));
+    return {
+      region: { x: 0, y: SHEET_TOP, w, h },
+      axis: "y",
+      length: StaffScore.contentHeight(w, s.score, s.hand, s.showOther),
+      origin: 0,
+      sight: line && [line[1] - h, line[0]],
+      home: line ? Math.max(0, line[0] - 24) : 0,
+    };
+  }
+  const sheetH = sheetBandH(H, s.showArrows);
+  if (sheetH === 0) return null;
+  const span = StaffBars.panSpan(w, s.score, s.focus, s.hand, s.showOther);
+  // whole pixels, so the rest lands on a position a scroller can hold
+  // exactly rather than one it rounds a fraction off
+  const origin = Math.max(0, -Math.floor(span.range[0]));
+  const [a, b] = span.focus;
+  return {
+    region: { x: 0, y: SHEET_TOP, w, h: sheetH },
+    axis: "x",
+    length: w + origin + Math.ceil(span.range[1]),
+    origin,
+    sight: [origin + a, origin + b],
+    home: origin,
+  };
 }
 
 export const Practice: ViewModule & {
@@ -752,7 +866,8 @@ export const Practice: ViewModule & {
   sheetBandH: typeof sheetBandH;
   whereLabel: typeof whereLabel;
   barAt: typeof barAt;
+  scroller: typeof scroller;
 } = {
   render, keyboardRegion, markup, keyStyles, struck, hits, pulseEnv, chartBandW,
-  sheetBandH, whereLabel, barAt,
+  sheetBandH, whereLabel, barAt, scroller,
 };

@@ -318,6 +318,29 @@ describe("the clock follows the cursor", () => {
 });
 
 /* ------------------------------------------------------------------ */
+describe("the whole-score toggle", () => {
+  it("is off until asked for, and outlives the lesson it was set in", () => {
+    start(scoreOf(n(60, 0), n(62, 1)));
+    expect(PracticeState.snapshot().wholeScore).toBe(false);
+    PracticeState.setWholeScore(true);
+    start(scoreOf(n(64, 0), n(65, 1)));
+    expect(PracticeState.snapshot().wholeScore).toBe(true);
+    PracticeState.setWholeScore(false);
+  });
+
+  it("changes nothing about where the cursor is", () => {
+    start(scoreOf(n(60, 0), n(62, 1)));
+    PracticeState.step(1);
+    const before = PracticeState.snapshot();
+    PracticeState.setWholeScore(true);
+    const after = PracticeState.snapshot();
+    expect(after.index).toBe(before.index);
+    expect(after.current).toBe(before.current);
+    PracticeState.setWholeScore(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 describe("the arrow toggle", () => {
   it("is off until asked for, and outlives the lesson it was set in", () => {
     start(scoreOf(n(60, 0), n(62, 1)));

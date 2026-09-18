@@ -10,14 +10,15 @@
    Three regions, top to bottom:
    - the DEGREE ROW (I–vii°), each colored by its computed quality using the
      SAME convention as the Tonnetz (major = warm --note-lit, minor = cool
-     --note, dim = --playhead tension); the held degree glows.
+     --minor, dim = --playhead tension); the held degree glows.
    - the COLORATION WHEEL: the current mode's 9 joystick zones laid out
      radially like the stick itself, the chosen direction lit.
    - the NOW-PLAYING readout: roman numeral, chord name, and the actual
      pitch-class spelling of the sounding (or previewed) voicing.
 
-   Keeps the design language deliberately: dark field, one warm accent, the
-   glow filter reused from the Tonnetz. No new colors invented.
+   Keeps the design language deliberately: one warm accent on the field
+   (dark or paper, per the stage's tokens), the glow filter reused from the
+   Tonnetz. No new colors invented.
    ==================================================================== */
 import {
   degreeQuality,

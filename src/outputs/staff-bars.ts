@@ -10,10 +10,10 @@
    What the page shows, and how it is told apart — by KIND, never shade:
 
    - the FOCUS, the bars being worked on, fitted to the width. Notes wear
-     their hand's hue (or the plain note colour when the score has no
-     hands); the hand not being practised wears its dim token, the same
-     rule the practice keyboard follows, so a note is one colour on the
-     page and under the finger.
+     their hand's page token (or the plain note colour when the score has
+     no hands) — the hand's hue on the dark field, black ink on paper; the
+     hand not being practised wears its dim token, the same rule the
+     practice keyboard follows.
    - the CONTEXT: the bar before and the bar after, engraved at the same
      scale and CLIPPED to a margin either side, so the last few notes of
      the previous bar and the first few of the next are visible, torn at
@@ -192,10 +192,12 @@ export function layout(W: number, score: Score, focus: BarRange, notes: readonly
 
 // --- colour ---------------------------------------------------------------
 
+// The page's own hand tokens, not the keyboard's: on the dark field they are
+// the same hues, and on paper the practised notes are plain black ink.
 const handHue = (h: Hand | undefined): string =>
-  h === "lower" ? "var(--hand-l)" : h === "upper" ? "var(--hand-r)" : "var(--note)";
+  h === "lower" ? "var(--page-l)" : h === "upper" ? "var(--page-r)" : "var(--note)";
 const handDim = (h: Hand | undefined): string =>
-  h === "lower" ? "var(--hand-l-dim)" : h === "upper" ? "var(--hand-r-dim)" : "var(--grid-oct)";
+  h === "lower" ? "var(--hand-l-dim)" : h === "upper" ? "var(--hand-r-dim)" : "var(--note-dim)";
 
 interface Style {
   fill: string;
@@ -206,7 +208,7 @@ interface Style {
 }
 
 const CONTEXT: Style = { fill: "var(--ink-dim)", opacity: 0.45, glow: "", rank: 0 };
-const REST: Style = { fill: "var(--ink-dim)", opacity: 0.9, glow: "", rank: 0 };
+const REST: Style = { fill: "var(--glyph)", opacity: 0.9, glow: "", rank: 0 };
 const loudest = (a: Style, b: Style): Style => (b.rank > a.rank ? b : a);
 
 // --- glyphs ---------------------------------------------------------------

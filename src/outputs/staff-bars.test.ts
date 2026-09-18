@@ -124,8 +124,8 @@ describe("what is engraved", () => {
 
   it("draws hollow heads for halves and wholes, filled for shorter", () => {
     // in the focus — the context bars either side have their own
-    const hollow = (svg: string, hand: string) => count(svg, new RegExp(`<ellipse [^>]*fill="none" stroke="var\\(--hand-${hand}\\)"`, "g"));
-    const solid = (svg: string, hand: string) => count(svg, new RegExp(`<ellipse [^>]*fill="var\\(--hand-${hand}\\)"`, "g"));
+    const hollow = (svg: string, hand: string) => count(svg, new RegExp(`<ellipse [^>]*fill="none" stroke="var\\(--page-${hand}\\)"`, "g"));
+    const solid = (svg: string, hand: string) => count(svg, new RegExp(`<ellipse [^>]*fill="var\\(--page-${hand}\\)"`, "g"));
     expect([hollow(page(2), "r"), hollow(page(2), "l"), solid(page(2), "r")]).toEqual([2, 1, 0]);
     expect([hollow(page(3), "r"), hollow(page(3), "l"), solid(page(3), "r")]).toEqual([1, 1, 0]);
     expect([hollow(page(0), "r"), solid(page(0), "r")]).toEqual([0, 4]);
@@ -141,7 +141,7 @@ describe("what is engraved", () => {
 
   it("stems every head shorter than a whole, and never a whole", () => {
     const stems = (svg: string, hand: string) =>
-      count(svg, new RegExp(`<line [^>]*stroke="var\\(--hand-${hand}\\)" stroke-width="1.6"`, "g"));
+      count(svg, new RegExp(`<line [^>]*stroke="var\\(--page-${hand}\\)" stroke-width="1.6"`, "g"));
     expect([stems(page(3), "r"), stems(page(3), "l")]).toEqual([0, 0]); // two wholes
     expect([stems(page(2), "r"), stems(page(2), "l")]).toEqual([2, 0]); // two halves over a whole
     expect(stems(page(0), "r")).toBe(4); // four quarters
@@ -150,7 +150,7 @@ describe("what is engraved", () => {
   it("writes a whole rest on a staff with nothing in the bar", () => {
     const trebleOnly = Core.makeScore([n(60, 0, 2)], [0, 2]);
     const svg = StaffBars.markup(W, H, trebleOnly, { ...opts, focus: { from: 0, to: 0 } });
-    expect(svg).toContain(`height="${7 * 0.85}" fill="var(--ink-dim)"`); // the whole-rest rectangle
+    expect(svg).toContain(`height="${7 * 0.85}" fill="var(--glyph)"`); // the whole-rest rectangle
   });
 
   it("ties a note across the barline, on both pages", () => {
@@ -184,8 +184,8 @@ describe("colour", () => {
 
   it("hues the focus by hand and the context in ink-dim", () => {
     const svg = StaffBars.markup(W, H, four, { ...opts, focus: { from: 1, to: 1 } });
-    expect(heads(svg, "var(--hand-r)")).toBe(5);
-    expect(heads(svg, "var(--hand-l)")).toBe(1);
+    expect(heads(svg, "var(--page-r)")).toBe(5);
+    expect(heads(svg, "var(--page-l)")).toBe(1);
     expect(heads(svg, "var(--ink-dim)")).toBeGreaterThan(0);
   });
 

@@ -446,6 +446,19 @@ const handsWrap = $<HTMLLabelElement>("hands-wrap");
 const handsBox = $<HTMLInputElement>("hands");
 handsBox.addEventListener("change", () => StaffPiano.setHands(handsBox.checked));
 
+// --- paper: the light scheme ----------------------------------------
+// Every view reads as sheet music on paper by default; the box takes them
+// back to the dark field. A theme is only a set of CSS tokens on the stage
+// (see index.html), so no renderer knows which one it is drawing in.
+const stage = $("stage");
+const paperBox = $<HTMLInputElement>("paper");
+const applyTheme = (): void => {
+  if (paperBox.checked) stage.dataset.theme = "light";
+  else delete stage.dataset.theme;
+};
+paperBox.addEventListener("change", applyTheme);
+applyTheme();
+
 // --- practice mode controls ----------------------------------------
 // In practice mode the LEARNER is the transport: the cursor advances when
 // the right keys go down and seeks the clock to match, so Play/Stop would

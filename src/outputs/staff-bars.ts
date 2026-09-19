@@ -24,7 +24,9 @@
      clef and signatures staying put like the edge of a stand.
    - the CURSOR: the current step's heads in the strike gold with a glow,
      and a playhead-coloured rule through their column, so the page and
-     the keyboard say "now" in one colour.
+     the keyboard say "now" in one colour. A key held that the step never
+     asked for is a red head in that column (strays.ts), so the page, like
+     the keyboard, shows how far off the hand was.
    - the RANGE, when bars are isolated, on a faint panel — a mark of a
      different kind from any note's hue.
 
@@ -47,7 +49,8 @@ import {
 } from "./engrave";
 import { gripsMarkup, panelMarkup, stopsOf, type MarkBar } from "./range-marks";
 import { inHand, soundingIn, type HandFilter, type Step } from "../steps";
-import type { Bar, BarRange, Hand, Note, Score } from "../types";
+import { STEP_ASIDE, strayGlyph, straysAt } from "./strays";
+import type { Bar, BarRange, Hand, Note, Pitch, Score } from "../types";
 
 /** The share of the usable width each neighbouring bar may show. Small:
  *  the bars are the subject, the context is a glance. */
@@ -86,6 +89,9 @@ export interface BarsOpts {
   /** How far along the strip the window is panned, in pixels from rest —
    *  positive toward the end of the piece. Absent is at rest. */
   pan?: number;
+  /** Keys held that the current step never asked for, written in red in
+   *  its column (strays.ts). Absent is none. */
+  wrong?: ReadonlySet<Pitch>;
 }
 
 /** One bar with its pixels decided. */
@@ -628,7 +634,11 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
   if (page.time) staff += timeSigGlyph(page.sigX + keyW(page.first.fifths), midY, page.first);
 
   const drawn: Drawn[] = [];
-  let cursorX: number | null = null;
+  // where the step strikes: its column's x, and the bar and instant, which
+  // say how a stray is spelled there
+  // (asserted, not annotated: it is set inside the forEach below, which
+  // narrowing cannot see into)
+  let cursor = null as { x: number; eb: EngravedBar; q: number } | null;
 
   page.placed.forEach((p, pi) => {
     const { eb } = p;
@@ -701,7 +711,7 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
         drawn.push({ head: h, x: hx, y, dir, style: s });
         // the head the step STRIKES — not a tied continuation of it, which
         // on the whole-score page may sit on the next line
-        if (attack.has(h.note.id) && !h.tiedFrom && !p.context && cursorX === null) cursorX = x;
+        if (attack.has(h.note.id) && !h.tiedFrom && !p.context && cursor === null) cursor = { x, eb, q: c.q };
         topY = Math.min(topY, y);
         botY = Math.max(botY, y);
         prevPos = pos;
@@ -784,8 +794,16 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
 
   // the current step's column: a rule through it, not a mark on the notes
   // — the gold heads already say which ones are meant
-  if (cursorX !== null)
-    out += `<line x1="${cursorX}" y1="${top}" x2="${cursorX}" y2="${bottom}" stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
+  if (cursor !== null) {
+    out += `<line x1="${cursor.x}" y1="${top}" x2="${cursor.x}" y2="${bottom}" stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
+    // ...and over it, what the learner struck instead. The grand staff is
+    // one run of positions, so a stray sits at its own and takes the
+    // grand staff's ledger lines.
+    for (const st of straysAt(cursor.eb, cursor.q, o.wrong ?? [], o.current!.attack)) {
+      const x = cursor.x + (st.crowded ? STEP_ASIDE : 0);
+      out += ledgers(st.pos, x, midY) + strayGlyph(x, yOf(st.pos), st.acc, glowAttr(o.glowId));
+    }
+  }
 
   if (o.range) out += gripsMarkup(marks, o.range, panelY, panelH);
 

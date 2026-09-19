@@ -173,6 +173,20 @@ describe("the whole score on Verovio's pages", () => {
     expect(svg).toContain(`<line x1="${head.x}"`);
   });
 
+  it("writes a key held that the step never asked for beside the head it missed", () => {
+    const s = piece(12);
+    const { steps } = makeSteps(s, "both");
+    const step = steps[steps.length - 1]; // G♯4 alone
+    expect(step.attack.map((n) => n.pitch)).toEqual([68]);
+    const L = lay(1200, s);
+    const head = L.sheets.flatMap((sh) => [sh.page.heads.get(headId(step.attack[0].id, 0))]).find(Boolean)!;
+    const svg = StaffScore.markup(1200, ALL, 0, s, { ...opts, current: step, wrong: new Set([72, 84]) });
+    // C5 three half-spaces over G♯4 on its staff; C6 ten, with two ledgers
+    expect(svg).toContain(`<ellipse cx="${head.x}" cy="${head.y - 3 * 7}" rx="6.5" ry="5.5" fill="var(--wrong)"`);
+    expect(svg).toContain(`<ellipse cx="${head.x}" cy="${head.y - 10 * 7}" rx="6.5" ry="5.5" fill="var(--wrong)"`);
+    expect(count(svg, /<line x1="[\d.-]+" y1="[\d.-]+" x2="[\d.-]+" y2="[\d.-]+" stroke="var\(--staff-line\)"/g)).toBe(2);
+  });
+
   it("lights nothing with no step", () => {
     const svg = StaffScore.markup(1200, ALL, 0, piece(12), opts);
     expect(svg).not.toContain("--note-lit");

@@ -48,7 +48,9 @@
    - the PAGE, along the top: the bars being worked on, as sheet music
      (staff-bars.ts, engraved by engrave.ts), with the neighbouring bars
      torn off at the margins for context and the current step's notes lit
-     in the same gold as the keys.
+     in the same gold as the keys. A key held that the step never asked
+     for is written in red in the step's column (strays.ts), so the page
+     shows how far off the hand was as well as the keyboard does.
      It shows the isolated range when there is one and otherwise the bar
      the cursor is in, so it turns its own pages. The rest of the piece
      lies either side of them, and the page PANS along it — the
@@ -568,6 +570,7 @@ export const markup = (
       `<g transform="translate(0,${SHEET_TOP})"><g clip-path="url(#${GLOW_ID}-sheets)">` +
       StaffScore.markup(mainW, h, sheetScroll, s.score!, {
         glowId: GLOW_ID, range: s.range, current: s.current, hand: s.hand, showOther: s.showOther,
+        wrong: s.wrong,
       }) + `</g></g>` +
       keyLayer(mainW, H, s, held) +
       harmonyBar(mainW, W, H, s);
@@ -580,7 +583,7 @@ export const markup = (
     ? `<g transform="translate(0,${SHEET_TOP})">` +
       StaffBars.markup(mainW, sheetH, s.score!, {
         glowId: GLOW_ID, focus: s.focus, range: s.range, current: s.current,
-        hand: s.hand, showOther: s.showOther, pan: s.pan,
+        hand: s.hand, showOther: s.showOther, pan: s.pan, wrong: s.wrong,
       }) + `</g>`
     : "";
 

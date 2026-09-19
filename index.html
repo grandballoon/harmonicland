@@ -148,6 +148,8 @@
   .section-name::placeholder { color: var(--ink-dim); }
   .section-name:hover { border-color: var(--line-acc); }
   .section-name:focus { outline: none; border-color: var(--note); background: #1d242e; }
+  .section-use { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
+  .section-use:not(:disabled):hover { color: var(--loop); border-color: var(--loop); }
   .section-remove { padding: 5px 9px; color: var(--ink-dim); }
   .section-remove:hover { color: var(--wrong); border-color: var(--wrong); }
   .sections-empty { margin: 0; color: var(--ink-dim); font-size: 12px; max-width: 360px; }
@@ -410,7 +412,6 @@
         <div class="dropdown-panel sections-panel">
           <div class="sections-actions">
             <button class="section-save" disabled>Save selected bars</button>
-            <button class="section-update" hidden></button>
             <span class="toggle">or split every
               <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
               bars <button class="section-split">Split</button>

@@ -59,7 +59,7 @@ describe("the sections panel", () => {
     expect(rows()[0]).toBe(row);
   });
 
-  it("loads a section with its latest name, and closes", () => {
+  it("loads a section with its latest name, and stays open to edit it", () => {
     store.save("demo", add([], { from: 4, to: 7 }));
     panel.setScore("demo", 8);
     root.open = true;
@@ -68,7 +68,7 @@ describe("the sections panel", () => {
     name.dispatchEvent(new Event("change"));
     q<HTMLButtonElement>(".section-load").click();
     expect(loaded.map((s) => [s.id, s.name])).toEqual([["4-7", "Coda"]]);
-    expect(root.open).toBe(false);
+    expect(root.open).toBe(true);
   });
 
   it("splits the score into chunks and deletes one", () => {
@@ -80,21 +80,28 @@ describe("the sections panel", () => {
     expect(store.load("demo").map((s) => s.id)).toEqual(["4-5"]);
   });
 
-  it("offers to move the section just loaded onto a fine-tuned selection", () => {
-    const update = q<HTMLButtonElement>(".section-update");
-    store.save("demo", rename(add([], { from: 2, to: 3 }), "2-3", "Theme"));
+  it("moves any saved section onto the selection, name and all, without loading it first", () => {
+    store.save("demo", rename(add(add([], { from: 0, to: 1 }), { from: 2, to: 3 }), "2-3", "Theme"));
     panel.setScore("demo", 8);
-    expect(update.hidden).toBe(true);
-    rows()[0].querySelector<HTMLButtonElement>(".section-load")!.click();
-    panel.setSelection(loaded[0].range);
-    expect(update.hidden).toBe(true); // nothing to update yet
-    panel.setSelection({ from: 2, fromBeat: 1, to: 3 });
-    expect(update.hidden).toBe(false);
-    expect(update.textContent).toBe("Update Theme");
-    update.click();
-    expect(store.load("demo").map((s) => [s.id, s.name])).toEqual([["2@1-3", "Theme"]]);
-    expect(rows()[0].classList.contains("current")).toBe(true);
-    expect(update.hidden).toBe(true);
+    const use = (i: number) => rows()[i].querySelector<HTMLButtonElement>(".section-use")!;
+    expect(use(1).disabled).toBe(true); // nothing selected
+    panel.setSelection({ from: 2, fromBeat: 1, to: 4 });
+    expect(use(1).disabled).toBe(false);
+    expect(use(1).title).toBe("Move Theme to bar 3 beat 2 – bar 5, keeping its name");
+    use(1).click();
+    expect(store.load("demo").map((s) => [s.id, s.name])).toEqual([["0-1", ""], ["2@1-4", "Theme"]]);
+    expect(rows()[1].classList.contains("current")).toBe(true);
+    expect(use(1).disabled).toBe(true); // it is the selection now
+    expect(loaded).toEqual([]);
+  });
+
+  it("will not move a section onto bars another section already has", () => {
+    store.save("demo", add(add([], { from: 0, to: 1 }), { from: 2, to: 3 }));
+    panel.setScore("demo", 8);
+    panel.setSelection({ from: 0, to: 1 });
+    const use = rows()[1].querySelector<HTMLButtonElement>(".section-use")!;
+    expect(use.disabled).toBe(true);
+    expect(use.title).toBe("Another section already has bars 1–2");
   });
 
   it("shows each score its own sections", () => {

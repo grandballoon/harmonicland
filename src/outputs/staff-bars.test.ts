@@ -248,6 +248,40 @@ describe("colour", () => {
     expect(svg).toContain('stroke="var(--playhead)"');
   });
 
+  describe("a key held that the step never asked for", () => {
+    const at = (wrong: number[], current: (typeof steps)[number] | null = steps[0]) =>
+      StaffBars.markup(W, H, four, { ...opts, focus: { from: 0, to: 0 }, current, wrong: new Set(wrong) });
+    const ruleX = (svg: string) => +/<line x1="([\d.]+)"[^>]*stroke="var\(--playhead\)"/.exec(svg)![1];
+    const reds = (svg: string) =>
+      [...svg.matchAll(/<ellipse cx="([\d.-]+)" cy="([\d.-]+)"[^>]*fill="var\(--wrong\)"/g)].map((m) => [+m[1], +m[2]]);
+    const midY = H / 2;
+
+    it("is a red head in the step's column, where its pitch is written", () => {
+      const svg = at([65]); // F4 against the D4 asked for, in D major
+      const [[x, y]] = reds(svg);
+      expect(x).toBe(ruleX(svg));
+      expect(y).toBe(midY - 3 * 7); // F4 is three half-spaces over middle C
+      expect(svg).toContain("♮"); // the key says F♯
+    });
+
+    it("steps aside from a head it would overprint", () => {
+      const svg = at([64]); // E4, a second over D4
+      const [[x]] = reds(svg);
+      expect(x).toBeGreaterThan(ruleX(svg));
+    });
+
+    it("takes the grand staff's ledger lines", () => {
+      const plain = at([]);
+      const high = at([84]); // C6, two ledgers over the treble staff
+      expect(count(high, /stroke="var\(--staff-line\)"/g) - count(plain, /stroke="var\(--staff-line\)"/g)).toBe(2);
+    });
+
+    it("is not drawn without a step to measure it by", () => {
+      expect(reds(at([65], null))).toEqual([]);
+      expect(reds(StaffBars.markup(W, H, four, { ...opts, focus: { from: 0, to: 0 }, wrong: new Set([65]) }))).toEqual([]);
+    });
+  });
+
   it("hues the focus by hand and the context in ink-dim", () => {
     const svg = StaffBars.markup(W, H, four, { ...opts, focus: { from: 1, to: 1 } });
     expect(heads(svg, "var(--page-r)")).toBe(5);

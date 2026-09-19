@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Core } from "../core";
-import { engraveBar, keyAccidental, snap, staffOf, valuesFor, type Value } from "./engrave";
+import { engraveBar, keyAccidental, printedAt, snap, spellIn, staffOf, valuesFor, type Value } from "./engrave";
 import type { Barline, Hand, RawNote, Score } from "../types";
 
 /* engrave.ts turns seconds back into notation. Everything here is a fact
@@ -242,5 +242,29 @@ describe("columns", () => {
     const eb = engraveBar(s.notes, s.bars[0]);
     expect(eb.columns.find((c) => c.q === 1)?.accidentals).toBe(true);
     expect(eb.columns.find((c) => c.q === 0)?.accidentals).toBe(false);
+  });
+});
+
+describe("a pitch the score never spelled", () => {
+  it("is spelled as the key signature says when it says so", () => {
+    expect(spellIn(66, 2)).toEqual({ letter: "F", acc: "#", octave: 4 }); // D major
+    expect(spellIn(70, -1)).toEqual({ letter: "B", acc: "b", octave: 4 }); // F major
+    expect(spellIn(63, -3)).toEqual({ letter: "E", acc: "b", octave: 4 }); // E♭ major
+  });
+
+  it("is spelled by the key's side of the circle otherwise", () => {
+    expect(spellIn(61, 0)).toEqual({ letter: "C", acc: "#", octave: 4 });
+    expect(spellIn(61, -1)).toEqual({ letter: "D", acc: "b", octave: 4 });
+    expect(spellIn(65, 2)).toEqual({ letter: "F", acc: "", octave: 4 }); // F natural in D
+  });
+
+  it("prints what the key and the bar so far do not already say", () => {
+    const bar: Barline[] = [{ at: 0, fifths: 2 }, 2];
+    const s = Core.makeScore([{ pitch: 65, onset: 1, duration: 0.5 }], bar);
+    const eb = engraveBar(s.notes, s.bars[0]);
+    const f = spellIn(65, 2);
+    expect(printedAt(eb, 0, f)).toBe("n"); // before the F natural: the key's F♯ holds
+    expect(printedAt(eb, 2, f)).toBe(""); // after it, the natural does
+    expect(printedAt(eb, 2, spellIn(66, 2))).toBe("#"); // and an F♯ now has to say so
   });
 });

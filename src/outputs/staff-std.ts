@@ -20,7 +20,7 @@
    ==================================================================== */
 import { SCROLL } from "./scroll";
 import { glowFilter, glowAttr } from "./defs";
-import { spell } from "../pitch";
+import { spell, type Spelt } from "../pitch";
 import type { Score, Note, Letter, Accidental } from "../types";
 import type { View, ViewModule } from "../view";
 
@@ -40,9 +40,11 @@ export const ACC: Record<Accidental | "n", string> = { "#": "♯", b: "♭", n: 
 // diatonic position relative to middle C (positive = higher on the page)
 const C4_STEP = LETTER.C + 7 * 4;
 export function posFromMiddleC(n: Note): number {
-  const s = spell(n);
-  return LETTER[s.letter] + 7 * s.octave - C4_STEP;
+  return posOf(spell(n));
 }
+
+/** The same, for a spelling that belongs to no note of the score. */
+export const posOf = (s: Spelt): number => LETTER[s.letter] + 7 * s.octave - C4_STEP;
 
 /** The staff's y for a position, given where middle C is. */
 export const yOfPos = (midY: number, pos: number): number => midY - pos * HALF;

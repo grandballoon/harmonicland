@@ -38,10 +38,12 @@
    4. MARKS OVER THE MUSIC. On either engraver, the isolated range is a
       panel under the bars, the current step's heads are lit in the strike
       gold with a glow, and a playhead-coloured rule runs through the
-      column it strikes. On Verovio's sheets the engraving is never
-      re-set for any of that: the hands and the lit heads are a stylesheet
-      over the classes and ids mei.ts gave them, and the rule and panel are
-      placed from the geometry verovio.ts read off the page.
+      column it strikes, with any key held that the step never asked for
+      as a red head in that column (strays.ts). On Verovio's sheets the
+      engraving is never re-set for any of that: the hands and the lit
+      heads are a stylesheet over the classes and ids mei.ts gave them,
+      and the rule, the panel and the red heads are placed from the
+      geometry verovio.ts read off the page.
 
    5. SCROLLING is a number handed in, not a thing this module does. The
       caller owns the scroll position (a native scroller, in the app) and
@@ -53,14 +55,15 @@
    view redraws every frame; the memos are caches, never a source of truth.
    ==================================================================== */
 import { StaffBars, type LineOpts, type PageLayout } from "./staff-bars";
-import { HALF } from "./staff-std";
+import { HALF, posFromMiddleC } from "./staff-std";
+import { STEP_ASIDE, ledgerLines, ledgerPositions, strayGlyph, straysAt, type Stray } from "./strays";
 import { engrave, type EngravedBar } from "./engrave";
 import { RangeMarks, gripsMarkup, panelMarkup, stopsOf, type End, type MarkBar } from "./range-marks";
 import { headId, headPrefix, toMei } from "./mei";
 import { Verovio, type PageSpec, type VrvPage } from "./verovio";
-import { text } from "./defs";
+import { glowAttr, text } from "./defs";
 import { soundingIn, type HandFilter } from "../steps";
-import type { Bar, BarRange, Score } from "../types";
+import type { Bar, BarRange, Note, Score } from "../types";
 
 /** One built-in line's height: the grand staff with two ledger lines each
  *  way, its bar numbers above, and air before the next line. */
@@ -141,7 +144,12 @@ interface Paper {
 
 export type ScoreLayout =
   | (Paper & { readonly engine: "built-in"; readonly sheets: readonly Sheet<BuiltInSystem>[] })
-  | (Paper & { readonly engine: "verovio"; readonly sheets: readonly VerovioSheet[] });
+  | (Paper & {
+    readonly engine: "verovio";
+    readonly sheets: readonly VerovioSheet[];
+    /** The notation the sheets were set from, one per bar. */
+    readonly ebs: readonly EngravedBar[];
+  });
 
 /** Decision 1: one size, unless the window cannot hold a sheet's width. */
 function paper(W: number, count: number): Paper & { tops: number[] } {
@@ -255,7 +263,7 @@ function verovio(W: number, { pages, ebs }: Engraved): ScoreLayout {
       })),
     })),
   }));
-  return { ...P, engine: "verovio", sheets };
+  return { ...P, engine: "verovio", sheets, ebs };
 }
 
 // --- the layout -----------------------------------------------------------------
@@ -304,21 +312,55 @@ function litStyle(o: LineOpts): string {
   return sel.length ? `${sel.join(",")}{color:var(--note-lit);filter:url(#${o.glowId})}` : "";
 }
 
+/** Where the current step strikes on Verovio's sheets. */
+interface Strike {
+  readonly sheet: number;
+  readonly x: number;
+  readonly system: number;
+  /** What the learner struck instead (strays.ts). */
+  readonly strays: readonly Stray[];
+}
+
 /** Where the current step strikes, on the sheet that holds it: the first
  *  of its attacks Verovio set a head for. */
-function strikeAt(sheets: readonly VerovioSheet[], o: LineOpts): { sheet: number; x: number; system: number } | null {
+function strikeAt(
+  sheets: readonly VerovioSheet[], ebs: readonly EngravedBar[], o: LineOpts,
+): Strike | null {
   if (!o.current) return null;
   for (const n of o.current.attack)
     for (let s = 0; s < sheets.length; s++) {
       const head = sheets[s].page.heads.get(headId(n.id, 0));
-      if (head) return { sheet: s, x: head.x, system: head.system };
+      if (head) return { sheet: s, x: head.x, system: head.system, strays: straysOf(ebs, n, o) };
     }
   return null;
 }
 
+/** The strays at the column where `struck`, one of the step's attacks,
+ *  is first written — the bar and instant a stray is spelled at. */
+function straysOf(ebs: readonly EngravedBar[], struck: Note, o: LineOpts): Stray[] {
+  if (!o.current || !o.wrong?.size) return [];
+  for (const eb of ebs)
+    for (const c of eb.chords)
+      if (c.heads.some((h) => h.note.id === struck.id && !h.tiedFrom))
+        return straysAt(eb, c.q, o.wrong, o.current.attack);
+  return [];
+}
+
+/** A stray on one of Verovio's sheets. Its staves stand apart, so it is
+ *  placed by the head of its reference, a whole number of half-spaces
+ *  away on the same staff, and takes that staff's ledger lines. */
+function strayOnSheet(sheet: VerovioSheet, x: number, st: Stray, glowId: string): string {
+  const ref = sheet.page.heads.get(headId(st.ref.id, 0));
+  if (!ref) return "";
+  const yOf = (pos: number): number => ref.y - (pos - posFromMiddleC(st.ref)) * HALF;
+  const hx = x + (st.crowded ? STEP_ASIDE : 0);
+  return ledgerLines(ledgerPositions(st.pos, st.staff).map(yOf), hx) + strayGlyph(hx, yOf(st.pos), st.acc, glowAttr(glowId));
+}
+
 /** Decision 4, on one of Verovio's sheets: the panel under the isolated
- *  bars, the page, and the rule through the struck column. */
-function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: { x: number; system: number } | null): string {
+ *  bars, the page, the rule through the struck column, and what the
+ *  learner struck instead. */
+function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: Strike | null): string {
   let out = "";
   const r = o.range;
   if (r) for (const sys of sheet.systems) out += panelMarkup(sys.bars, r, sys.y, sys.h);
@@ -328,6 +370,7 @@ function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: { x: number; sys
     const sys = sheet.systems[strike.system];
     out += `<line x1="${strike.x}" y1="${sys.y}" x2="${strike.x}" y2="${sys.y + sys.h}" ` +
       `stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
+    for (const st of strike.strays) out += strayOnSheet(sheet, strike.x, st, o.glowId);
   }
   return out;
 }
@@ -338,7 +381,7 @@ export function markup(W: number, H: number, scroll: number, score: Score, o: Li
   if (!W || !H || score.bars.length === 0) return "";
   const L = layout(W, score, o.hand, o.showOther);
   let out = `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--desk)"/>`;
-  const strike = L.engine === "verovio" ? strikeAt(L.sheets, o) : null;
+  const strike = L.engine === "verovio" ? strikeAt(L.sheets, L.ebs, o) : null;
   if (L.engine === "verovio") out += `<style>${PAGE_STYLE}${litStyle(o)}</style>`;
   L.sheets.forEach((sheet: Sheet, p) => {
     const top = sheet.top - scroll;

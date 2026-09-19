@@ -147,7 +147,7 @@ A trim is stored in beats of its bar (`BarRange.fromBeat` / `toBeat`), and `Core
 A section is bars, not seconds, so the same one loops in the falling-notes views and confines a lesson in practice mode with no tempo to convert.
 It deliberately does not remember a hand: the hand is chosen per sitting, and loading a section leaves it as it was.
 Loading one is just `selectBars(range)`, the same path a dragged flag takes.
-To fine-tune a saved section, load it, trim the selection, and press Update in the Sections panel, which moves the section (name and all) onto the new range.
+To change a saved section's span, select the bars you want (loading the section first is handy but not required) and press that row's "Use selection" in the Sections panel, which moves the section (name and all) onto the selection.
 Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with

@@ -494,6 +494,13 @@ describe("the page", () => {
     expect(p).toContain(">1</text>");
   });
 
+  it("writes a key held that the step never asked for in red, as the keyboard lights it", () => {
+    expect(heads(page(Practice.markup(W, H, snap(), NONE))!, "var(--wrong)")).toBe(0);
+    const svg = Practice.markup(W, H, snap({ wrong: new Set([67]) }), NONE);
+    expect(heads(page(svg)!, "var(--wrong)")).toBe(1);
+    expect(heads(Practice.markup(W, H, snap({ wholeScore: true, wrong: new Set([67]) }), NONE), "var(--wrong)")).toBe(1);
+  });
+
   it("is absent with no lesson, and absent for an empty one", () => {
     expect(page(Practice.markup(W, H, snap({ active: false, score: null, total: 0 }), NONE))).toBeNull();
     expect(page(Practice.markup(W, H, snap({ total: 0 }), NONE))).toBeNull();

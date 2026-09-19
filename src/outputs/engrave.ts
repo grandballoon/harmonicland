@@ -35,8 +35,8 @@
       group. The beat is the quarter, or the dotted quarter in compound
       meters, or the half in cut time.
    ==================================================================== */
-import { spell } from "../pitch";
-import type { Accidental, Bar, Letter, Note } from "../types";
+import { octaveFor, semi, spell, type Spelt } from "../pitch";
+import type { Accidental, Bar, Letter, Note, Pitch, Spelling } from "../types";
 
 /** Which of the two staves a note is written on. The parser's hand when
  *  it gave one; otherwise middle C and up goes on the treble staff. */
@@ -175,6 +175,46 @@ export function keyAccidental(fifths: number, letter: Letter): Accidental {
   if (fifths > 0 && SHARPS.indexOf(letter) < fifths) return "#";
   if (fifths < 0 && SHARPS.length - SHARPS.indexOf(letter) <= -fifths) return "b";
   return "";
+}
+
+/** Sharp and flat spellings of the twelve pitch classes; a white key has
+ *  only its own letter. */
+const SHARP_SP: readonly Spelling[] = [
+  { letter: "C", acc: "" }, { letter: "C", acc: "#" }, { letter: "D", acc: "" }, { letter: "D", acc: "#" },
+  { letter: "E", acc: "" }, { letter: "F", acc: "" }, { letter: "F", acc: "#" }, { letter: "G", acc: "" },
+  { letter: "G", acc: "#" }, { letter: "A", acc: "" }, { letter: "A", acc: "#" }, { letter: "B", acc: "" },
+];
+const FLAT_SP: readonly Spelling[] = [
+  { letter: "C", acc: "" }, { letter: "D", acc: "b" }, { letter: "D", acc: "" }, { letter: "E", acc: "b" },
+  { letter: "E", acc: "" }, { letter: "F", acc: "" }, { letter: "G", acc: "b" }, { letter: "G", acc: "" },
+  { letter: "A", acc: "b" }, { letter: "A", acc: "" }, { letter: "B", acc: "b" }, { letter: "B", acc: "" },
+];
+
+/** How a bare pitch is written in a key: the spelling the key signature
+ *  already says when one of them does, else a black key by the key's own
+ *  side of the circle — sharps from C up, flats below. For a pitch the
+ *  score never spelled, such as a key the learner pressed by mistake. */
+export function spellIn(pitch: Pitch, fifths: number): Spelt {
+  const pc = semi(pitch);
+  const [sharp, flat] = [SHARP_SP[pc], FLAT_SP[pc]];
+  const sp = [sharp, flat].find((c) => c.acc !== "" && keyAccidental(fifths, c.letter) === c.acc)
+    ?? (fifths < 0 ? flat : sharp);
+  return { ...sp, octave: octaveFor(pitch, sp) };
+}
+
+/** The accidental to print before a head spelled `sp` at `q` quarters
+ *  into an engraved bar: what the key signature says, unless a head of
+ *  the same letter and octave earlier in the bar — or in the same column —
+ *  has said otherwise. The rule `engraveBar` prints by, asked of one head
+ *  that is not in the bar. */
+export function printedAt(eb: EngravedBar, q: number, sp: Spelt): Printed {
+  let implied: Accidental = keyAccidental(eb.bar.fifths, sp.letter);
+  const before = eb.chords.flatMap((c) => c.heads).filter((h) => h.q <= q + EPS).sort((a, b) => a.q - b.q);
+  for (const h of before) {
+    const hs = spell(h.note);
+    if (hs.letter === sp.letter && hs.octave === sp.octave) implied = hs.acc;
+  }
+  return sp.acc === implied ? "" : sp.acc || "n";
 }
 
 // --- engraving one bar -----------------------------------------------------
@@ -331,5 +371,5 @@ export function engrave(notes: readonly Note[], bars: readonly Bar[], from: numb
 }
 
 export const Engrave = {
-  engrave, engraveBar, valuesFor, snap, quartersOf, quartersPerBar, beatOf, staffOf, keyAccidental,
+  engrave, engraveBar, valuesFor, snap, quartersOf, quartersPerBar, beatOf, staffOf, keyAccidental, spellIn, printedAt,
 };

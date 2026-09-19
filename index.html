@@ -40,6 +40,7 @@
     --page-l:    #c77dff;
     --minor:     #5b7fff;   /* minor chords: the cool half of the quality pair */
     --desk:      #080a0e;   /* behind the sheets of the whole score    */
+    --grip:      #6b7785;   /* the isolated range's drag handles       */
   }
 
   /* ---- paper: the light scheme ----------------------------------------
@@ -77,6 +78,7 @@
     --page-l:    #141414;
     --minor:     #4a76e8;
     --desk:      #e4ddcd;
+    --grip:      #a8946a;   /* the panel's own warm, deepened           */
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -108,6 +110,8 @@
   /* the bar-range inputs: two short numbers that read as one control */
   input[type=number] { width: 4.6em; padding: 6px 8px; cursor: text; font-variant-numeric: tabular-nums; }
   .bar-range .dash { color: var(--ink-dim); }
+  /* a trimmed edge's beat, hugging its bar box: "3·2" is bar 3, beat 2 */
+  .bar-range .bar-beat { margin-left: -3px; color: var(--loop); font-variant-numeric: tabular-nums; }
   /* the step buttons: a pair, so they sit tighter than the rest */
   .step-pair { display: inline-flex; gap: 4px; }
   .step-pair button { padding-left: 11px; padding-right: 11px; }
@@ -333,12 +337,13 @@
   </button>
   <div class="scrub-wrap">
     <!-- The loop's edges ride the scrub bar, on barlines. Drag them, or
-         press [ and ] in a bar; the bar boxes beside it move with them. -->
+         press [ and ] in a bar; the bar boxes beside it move with them.
+         Alt-drag, or { and } on a note, trims an edge into its bar. -->
     <div class="scrub-track" id="scrub-track">
       <div class="loop-band"></div>
       <input id="scrub" type="range" min="0" max="1000" value="0" disabled>
-      <div class="loop-edge start" id="loop-start" title="Loop start — drag, or press [ on a note"></div>
-      <div class="loop-edge end" id="loop-end" title="Loop end — drag, or press ] on a note"></div>
+      <div class="loop-edge start" id="loop-start" title="Loop start — drag to a barline, Alt-drag to a note; or press [ in a bar, { on a note"></div>
+      <div class="loop-edge end" id="loop-end" title="Loop end — drag to a barline, Alt-drag to a note; or press ] in a bar, } on a note"></div>
     </div>
     <!-- under the track, in the row's padding: it adds no height -->
     <span class="time"><span id="time-now">0.00</span><span id="time-total">0.00s</span></span>
@@ -354,11 +359,13 @@
        bars under a name, per score, and loads them back into the same
        selection. -->
   <span class="practice-controls" id="bars-wrap">
-    <span class="toggle bar-range" title="Loop only these bars — or drag the flags on the scrub bar, or press [ and ] in a bar">
+    <span class="toggle bar-range" title="Loop only these bars — or drag the flags on the scrub bar (Alt-drag to start or stop on a note), or press [ and ] in a bar ({ and } on a note)">
       bars
       <input type="number" id="bar-from" min="1" step="1" placeholder="all" aria-label="First bar" disabled>
+      <span class="bar-beat" id="beat-from" hidden></span>
       <span class="dash">–</span>
       <input type="number" id="bar-to" min="1" step="1" placeholder="all" aria-label="Last bar" disabled>
+      <span class="bar-beat" id="beat-to" hidden></span>
       <button id="bar-all" title="Select the whole piece again" disabled>all</button>
       <button id="loop" class="icon-btn" aria-pressed="false" aria-label="Loop" disabled title="Go round the selected bars when playing">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.3 9.2A5.5 5.5 0 1 1 11.9 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.6 1.3v3.4H9.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -403,6 +410,7 @@
         <div class="dropdown-panel sections-panel">
           <div class="sections-actions">
             <button class="section-save" disabled>Save selected bars</button>
+            <button class="section-update" hidden></button>
             <span class="toggle">or split every
               <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
               bars <button class="section-split">Split</button>

@@ -149,6 +149,8 @@ export function sheetsScroller(W: number, H: number, score: Score, t: number, sc
     follow: bar,
     ...StaffScore.sightOf(W, H, score, "both", true, bar),
     barAt: (x, y) => StaffScore.barAt(W, score, "both", true, x, y + scroll),
+    gripAt: () => null, // this page draws no range
+    timeAt: () => null,
   };
 }
 

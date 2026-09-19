@@ -7,6 +7,11 @@
    main.ts turns that into the one shared selection, so a loaded section
    loops in the falling notes and confines a lesson by the same path a
    dragged flag does.
+
+   Fine-tuning a saved section is load, adjust, update: the panel keeps
+   the section last loaded or saved as its "current" one, and while the
+   selection has moved off that section's bars it offers to move the
+   section — name and all — onto the selection.
    ==================================================================== */
 import { Sections, type Section } from "./sections";
 import type { SectionStore } from "./section-store";
@@ -26,6 +31,7 @@ export function mountSectionsPanel(
   const q = <T extends HTMLElement>(sel: string): T => root.querySelector(sel) as T;
   const count = q<HTMLSpanElement>(".sections-count");
   const saveBtn = q<HTMLButtonElement>(".section-save");
+  const updateBtn = q<HTMLButtonElement>(".section-update");
   const chunkBox = q<HTMLInputElement>(".section-chunk");
   const splitBtn = q<HTMLButtonElement>(".section-split");
   const listEl = q<HTMLUListElement>(".sections-list");
@@ -35,6 +41,8 @@ export function mountSectionsPanel(
   let bars = 0;
   let selection: BarRange | null = null;
   let list: readonly Section[] = [];
+  /** The section last loaded or saved: the one Update moves. */
+  let currentId: string | null = null;
 
   const commit = (next: readonly Section[]): void => {
     list = next;
@@ -70,6 +78,7 @@ export function mountSectionsPanel(
     load.title = "Loop these bars, or practise them";
     load.addEventListener("click", () => {
       root.open = false;
+      currentId = s.id;
       onLoad(list.find((x) => x.id === s.id) ?? s); // the latest name
     });
 
@@ -103,7 +112,8 @@ export function mountSectionsPanel(
     return li;
   }
 
-  /** Save button and highlighted row follow the selection, without a rebuild. */
+  /** Save and Update buttons and the highlighted row follow the selection,
+   *  without a rebuild. */
   function mark(): void {
     const current = Sections.find(list, selection);
     for (const li of listEl.querySelectorAll<HTMLLIElement>(".section-row"))
@@ -112,13 +122,27 @@ export function mountSectionsPanel(
     saveBtn.textContent = selection === null
       ? "Save selected bars"
       : current ? `${Sections.describeBars(selection)} saved` : `Save ${Sections.describeBars(selection)}`;
+    const moved = list.find((s) => s.id === currentId);
+    updateBtn.hidden = !moved || selection === null || current !== undefined;
+    if (moved && selection !== null) {
+      updateBtn.textContent = `Update ${Sections.labelOf(moved)}`;
+      updateBtn.title = `Move this section to ${Sections.describeBars(selection)}, keeping its name`;
+    }
   }
 
   saveBtn.addEventListener("click", () => {
     if (selection === null) return;
     commit(Sections.add(list, selection));
+    currentId = Sections.find(list, selection)!.id;
     render();
-    nameBox(Sections.find(list, selection)!.id)?.focus(); // name it now, if you like
+    nameBox(currentId)?.focus(); // name it now, if you like
+  });
+
+  updateBtn.addEventListener("click", () => {
+    if (selection === null || currentId === null) return;
+    commit(Sections.retarget(list, currentId, selection));
+    currentId = Sections.find(list, selection)?.id ?? currentId;
+    render();
   });
 
   splitBtn.addEventListener("click", () => {
@@ -134,6 +158,7 @@ export function mountSectionsPanel(
     setScore(k, n) {
       key = k;
       bars = n;
+      currentId = null;
       list = k === null ? [] : store.load(k);
       render();
     },

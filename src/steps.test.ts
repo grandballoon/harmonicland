@@ -227,13 +227,13 @@ describe("spanOf", () => {
   const { steps } = makeSteps(score, "both");
 
   it("names the steps beginning inside the bars, last exclusive", () => {
-    expect(spanOf(steps, score.bars, { from: 0, to: 0 })).toEqual({ first: 0, last: 2 });
-    expect(spanOf(steps, score.bars, { from: 1, to: 1 })).toEqual({ first: 2, last: 4 });
-    expect(spanOf(steps, score.bars, { from: 1, to: 3 })).toEqual({ first: 2, last: 8 });
+    expect(spanOf(steps, Core.barTime(score, { from: 0, to: 0 }))).toEqual({ first: 0, last: 2 });
+    expect(spanOf(steps, Core.barTime(score, { from: 1, to: 1 }))).toEqual({ first: 2, last: 4 });
+    expect(spanOf(steps, Core.barTime(score, { from: 1, to: 3 }))).toEqual({ first: 2, last: 8 });
   });
 
   it("lands on the same step a scrub to the bar's start would", () => {
-    const { first } = spanOf(steps, score.bars, { from: 2, to: 2 });
+    const { first } = spanOf(steps, Core.barTime(score, { from: 2, to: 2 }));
     expect(first).toBe(stepAt(steps, score.bars[2].start));
   });
 
@@ -241,12 +241,18 @@ describe("spanOf", () => {
     // a note in bar 0 and one in bar 3; bars 1 and 2 are silent
     const sparse = Core.makeScore([n(60, 0), n(62, 3)], [0, 1, 2, 3, 4]);
     const cut = makeSteps(sparse, "both").steps;
-    expect(spanOf(cut, sparse.bars, { from: 1, to: 1 })).toEqual({ first: 1, last: 1 });
-    expect(spanOf(cut, sparse.bars, { from: 1, to: 2 })).toEqual({ first: 1, last: 1 });
+    expect(spanOf(cut, Core.barTime(sparse, { from: 1, to: 1 }))).toEqual({ first: 1, last: 1 });
+    expect(spanOf(cut, Core.barTime(sparse, { from: 1, to: 2 }))).toEqual({ first: 1, last: 1 });
+  });
+
+  it("honours a range trimmed inside its bars", () => {
+    // from beat 3 of bar 2 up to beat 3 of bar 3: the steps at 1.5s and 2s
+    const r = { from: 1, fromBeat: 2, to: 2, toBeat: 2 };
+    expect(spanOf(steps, Core.barTime(score, r))).toEqual({ first: 3, last: 5 });
   });
 
   it("clamps bar indices to the bars that exist", () => {
-    expect(spanOf(steps, score.bars, { from: 3, to: 9 })).toEqual({ first: 6, last: 8 });
-    expect(spanOf(steps, score.bars, { from: -2, to: 0 })).toEqual({ first: 0, last: 2 });
+    expect(spanOf(steps, Core.barTime(score, { from: 3, to: 9 }))).toEqual({ first: 6, last: 8 });
+    expect(spanOf(steps, Core.barTime(score, { from: -2, to: 0 }))).toEqual({ first: 0, last: 2 });
   });
 });

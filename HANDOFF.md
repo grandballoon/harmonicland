@@ -139,11 +139,15 @@ Where the edges may sit and where the ← → arrow keys land is `loop.ts`, a pu
 `main.ts` owns ONE bar selection shared by every view: in practice mode it confines the lesson (`PracticeState.setRange`), elsewhere it is the playback loop (`clock.setLoop(Core.barTime(...))`), and `applyBars` is the only place either is written.
 The bar-number boxes, the two draggable flags on the scrub bar, `[` and `]` on the bar under the playhead, and a click on a bar of the practice page all edit that selection, so they always agree.
 The Loop button switches playback round the selection on and off without forgetting the bars; practice mode hides it, since a lesson always goes round its bars, but keeps the flags, and `[` `]` mark the bar the cursor stands in.
+Edges snap to barlines by default, but either end may be trimmed into its bar, onto a note: Alt-drag a flag, press `{` `}` on the step under the playhead or cursor, or drag a grip on the practice page.
+The isolated range on the practice page (strip or whole score, either engraver) has a pill-shaped grip at each end; dragging one moves that end to the nearest barline or gap before a note (`outputs/range-marks.ts`, hit-tested through `Scroller.gripAt` / `timeAt`), while `PracticeState.holdFocus` pins the strip's layout so the bars do not re-flow under the pointer.
+A trim is stored in beats of its bar (`BarRange.fromBeat` / `toBeat`), and `Core.barTime` is the one place it becomes seconds, for the loop and the lesson alike.
 
 **Saved sections.** A score can be broken into named runs of bars and kept (`sections.ts`).
 A section is bars, not seconds, so the same one loops in the falling-notes views and confines a lesson in practice mode with no tempo to convert.
 It deliberately does not remember a hand: the hand is chosen per sitting, and loading a section leaves it as it was.
 Loading one is just `selectBars(range)`, the same path a dragged flag takes.
+To fine-tune a saved section, load it, trim the selection, and press Update in the Sections panel, which moves the section (name and all) onto the new range.
 Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with

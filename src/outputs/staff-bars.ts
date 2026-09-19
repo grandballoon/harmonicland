@@ -45,6 +45,7 @@ import { glowAttr, text } from "./defs";
 import {
   engrave, type Chord, type EngravedBar, type Head, type Staff, type Value,
 } from "./engrave";
+import { gripsMarkup, panelMarkup, stopsOf, type MarkBar } from "./range-marks";
 import { inHand, soundingIn, type HandFilter, type Step } from "../steps";
 import type { Bar, BarRange, Hand, Note, Score } from "../types";
 
@@ -215,6 +216,17 @@ const strip = memo1((W: number, score: Score, from: number, to: number, notes: r
     final: true,
   });
 });
+
+/** A placed line's bars as the range's marks see them (range-marks.ts,
+ *  decision 1): each struck instant at its column's x. */
+export const marksOf = (page: PageLayout): MarkBar[] =>
+  page.placed.map((p) => ({
+    bar: p.eb.bar, x0: p.x0, x1: p.x1,
+    stops: stopsOf(p.eb, (h) => {
+      const i = p.eb.columns.findIndex((c) => Math.abs(c.q - h.q) < 1e-6);
+      return i >= 0 ? p.colX[i] : undefined;
+    }),
+  }));
 
 const focusOf = (bars: readonly Bar[], focus: BarRange): [number, number] => {
   const from = clampBar(bars, focus.from);
@@ -601,16 +613,11 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
     staff += `<defs><clipPath id="${o.glowId}-page"><rect x="${va}" y="0" width="${Math.max(0, vb - va)}" height="${H}"/></clipPath></defs>`;
   }
 
-  // the isolated bars, as a panel under everything
-  if (o.range) {
-    const r = o.range;
-    const inRange = page.placed.filter((p) => !p.context && p.eb.bar.index >= r.from && p.eb.bar.index <= r.to);
-    if (inRange.length) {
-      const xa = inRange[0].x0;
-      const xb = inRange[inRange.length - 1].x1;
-      out += `<rect x="${xa}" y="${top - 6}" width="${Math.max(0, xb - xa)}" height="${bottom - top + 12}" rx="4" fill="var(--panel)"/>`;
-    }
-  }
+  // the isolated bars, as a panel under everything, with a grip at each
+  // end over everything (range-marks.ts)
+  const marks = o.range ? marksOf(page) : [];
+  const [panelY, panelH] = [top - 6, bottom - top + 12];
+  if (o.range) out += panelMarkup(marks, o.range, panelY, panelH);
 
   const panel = out;
   out = "";
@@ -780,6 +787,8 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
   if (cursorX !== null)
     out += `<line x1="${cursorX}" y1="${top}" x2="${cursorX}" y2="${bottom}" stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
 
+  if (o.range) out += gripsMarkup(marks, o.range, panelY, panelH);
+
   const inView = (m: string): string => (page.view && m ? `<g clip-path="url(#${o.glowId}-page)">${m}</g>` : m);
   return inView(panel) + staff + inView(out);
 }
@@ -801,4 +810,11 @@ export function barAt(
   return null;
 }
 
-export const StaffBars = { markup, barAt, layout, panSpan, panTo, timeline, placeLine, drawLine, roomFor, naturalW, visibleNotes };
+/** The single-line page's bars as the range's marks see them, laid out
+ *  exactly as `markup` draws them — what a grip is hit-tested against. */
+export const stripMarks = (
+  W: number, score: Score, focus: BarRange, hand: HandFilter = "both", showOther = true, pan = 0,
+): MarkBar[] =>
+  !W || score.bars.length === 0 ? [] : marksOf(layout(W, score, focus, visibleNotes(score, hand, showOther), pan));
+
+export const StaffBars = { markup, barAt, stripMarks, marksOf, layout, panSpan, panTo, timeline, placeLine, drawLine, roomFor, naturalW, visibleNotes };

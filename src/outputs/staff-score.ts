@@ -54,12 +54,13 @@
    ==================================================================== */
 import { StaffBars, type LineOpts, type PageLayout } from "./staff-bars";
 import { HALF } from "./staff-std";
-import { engrave } from "./engrave";
+import { engrave, type EngravedBar } from "./engrave";
+import { RangeMarks, gripsMarkup, panelMarkup, stopsOf, type End, type MarkBar } from "./range-marks";
 import { headId, headPrefix, toMei } from "./mei";
 import { Verovio, type PageSpec, type VrvPage } from "./verovio";
 import { text } from "./defs";
 import { soundingIn, type HandFilter } from "../steps";
-import type { Bar, Score } from "../types";
+import type { Bar, BarRange, Score } from "../types";
 
 /** One built-in line's height: the grand staff with two ledger lines each
  *  way, its bar numbers above, and air before the next line. */
@@ -96,11 +97,11 @@ const SPEC: PageSpec = {
   space: SPACE,
 };
 
-/** A bar on a line, in its sheet's units. */
-export interface BarSpan {
+/** A bar on a line, in its sheet's units, with its struck instants placed
+ *  — what the isolated range's panel and grips are drawn and hit-tested
+ *  against (range-marks.ts). */
+export interface BarSpan extends MarkBar {
   readonly index: number;
-  readonly x0: number;
-  readonly x1: number;
 }
 
 /** One line of music, whichever engraver set it, in its sheet's units. */
@@ -188,7 +189,10 @@ function builtIn(W: number, score: Score, hand: HandFilter, showOther: boolean):
       maxScale: i === lines.length - 1 ? LOOSE : Infinity,
       final: to === bars.length - 1,
     });
-    const spans = line.placed.map((p) => ({ index: p.eb.bar.index, x0: MARGIN_X + p.x0, x1: MARGIN_X + p.x1 }));
+    const spans = StaffBars.marksOf(line).map((m) => ({
+      ...m, index: m.bar.index, x0: MARGIN_X + m.x0, x1: MARGIN_X + m.x1,
+      stops: m.stops.map((st) => ({ q: st.q, x: MARGIN_X + st.x })),
+    }));
     return { from, to, line, bars: spans };
   });
 
@@ -205,34 +209,50 @@ function builtIn(W: number, score: Score, hand: HandFilter, showOther: boolean):
 
 // --- Verovio ------------------------------------------------------------------
 
-let engraved: { key: readonly unknown[]; pages: VrvPage[] | null } | null = null;
+interface Engraved {
+  readonly pages: VrvPage[];
+  /** The notation the pages were set from, one per bar: where each bar's
+   *  struck instants are, for the range's marks. */
+  readonly ebs: EngravedBar[];
+}
+
+let engraved: { key: readonly unknown[]; value: Engraved | null } | null = null;
 
 /** The piece set by Verovio for the notes the page shows — independent of
  *  the window, so a resize never re-sets it. Null while the engine is not
  *  loaded, and when it set nothing. */
-function verovioPages(score: Score, hand: HandFilter, showOther: boolean): VrvPage[] | null {
+function verovioPages(score: Score, hand: HandFilter, showOther: boolean): Engraved | null {
   if (!Verovio.ready()) return null;
   const key = [score, hand, showOther];
   if (!engraved || !engraved.key.every((k, i) => k === key[i])) {
     const bars = score.bars;
     const ebs = engrave(StaffBars.visibleNotes(score, hand, showOther), bars, 0, bars.length - 1);
-    engraved = { key, pages: Verovio.engrave(toMei(ebs, hand), SPEC) };
+    const pages = Verovio.engrave(toMei(ebs, hand), SPEC);
+    engraved = { key, value: pages && pages.length > 0 ? { pages, ebs } : null };
   }
-  const pages = engraved.pages;
-  return pages && pages.length > 0 ? pages : null;
+  return engraved.value;
 }
 
-function verovio(W: number, pages: readonly VrvPage[]): ScoreLayout {
+function verovio(W: number, { pages, ebs }: Engraved): ScoreLayout {
   const { tops, ...P } = paper(W, pages.length);
   const sheets = pages.map((page, i): VerovioSheet => ({
     top: tops[i],
     page,
-    systems: page.systems.map((s) => ({
+    systems: page.systems.map((s, si) => ({
       from: s.bars[0].index,
       to: s.bars[s.bars.length - 1].index,
       y: s.top - REACH,
       h: s.bottom - s.top + 2 * REACH,
-      bars: s.bars,
+      // a struck instant is where Verovio set the first head of a note
+      // struck then, on this line
+      bars: s.bars.map((b) => ({
+        ...b,
+        bar: ebs[b.index].bar,
+        stops: stopsOf(ebs[b.index], (h) => {
+          const at = page.heads.get(headId(h.note.id, 0));
+          return at && at.system === si ? at.x : undefined;
+        }),
+      })),
     })),
   }));
   return { ...P, engine: "verovio", sheets };
@@ -301,15 +321,9 @@ function strikeAt(sheets: readonly VerovioSheet[], o: LineOpts): { sheet: number
 function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: { x: number; system: number } | null): string {
   let out = "";
   const r = o.range;
-  if (r)
-    for (const sys of sheet.systems) {
-      const on = sys.bars.filter((b) => b.index >= r.from && b.index <= r.to);
-      if (!on.length) continue;
-      const xa = on[0].x0;
-      const xb = on[on.length - 1].x1;
-      out += `<rect x="${xa}" y="${sys.y}" width="${Math.max(0, xb - xa)}" height="${sys.h}" rx="4" fill="var(--panel)"/>`;
-    }
+  if (r) for (const sys of sheet.systems) out += panelMarkup(sys.bars, r, sys.y, sys.h);
   out += `<g class="vrv">${sheet.page.svg}</g>`;
+  if (r) for (const sys of sheet.systems) out += gripsMarkup(sys.bars, r, sys.y, sys.h);
   if (strike) {
     const sys = sheet.systems[strike.system];
     out += `<line x1="${strike.x}" y1="${sys.y}" x2="${strike.x}" y2="${sys.y + sys.h}" ` +
@@ -405,4 +419,26 @@ export function sightOf(
 export const contentHeight = (W: number, score: Score, hand: HandFilter, showOther: boolean): number =>
   !W || score.bars.length === 0 ? 0 : layout(W, score, hand, showOther).height;
 
-export const StaffScore = { markup, barAt, layout, lineSpan, sightOf, contentHeight };
+/** Which of the range's grips a point is on — `x` across the region, `y`
+ *  down the scrolling content — or null. */
+export function gripAt(
+  W: number, score: Score, hand: HandFilter, showOther: boolean, range: BarRange, x: number, y: number,
+): End | null {
+  if (!W || score.bars.length === 0) return null;
+  const L = layout(W, score, hand, showOther);
+  const hit = lineAt(L, x, y);
+  // the reach is in pixels, and a sheet shown smaller has fewer of them
+  return hit ? RangeMarks.gripAt(hit.sys.bars, range, hit.sx, RangeMarks.GRIP_REACH / L.k) : null;
+}
+
+/** The score time of the nearest place a range's end can sit to a point
+ *  (range-marks.ts, decision 3), or null off every line. */
+export function timeAt(
+  W: number, score: Score, hand: HandFilter, showOther: boolean, x: number, y: number,
+): number | null {
+  if (!W || score.bars.length === 0) return null;
+  const hit = lineAt(layout(W, score, hand, showOther), x, y);
+  return hit ? RangeMarks.timeAt(hit.sys.bars, hit.sx) : null;
+}
+
+export const StaffScore = { markup, barAt, gripAt, timeAt, layout, lineSpan, sightOf, contentHeight };

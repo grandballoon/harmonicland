@@ -11,15 +11,19 @@
       thing whether the clock plays them (every other view) or the learner
       walks them (practice mode, where time stands still between presses).
       The same saved section loops in the falling notes and confines a
-      lesson, with no tempo to convert.
+      lesson, with no tempo to convert. When a phrase does not begin or end
+      on a barline, its ends are trimmed in BEATS of their bars (types.ts,
+      BarRange) — still the musician's unit, still no tempo.
 
    2. A SECTION IS NOT A HAND. Which hand you drill is a choice made at the
       instrument, per sitting, and the same eight bars get practised right
       hand, then left, then together. Saving it would make one chunk three.
 
-   3. A RANGE IS SAVED ONCE. Its id IS its range, so saving bars 3–8 again
-      finds the section already there rather than growing a twin, and a
-      list is always in score order.
+   3. A RANGE IS SAVED ONCE. Its id IS its range, trims included, so
+      saving bars 3–8 again finds the section already there rather than
+      growing a twin, and a list is always in score order. Retargeting a
+      section to new bars therefore changes its id, and is refused when
+      those bars are already another section.
    ==================================================================== */
 import type { BarRange } from "./types";
 
@@ -32,24 +36,64 @@ export interface Section {
   readonly name: string;
 }
 
-const idOf = (r: BarRange): string => `${r.from}-${r.to}`;
+/** Untrimmed ranges keep the ids they had before trims existed. */
+const idOf = (r: BarRange): string =>
+  `${r.from}${r.fromBeat !== undefined ? `@${r.fromBeat}` : ""}-${r.to}${r.toBeat !== undefined ? `@${r.toBeat}` : ""}`;
 
-/** "bar 3", "bars 3–8", "the whole piece" — bar NUMBERS, from 1. */
-export const describeBars = (r: BarRange | null): string =>
-  r === null ? "the whole piece" : r.from === r.to ? `bar ${r.from + 1}` : `bars ${r.from + 1}–${r.to + 1}`;
+/** A beat as a musician numbers it — from 1, to two places at most. */
+const beatNo = (beat: number): string => String(Math.round((beat + 1) * 100) / 100);
+
+/** "bar 3", "bars 3–8", "the whole piece" — bar NUMBERS, from 1. A trimmed
+ *  range names its beats: "bar 3 beat 2 – bar 8", "bar 5 beat 2–4". A
+ *  trimmed end is where the range stops, so "– bar 8 beat 3" ends as beat
+ *  3 begins, while an untrimmed "– bar 8" plays bar 8 through. */
+export function describeBars(r: BarRange | null): string {
+  if (r === null) return "the whole piece";
+  const { from, to, fromBeat, toBeat } = r;
+  if (fromBeat === undefined && toBeat === undefined)
+    return from === to ? `bar ${from + 1}` : `bars ${from + 1}–${to + 1}`;
+  if (from === to)
+    return `bar ${from + 1} beat ${beatNo(fromBeat ?? 0)}–${toBeat === undefined ? "end" : beatNo(toBeat)}`;
+  const edge = (bar: number, beat: number | undefined): string =>
+    beat === undefined ? `bar ${bar + 1}` : `bar ${bar + 1} beat ${beatNo(beat)}`;
+  return `${edge(from, fromBeat)} – ${edge(to, toBeat)}`;
+}
 
 /** What a section is called on screen. */
 export const labelOf = (s: Section): string => s.name || describeBars(s.range);
 
+/** By where a section starts, then where it ends — trims included. */
 const inOrder = (list: Section[]): Section[] =>
-  list.sort((a, b) => a.range.from - b.range.from || a.range.to - b.range.to);
+  list.sort((a, b) =>
+    a.range.from - b.range.from || (a.range.fromBeat ?? 0) - (b.range.fromBeat ?? 0)
+    || a.range.to - b.range.to || (a.range.toBeat ?? Infinity) - (b.range.toBeat ?? Infinity));
+
+/** A section of `range` — copied, so a caller's object with more on it, or
+ *  an explicit `undefined`, never reaches storage. */
+function sectionOf(range: BarRange, name: string): Section {
+  const r: BarRange = {
+    from: range.from, to: range.to,
+    ...(range.fromBeat !== undefined && { fromBeat: range.fromBeat }),
+    ...(range.toBeat !== undefined && { toBeat: range.toBeat }),
+  };
+  return { id: idOf(r), range: r, name: name.trim() };
+}
 
 /** Add `range`, unless a section of exactly those bars exists (decision 3),
  *  in which case the list comes back unchanged. */
 export function add(list: readonly Section[], range: BarRange, name = ""): readonly Section[] {
-  const id = idOf(range);
-  if (list.some((s) => s.id === id)) return list;
-  return inOrder([...list, { id, range: { from: range.from, to: range.to }, name: name.trim() }]);
+  const s = sectionOf(range, name);
+  if (list.some((x) => x.id === s.id)) return list;
+  return inOrder([...list, s]);
+}
+
+/** Move section `id` to `range`, name and all — how a saved section is
+ *  fine-tuned. Unchanged when `id` is gone or `range` is already another
+ *  section (decision 3): two sections would otherwise share one id. */
+export function retarget(list: readonly Section[], id: string, range: BarRange): readonly Section[] {
+  const s = list.find((x) => x.id === id);
+  if (!s || find(list, range)) return list;
+  return inOrder([...list.filter((x) => x.id !== id), sectionOf(range, s.name)]);
 }
 
 export function rename(list: readonly Section[], id: string, name: string): readonly Section[] {
@@ -84,10 +128,11 @@ export const addAll = (list: readonly Section[], ranges: readonly BarRange[]): r
 export function parse(data: unknown): readonly Section[] {
   if (!Array.isArray(data)) return [];
   const isBar = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 0;
+  const isTrim = (x: unknown): boolean => x === undefined || (Number.isFinite(x) && (x as number) > 0);
   let list: readonly Section[] = [];
   for (const d of data) {
     const r = d?.range;
-    if (!r || !isBar(r.from) || !isBar(r.to) || r.from > r.to) continue;
+    if (!r || !isBar(r.from) || !isBar(r.to) || r.from > r.to || !isTrim(r.fromBeat) || !isTrim(r.toBeat)) continue;
     list = add(list, r, typeof d.name === "string" ? d.name : "");
   }
   return list;
@@ -110,4 +155,4 @@ export function keyForBytes(bytes: Uint8Array): string {
   return `file:${hash.toString(36)}-${bytes.length.toString(36)}`;
 }
 
-export const Sections = { describeBars, labelOf, add, addAll, rename, remove, find, chunk, parse, keyForBytes };
+export const Sections = { describeBars, labelOf, add, addAll, retarget, rename, remove, find, chunk, parse, keyForBytes };

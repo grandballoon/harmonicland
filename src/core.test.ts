@@ -159,6 +159,36 @@ describe("bars", () => {
     expect(Core.barTime(s, { from: 2, to: 9 })).toEqual({ start: 2, end: 3 });
     expect(Core.barTime(s, null)).toEqual({ start: 0, end: 3 });
   });
+
+  it("barTime honours trims, in beats of their own bars", () => {
+    // three one-second bars of 4/4: a beat is a quarter second
+    const s = Core.makeScore(one(3), [0, 1, 2, 3]);
+    expect(Core.barTime(s, { from: 0, fromBeat: 2, to: 2, toBeat: 1 })).toEqual({ start: 0.5, end: 2.25 });
+  });
+
+  it("barTime puts a trim that is a hair off an attack exactly on it", () => {
+    // a bar of three beats, trimmed to its second: 1/3 of a second is not exact
+    const s = Core.makeScore([{ pitch: 60, onset: 1 / 3, duration: 0.1 }], [{ at: 0, beats: 3, unit: 4 }, 1]);
+    const beat = Core.beatOfTime(s.bars[0], 1 / 3);
+    expect(Core.barTime(s, { from: 0, fromBeat: beat, to: 0 }).start).toBe(s.notes[0].onset);
+  });
+
+  it("normalizeRange keeps a trim strictly inside its bar, with one spelling", () => {
+    const s = Core.makeScore(one(3), [0, 1, 2, 3]);
+    const norm = (r: Parameters<typeof Core.normalizeRange>[1]) => Core.normalizeRange(s, r);
+    expect(norm({ from: 0, fromBeat: 0, to: 2, toBeat: 4 })).toEqual({ from: 0, to: 2 });
+    expect(norm({ from: 0, fromBeat: 4, to: 2 })).toEqual({ from: 1, to: 2 }); // the next bar, whole
+    expect(norm({ from: 0, to: 2, toBeat: 0 })).toEqual({ from: 0, to: 1 }); // the bar before, whole
+    expect(norm({ from: 1, fromBeat: 3, to: 1, toBeat: 1 })).toEqual({ from: 1, fromBeat: 3, to: 1 });
+    expect(norm({ from: 1, fromBeat: 1, to: 9, toBeat: 2 })).toEqual({ from: 1, fromBeat: 1, to: 2 });
+  });
+
+  it("sameRange compares trims too", () => {
+    expect(Core.sameRange({ from: 1, to: 2 }, { from: 1, to: 2 })).toBe(true);
+    expect(Core.sameRange({ from: 1, to: 2 }, { from: 1, fromBeat: 1, to: 2 })).toBe(false);
+    expect(Core.sameRange(null, null)).toBe(true);
+    expect(Core.sameRange(null, { from: 0, to: 0 })).toBe(false);
+  });
 });
 
 describe("meter and key on the barline", () => {

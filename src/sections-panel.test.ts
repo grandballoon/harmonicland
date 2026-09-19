@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mountSectionsPanel, type SectionsPanel } from "./sections-panel";
 import { memorySectionStore, type SectionStore } from "./section-store";
-import { add } from "./sections";
+import { add, rename } from "./sections";
 import type { Section } from "./sections";
 
 /* The panel is driven against index.html's own #sections markup, so a
@@ -78,6 +78,23 @@ describe("the sections panel", () => {
     expect(rows().map((r) => r.dataset.id)).toEqual(["0-3", "4-5"]);
     rows()[0].querySelector<HTMLButtonElement>(".section-remove")!.click();
     expect(store.load("demo").map((s) => s.id)).toEqual(["4-5"]);
+  });
+
+  it("offers to move the section just loaded onto a fine-tuned selection", () => {
+    const update = q<HTMLButtonElement>(".section-update");
+    store.save("demo", rename(add([], { from: 2, to: 3 }), "2-3", "Theme"));
+    panel.setScore("demo", 8);
+    expect(update.hidden).toBe(true);
+    rows()[0].querySelector<HTMLButtonElement>(".section-load")!.click();
+    panel.setSelection(loaded[0].range);
+    expect(update.hidden).toBe(true); // nothing to update yet
+    panel.setSelection({ from: 2, fromBeat: 1, to: 3 });
+    expect(update.hidden).toBe(false);
+    expect(update.textContent).toBe("Update Theme");
+    update.click();
+    expect(store.load("demo").map((s) => [s.id, s.name])).toEqual([["2@1-3", "Theme"]]);
+    expect(rows()[0].classList.contains("current")).toBe(true);
+    expect(update.hidden).toBe(true);
   });
 
   it("shows each score its own sections", () => {

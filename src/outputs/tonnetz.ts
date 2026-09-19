@@ -172,4 +172,4 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
 export const Tonnetz: ViewModule & {
   markup: typeof markup;
   neoTransform: typeof neoTransform;
-} = { render, keyboardRegion: () => null, tape: () => null, markup, neoTransform };
+} = { render, keyboardRegion: () => null, tape: () => null, scroller: () => null, markup, neoTransform };

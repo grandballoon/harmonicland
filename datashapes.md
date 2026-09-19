@@ -277,6 +277,7 @@ interface LiveSnapshot {
   tonnetz: TonnetzSnapshot;
   practice: PracticeSnapshot;
   pagePan: PagePan | null;
+  sheetScroll: number;
 }
 ```
 
@@ -287,6 +288,9 @@ Everything live about this instant that is neither the score nor the clock.
 It is inert (`active: false`) unless practice mode is running, the same way `perf` is inert unless a chord is being played, so every view receives it and all but one ignore it.
 
 `pagePan` is where a page has been panned by its tape, or null at rest; only the `StaffPiano` flavors read it.
+
+`sheetScroll` is how far down the whole score's sheets the reader has scrolled, in pixels.
+It belongs to the frame rather than to the lesson because more than one view shows those sheets: practice mode and `StaffPiano.keysView` both read it.
 
 ### `Frame` — exported
 
@@ -342,7 +346,30 @@ Scrolling it moves the playhead, so the notes, the keys, the sound and the scrub
 `main.ts` owns the DOM in between: it stands the scroller at `pos` every frame and seeks the clock on any position it did not set itself.
 The piano roll's tape is its falling notes, the whole piece stood on end with its start at the bottom, so a swipe down brings the notes down onto the keys.
 The `StaffPiano` flavors' tape is the page, panned across the piece, with the music sliding under a playhead that stays where it was on screen.
-Practice mode has none: its learner, not the clock, is the transport, so its scroller (`Scroller` in `practice.ts`) moves only the page.
+Practice mode has none: its learner, not the clock, is the transport, so it names a `Scroller` instead.
+Nor does `StaffPiano.keysView` while it shows the whole score, whose sheets are for reading ahead, not for moving the playhead.
+
+### `Scroller` — exported
+
+```ts
+interface Scroller {
+  region: Region;
+  axis: "x" | "y";
+  length: number;
+  origin: number;
+  follow: number | null;
+  sight: [number, number] | null;
+  home: number;
+  barAt(x: number, y: number): number | null;
+}
+```
+
+The part of a view that a native scroller is laid over and that moves only what the reader sees.
+The position less `origin` is the view's offset, which `main.ts` copies into live state for the view to draw at: down (`"y"`) is always the whole score's sheets, into `LiveSnapshot.sheetScroll`; across (`"x"`) is practice's strip of bars, into its `pan`.
+`follow` names what the scroller keeps in view — the learner's step in practice, the playhead's bar over the keys.
+When it changes and the scroller stands outside `sight`, `main.ts` scrolls to `home`; only when it changes, so a reader who scrolls away to look ahead is left there.
+`barAt` names the bar under a point in `region`, so a click on the music picks a bar; what picking means is `main.ts`'s call — practice isolates the bar, any other view sends the playhead to its start.
+A view names a scroller or a tape for a frame, never both.
 
 ### `View` — exported
 
@@ -360,6 +387,7 @@ interface ViewModule {
   render: View;
   keyboardRegion(svg: SVGSVGElement, live: LiveSnapshot): Region | null;
   tape(svg: SVGSVGElement, f: Frame): Tape | null;
+  scroller(svg: SVGSVGElement, f: Frame): Scroller | null;
 }
 ```
 
@@ -372,7 +400,7 @@ A view's layout may legitimately depend on live state: practice mode gives up a 
 That failure is silent — a hit-test disagreeing with the pixels produces no error, just wrong notes near the edge — which is why the parameter is in the type rather than the region being recomputed from a global.
 Views whose geometry is a function of size alone simply ignore it, which is itself a statement.
 
-`tape` is required for the same reason, and answered from the whole frame because where a tape stands is a function of the playhead.
+`tape` and `scroller` are required for the same reason, and answered from the whole frame because where a tape stands, and what a scroller follows, are functions of the playhead.
 
 Every renderer now exports one: `StaffStd`, `PianoRoll`, `Tonnetz`, `Combo`, `Nashville`, `Practice`, and `StaffPiano.keysView` / `StaffPiano.rollView` — eight in all, which `view-purity.test.ts` asserts.
 The two `StaffPiano` flavors each carry their own region function, which closes the old trap where `renderKeys` and `renderRoll` were distinguishable only because `stacked(...)` happened to be called twice.
@@ -1231,7 +1259,7 @@ Now the caller passes the id it defined, and one that forgets does not compile.
 
 `fall` and `hands` were positional booleans; folding them in means a call site says which is which.
 
-The practice view has no `MarkupOpts` of its own: its `markup(W, H, snapshot, held)` takes the `PracticeSnapshot` whole, the same way Nashville's takes a `PerfSnapshot`.
+The practice view has no `MarkupOpts` of its own: its `markup(W, H, snapshot, held, sheetScroll)` takes the `PracticeSnapshot` whole, the same way Nashville's takes a `PerfSnapshot`, plus the frame's scroll down the whole score.
 
 ### Notation — `src/outputs/engrave.ts`
 
@@ -1548,6 +1576,7 @@ It named chords by joystick cell alone and was blind to the degree's quality; `c
 | `ViewModule` | interface | `view.ts` | exported |
 | `PagePan` | interface | `view.ts` | exported |
 | `Tape` | interface | `view.ts` | exported |
+| `Scroller` | interface | `view.ts` | exported |
 | `PitchClass` | enum | `harmony/perfecto.ts` | exported |
 | `ScaleType` | union | `harmony/perfecto.ts` | exported |
 | `Key` | interface | `harmony/perfecto.ts` | exported |

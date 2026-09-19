@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Practice } from "./practice";
+import { Practice, rollBandH } from "./practice";
 import { Core } from "../core";
 import { makeSteps, movesBetween } from "../steps";
 import { realize } from "../harmony/progression";
@@ -7,7 +7,7 @@ import { progressionById } from "../harmony/repertoire";
 import { PerfState } from "../perf-state";
 import { TonnetzState } from "../tonnetz-state";
 import type { PracticeSnapshot } from "../practice-state";
-import type { LiveSnapshot } from "../view";
+import type { Frame, LiveSnapshot } from "../view";
 import type { Hand, RawNote } from "../types";
 
 /* The view is a pure function of a snapshot, so a "moment" here is just a
@@ -37,7 +37,6 @@ const snap = (over: Partial<PracticeSnapshot> = {}): PracticeSnapshot => ({
   // "switched off" test covers.
   showArrows: true,
   wholeScore: false,
-  scroll: 0,
   pan: 0,
   score,
   range: null,
@@ -80,13 +79,17 @@ const withChart = (index = 0, over: Partial<PracticeSnapshot> = {}) =>
 
 /** The frame's live state around a practice snapshot. Only `practice` is
  *  read by the region function; the rest is inert. */
-const live = (practice: PracticeSnapshot): LiveSnapshot => ({
+const live = (practice: PracticeSnapshot, sheetScroll = 0): LiveSnapshot => ({
   held: NONE,
   perf: PerfState.snapshot(),
   tonnetz: TonnetzState.snapshot(),
   practice,
   pagePan: null,
+  sheetScroll,
 });
+/** ...and the frame around it, for what reads the whole frame. The lesson
+ *  carries its own score, so the frame's is inert. */
+const frame = (practice: PracticeSnapshot): Frame => ({ score, t: 0, live: live(practice) });
 
 const W = 900;
 const H = 600;
@@ -608,7 +611,7 @@ describe("the page pans across the piece", () => {
   };
 
   it("names the page's band as a scroller across, resting on the bars in hand", () => {
-    const sc = Practice.scroller(stub, live(snap()))!;
+    const sc = Practice.scroller(stub, frame(snap()))!;
     expect(sc.axis).toBe("x");
     expect(sc.region).toEqual({ x: 0, y: 60, w: W, h: sheetH });
     // focus on bar 0, the first: nothing before it to pan back to
@@ -622,13 +625,13 @@ describe("the page pans across the piece", () => {
 
   it("offers nothing to scroll with no page", () => {
     const short = { ...stub, clientHeight: 420 } as unknown as SVGSVGElement;
-    expect(Practice.scroller(short, live(snap()))).toBeNull();
-    expect(Practice.scroller(stub, live(snap({ active: false, score: null, total: 0 })))).toBeNull();
+    expect(Practice.scroller(short, frame(snap()))).toBeNull();
+    expect(Practice.scroller(stub, frame(snap({ active: false, score: null, total: 0 })))).toBeNull();
   });
 
   it("slides the next bar into view, hit-testing where it is drawn", () => {
     expect(sweep(snap())).toEqual([null, 0, 1, null]);
-    const { length } = Practice.scroller(stub, live(snap()))!;
+    const { length } = Practice.scroller(stub, frame(snap()))!;
     // panned to the end: the torn start of bar 0, then all of bar 1
     expect(sweep(snap({ pan: length - W }))).toEqual([null, 0, 1, null]);
     const startX = (pan: number) => {
@@ -641,14 +644,14 @@ describe("the page pans across the piece", () => {
 
   it("ends the strip on the final barline once the last bar is in view", () => {
     const final = /<rect [^>]*width="4"[^>]*fill="var\(--grid-oct\)"/;
-    const { length } = Practice.scroller(stub, live(snap()))!;
+    const { length } = Practice.scroller(stub, frame(snap()))!;
     expect(Practice.markup(W, H, snap(), NONE)).not.toMatch(final);
     expect(Practice.markup(W, H, snap({ pan: length - W }), NONE)).toMatch(final);
   });
 
   it("holds a pan past either end at the end", () => {
     expect(Practice.markup(W, H, snap({ pan: 1e6 }), NONE))
-      .toBe(Practice.markup(W, H, snap({ pan: Practice.scroller(stub, live(snap()))!.length - W }), NONE));
+      .toBe(Practice.markup(W, H, snap({ pan: Practice.scroller(stub, frame(snap()))!.length - W }), NONE));
     expect(Practice.markup(W, H, snap({ pan: -1e6 }), NONE)).toBe(Practice.markup(W, H, snap(), NONE));
   });
 });
@@ -660,24 +663,32 @@ describe("the whole score", () => {
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
   } as unknown as SVGSVGElement;
 
-  it("sets every bar, in place of the readout and the keys", () => {
+  it("sets every bar in place of the readout, above the keys", () => {
     const svg = Practice.markup(W, H, whole(), NONE);
     expect(svg).toContain(">1</text>");
     expect(svg).toContain(">2</text>");
     expect(svg).not.toContain(">NOW<");
-    expect(svg).not.toContain("var(--key-white)");
-    // ...and keeps the header
+    // ...and keeps the header and the keyboard
     expect(svg).toContain("step 1 / 2");
+    expect(svg).toContain("var(--key-white)");
   });
 
-  it("still lights the current step in the strike gold", () => {
-    // hollow heads (these are wholes) carry their colour as a stroke
-    expect(Practice.markup(W, H, whole(), NONE)).toMatch(/<ellipse [^>]*(?:fill|stroke)="var\(--note-lit\)"/);
+  it("draws the keys exactly as the step layout does", () => {
+    const keys = (svg: string) => svg.slice(svg.indexOf(`<g transform="translate(0,${H - rollBandH(H)})">`));
+    const held = new Set([60]);
+    expect(keys(Practice.markup(W, H, whole(), held))).toBe(keys(Practice.markup(W, H, snap(), held)));
   });
 
-  it("offers no keyboard to the pointer, since it draws none", () => {
-    expect(Practice.keyboardRegion(stub, live(whole()))).toBeNull();
-    expect(Practice.keyboardRegion(stub, live(snap()))).not.toBeNull();
+  it("offers the same keyboard to the pointer as the step layout", () => {
+    expect(Practice.keyboardRegion(stub, live(whole()))).toEqual(Practice.keyboardRegion(stub, live(snap())));
+  });
+
+  it("keeps the sheets clear of the arrows and the keys", () => {
+    for (const showArrows of [false, true]) {
+      const h = Practice.sheetsH(H, showArrows);
+      expect(60 + h).toBe(H - rollBandH(H) - (showArrows ? 84 : 0));
+      expect(Practice.barAt(stub, W / 2, 60 + h + 1, live(whole({ showArrows })))).toBeNull();
+    }
   });
 
   it("is a bar picker too", () => {
@@ -687,22 +698,30 @@ describe("the whole score", () => {
   });
 
   it("names the region that scrolls, down the sheets", () => {
-    const sc = Practice.scroller(stub, live(whole()))!;
-    expect(sc.region).toEqual({ x: 0, y: 60, w: W, h: H - 60 });
+    const sc = Practice.scroller(stub, frame(whole()))!;
+    expect(sc.region).toEqual({ x: 0, y: 60, w: W, h: Practice.sheetsH(H, true) });
     expect(sc.axis).toBe("y");
     expect(sc.length).toBeGreaterThan(0);
     expect(sc.origin).toBe(0);
     expect(sc.sight).not.toBeNull();
     // the harmony bar keeps its column; the sheets scroll beside it
-    expect(Practice.scroller(stub, live(whole({ chart: twoFiveOne.chart }))))
+    expect(Practice.scroller(stub, frame(whole({ chart: twoFiveOne.chart }))))
       .toMatchObject({ region: { w: W - Practice.chartBandW(W, true) } });
+  });
+
+  it("its scroller hit-tests the bars the same way, from its region's corner", () => {
+    for (const s of [snap(), whole()]) {
+      const sc = Practice.scroller(stub, frame(s))!;
+      for (let x = 0; x < W; x += 10)
+        expect(sc.barAt(x, 112)).toBe(Practice.barAt(stub, x, sc.region.y + 112, live(s)));
+    }
   });
 
   it("hit-tests the sheets where they are scrolled to", () => {
     const y = 60 + 112;
     const at = (scroll: number) => {
       const seen = new Set<number | null>();
-      for (let x = 0; x < W; x += 10) seen.add(Practice.barAt(stub, x, y - scroll, live(whole({ scroll }))));
+      for (let x = 0; x < W; x += 10) seen.add(Practice.barAt(stub, x, y - scroll, live(whole(), scroll)));
       return seen;
     };
     // the same point on the sheet, reached with and without scrolling

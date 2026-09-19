@@ -16,7 +16,7 @@ import { StaffPiano } from "./outputs/staff-piano";
 import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
-import { Practice, type Scroller } from "./outputs/practice";
+import { Practice } from "./outputs/practice";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
 import { Verovio } from "./outputs/verovio";
@@ -40,7 +40,7 @@ import {
 import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
 import type { BarRange, Score } from "./types";
-import type { LiveSnapshot, PagePan, Region, Tape, ViewModule } from "./view";
+import type { LiveSnapshot, PagePan, Region, Scroller, Tape, ViewModule } from "./view";
 // the piece the app opens on — bundled, so it loads the same way from the
 // dev server and from the deployed site
 import openingScoreUrl from "../scores/chopin_prelude_4.midi?url";
@@ -81,6 +81,9 @@ let auditioning = false;
 // view.ts's PagePan. Set by the scroller, dropped by the view once the
 // playhead leaves it behind, and forgotten with the view or the score.
 let pagePan: PagePan | null = null;
+// How far down the whole score's sheets the reader has scrolled — see
+// view.ts, note 5. Set by the scroller, forgotten with the score.
+let sheetScroll = 0;
 
 const clock = makeClock(() => score.duration);
 
@@ -95,6 +98,7 @@ const liveSnapshot = (): LiveSnapshot => ({
   tonnetz: TonnetzState.snapshot(),
   practice: PracticeState.snapshot(),
   pagePan,
+  sheetScroll,
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
@@ -129,6 +133,7 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   steps = StepModel.makeSteps(score, "both").steps;
   auditioning = false;
   pagePan = null;
+  sheetScroll = 0;
   // a bar selection is a stretch of ONE score
   selection = null;
   looping = false;
@@ -470,6 +475,17 @@ const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
 const handsWrap = $<HTMLLabelElement>("hands-wrap");
 const handsBox = $<HTMLInputElement>("hands");
 handsBox.addEventListener("change", () => StaffPiano.setHands(handsBox.checked));
+// ...and the whole score to practice and the staff+keys view, each of
+// which keeps the setting as its own; one box, so the two cannot disagree
+const wholeScoreWrap = $<HTMLLabelElement>("whole-score-wrap");
+const wholeScore = $<HTMLInputElement>("whole-score");
+const applyWholeScore = (): void => {
+  PracticeState.setWholeScore(wholeScore.checked);
+  StaffPiano.setWholeScore(wholeScore.checked);
+};
+wholeScore.addEventListener("change", applyWholeScore);
+// the box is the default (on, in index.html), so the views start from it
+applyWholeScore();
 
 // --- paper: the light scheme ----------------------------------------
 // Every view reads as sheet music on paper by default; the box takes them
@@ -548,11 +564,9 @@ const playOther = $<HTMLInputElement>("play-other");
 // off unless you ask for them, so the checkbox that is ON by default has to
 // be the one that means "hide".
 const hideArrows = $<HTMLInputElement>("hide-arrows");
-const wholeScore = $<HTMLInputElement>("whole-score");
 practiceHand.addEventListener("change", () => PracticeState.setHand(practiceHand.value as HandFilter));
 showOther.addEventListener("change", () => PracticeState.setShowOther(showOther.checked));
 hideArrows.addEventListener("change", () => PracticeState.setShowArrows(!hideArrows.checked));
-wholeScore.addEventListener("change", () => PracticeState.setWholeScore(wholeScore.checked));
 playOther.addEventListener("change", () => {
   AudioOut.ensure();
   PracticeState.setPlayOther(playOther.checked);
@@ -585,6 +599,7 @@ function applyView(val: string): void {
   view = VIEWS[val] ?? Practice;
   handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
   practiceWrap.style.display = val === "practice" ? "" : "none";
+  wholeScoreWrap.style.display = val === "practice" || val === "std-keys" ? "" : "none";
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
   auditioning = false; // a parked step belongs to the view it was walked in
   pagePan = null; // ...and a panned page to the view it was panned in
@@ -636,18 +651,24 @@ const pointerVoice = new Map<number, Voice>(); // pointerId -> its live voice
 // a new view silently had no keyboard and any decorator around a view broke
 // hit-testing without an error.
 const rollRegion = (): Region | null => view.keyboardRegion(svg, liveSnapshot());
-/** The practice page is a second input surface: a bar clicked there is
- *  isolated, and shift-click grows the range to reach it. True when the
- *  pointer was on a bar and the selection took it. */
-function pickBar(e: MouseEvent): boolean {
-  if (view !== Practice) return false;
-  const bar = Practice.barAt(svg, e.clientX, e.clientY, liveSnapshot());
-  if (bar === null) return false;
-  // only the lesson knows how shift-click extends its range, so ask it,
-  // then adopt the answer as the one selection every view shares.
-  PracticeState.isolate(bar, e.shiftKey);
-  selectBars(PracticeState.snapshot().range);
-  return true;
+/** The music under the scroller is a second input surface: the view says
+ *  which bar a click is on (view.ts, note 5), and this says what picking
+ *  it means. In practice mode the bar is isolated, and shift-click grows
+ *  the range to reach it; elsewhere the playhead goes to the bar. */
+function pickBar(e: MouseEvent): void {
+  if (!scrolling) return;
+  const r = scoreScroll.getBoundingClientRect();
+  const bar = scrolling.barAt(e.clientX - r.left, e.clientY - r.top);
+  if (bar === null) return;
+  if (view === Practice) {
+    // only the lesson knows how shift-click extends its range, so ask it,
+    // then adopt the answer as the one selection every view shares.
+    PracticeState.isolate(bar, e.shiftKey);
+    selectBars(PracticeState.snapshot().range);
+    return;
+  }
+  auditioning = false;
+  clock.seek(score.bars[bar].start);
 }
 
 // --- the music's scroller -------------------------------------------
@@ -657,14 +678,16 @@ function pickBar(e: MouseEvent): boolean {
 // the strip, along the tape — so the wheel, the trackpad's momentum, touch
 // and the scrollbar all behave as they do on any page.
 //
-// What a position MEANS differs, and that is the one branch here. In
-// practice mode it is only where the reader is looking: its offset from
-// the view's origin is copied into PracticeState, which is how the view
-// learns it. On a tape it is the playhead: a scroll seeks the clock, and
-// every frame puts the scroller back where the playhead now stands.
+// What a position MEANS differs, and that is the one branch here. On a
+// view's scroller (view.ts, note 5) it is only where the reader is looking:
+// its offset from the scroller's origin is copied into live state — the
+// sheets' `sheetScroll` here, the practice strip's pan in PracticeState —
+// which is how the view learns it. On a tape it is the playhead: a scroll
+// seeks the clock, and every frame puts the scroller back where the
+// playhead now stands.
 const scoreScroll = $<HTMLDivElement>("score-scroll");
 const scoreSpacer = scoreScroll.firstElementChild as HTMLDivElement;
-/** The practice music the scroller is laid over, or null. */
+/** The view's scroller the native one is laid over, or null. */
 let scrolling: Scroller | null = null;
 /** The tape the scroller is laid over, as the last frame drew it, or null. */
 let tape: Tape | null = null;
@@ -676,12 +699,14 @@ function setScrollPos(v: number): void {
   if (axis === "x") scoreScroll.scrollLeft = v;
   else scoreScroll.scrollTop = v;
 }
-/** Copy the scroller's position into the lesson, as the view's offset. */
+/** Copy the scroller's position into live state, as the view's offset.
+ *  Down is always the whole score's sheets; across, only practice's strip
+ *  of bars scrolls without being a tape (view.ts, `Scroller.axis`). */
 function publishScroll(): void {
   if (!scrolling) return;
   const offset = scrollPos() - scrolling.origin;
   if (scrolling.axis === "x") PracticeState.setPan(offset);
-  else PracticeState.setScroll(offset);
+  else sheetScroll = Math.max(0, offset);
 }
 /** A reader moved the tape: the playhead goes with it. */
 function readTape(): void {
@@ -707,9 +732,9 @@ scoreScroll.addEventListener("wheel", (e) => {
 // a click, not a pointerdown: a finger that lands on a bar to scroll the
 // music must not isolate it. A click only fires when the pointer did not
 // scroll.
-scoreScroll.addEventListener("click", (e) => { pickBar(e); });
+scoreScroll.addEventListener("click", pickBar);
 
-/** The step the scroller last followed, or null to follow afresh. */
+/** What the scroller last followed, or null to follow afresh. */
 let followed: number | null = null;
 let scrollBox = "";
 
@@ -732,11 +757,11 @@ function layScroller(r: Region, ax: "x" | "y", length: number, key: string): boo
 
 /** Lay the scroller over whatever scrolls in this frame, or hide it. */
 function syncScoreScroll(live: LiveSnapshot, t: number): void {
-  const sc = view === Practice ? Practice.scroller(svg, live) : null;
+  const sc = view.scroller(svg, { score, t, live });
   const tp = sc ? null : view.tape(svg, { score, t, live });
   scrolling = sc;
   tape = tp;
-  if (sc) followLesson(sc, live);
+  if (sc) followReader(sc, live);
   else if (tp) followPlayhead(tp);
   else {
     scoreScroll.hidden = true;
@@ -745,21 +770,23 @@ function syncScoreScroll(live: LiveSnapshot, t: number): void {
   }
 }
 
-/** Practice: size what the scroller scrolls, and follow the cursor — when
- *  the learner's step moves out of sight, scroll back to it. Only when the
- *  step MOVES, so a reader who scrolls away to look ahead is left there
- *  until they play on. */
-function followLesson(sc: Scroller, live: LiveSnapshot): void {
+/** A view's scroller: size what it scrolls, and follow what the view
+ *  follows — when that moves out of sight, scroll back to it. Only when it
+ *  MOVES, so a reader who scrolls away to look ahead is left there until
+ *  the learner plays on, or the music does. */
+function followReader(sc: Scroller, live: LiveSnapshot): void {
   const { region: r, axis: ax, length, origin } = sc;
-  if (layScroller(r, ax, length, `lesson,${origin}`)) {
-    // the content changed under the scroller — a resize, or the page turned
-    // to other bars — so put it back at the offset the view is drawing
-    const offset = ax === "x" ? live.practice.pan : live.practice.scroll;
+  if (layScroller(r, ax, length, `reader,${origin}`)) {
+    // the content changed under the scroller — a resize, the page turned
+    // to other bars, another view — so put it back at the offset the view
+    // is drawing, and look afresh for what it follows
+    const offset = ax === "x" ? live.practice.pan : live.sheetScroll;
     setScrollPos(origin + offset);
     publishScroll();
+    followed = null;
   }
-  const at = live.practice.index;
-  if (followed === at || !sc.sight) return;
+  const at = sc.follow;
+  if (followed === at || at === null || !sc.sight) return;
   followed = at;
   const pos = scrollPos();
   if (pos < sc.sight[0] - 1 || pos > sc.sight[1] + 1) {
@@ -782,10 +809,6 @@ function followPlayhead(tp: Tape): void {
 }
 
 svg.addEventListener("pointerdown", (e) => {
-  if (pickBar(e)) {
-    e.preventDefault();
-    return;
-  }
   const region = rollRegion();
   if (region === null) return;
   AudioOut.ensure(); // first gesture unlocks the AudioContext

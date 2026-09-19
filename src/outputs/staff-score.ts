@@ -85,6 +85,8 @@ const SPACE = 2 * HALF;
 /** How far past its outer staff lines a Verovio line reaches, for the
  *  panel, the rule, and what counts as on the line: two ledger lines. */
 const REACH = 3 * SPACE;
+/** How far under the window's top a followed line is brought to rest. */
+const FOLLOW_AIR = 24;
 
 /** The paper, for Verovio: decision 1's sheet, at decision 2's size. */
 const SPEC: PageSpec = {
@@ -386,8 +388,21 @@ export function lineSpan(
   return null;
 }
 
+/** Following `bar` down sheets seen through a window `H` tall: the scroll
+ *  positions at which its line is in sight, and where to scroll to bring it
+ *  back — its line a little under the window's top. Null sight when the bar
+ *  is on no line. */
+export function sightOf(
+  W: number, H: number, score: Score, hand: HandFilter, showOther: boolean, bar: number,
+): { sight: [number, number] | null; home: number } {
+  const line = lineSpan(W, score, hand, showOther, bar);
+  return line
+    ? { sight: [line[1] - H, line[0]], home: Math.max(0, line[0] - FOLLOW_AIR) }
+    : { sight: null, home: 0 };
+}
+
 /** How tall the scrolling content is, in pixels. */
 export const contentHeight = (W: number, score: Score, hand: HandFilter, showOther: boolean): number =>
   !W || score.bars.length === 0 ? 0 : layout(W, score, hand, showOther).height;
 
-export const StaffScore = { markup, barAt, layout, lineSpan, contentHeight };
+export const StaffScore = { markup, barAt, layout, lineSpan, sightOf, contentHeight };

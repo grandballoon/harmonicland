@@ -13,6 +13,7 @@ const page = readFileSync(join(__dirname, "..", "index.html"), "utf8");
 let root: HTMLDetailsElement;
 let store: SectionStore;
 let loaded: Section[];
+let isolated: Section[];
 let panel: SectionsPanel;
 
 const q = <T extends Element>(sel: string): T => root.querySelector(sel) as T;
@@ -23,7 +24,11 @@ beforeEach(() => {
   root = document.getElementById("sections") as HTMLDetailsElement;
   store = memorySectionStore();
   loaded = [];
-  panel = mountSectionsPanel(root, store, (s) => loaded.push(s));
+  isolated = [];
+  panel = mountSectionsPanel(root, store, {
+    onLoad: (s) => loaded.push(s),
+    onIsolate: (s) => isolated.push(s),
+  });
 });
 
 describe("the sections panel", () => {
@@ -69,6 +74,17 @@ describe("the sections panel", () => {
     q<HTMLButtonElement>(".section-load").click();
     expect(loaded.map((s) => [s.id, s.name])).toEqual([["4-7", "Coda"]]);
     expect(root.open).toBe(true);
+  });
+
+  it("isolates a section's keys with its latest name, without loading it too", () => {
+    store.save("demo", add([], { from: 4, to: 7 }));
+    panel.setScore("demo", 8);
+    const name = q<HTMLInputElement>(".section-name");
+    name.value = "Coda";
+    name.dispatchEvent(new Event("change"));
+    q<HTMLButtonElement>(".section-keys").click();
+    expect(isolated.map((s) => [s.id, s.name])).toEqual([["4-7", "Coda"]]);
+    expect(loaded).toEqual([]);
   });
 
   it("splits the score into chunks and deletes one", () => {

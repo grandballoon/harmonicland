@@ -17,6 +17,7 @@ import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
 import { Practice } from "./outputs/practice";
+import { IsolatedKeys } from "./outputs/isolated-keys";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
 import { Verovio } from "./outputs/verovio";
@@ -30,7 +31,7 @@ import { PerfState } from "./perf-state";
 import { PracticeState } from "./practice-state";
 import { StepModel, type HandFilter, type Step } from "./steps";
 import { Loop, type Edge } from "./loop";
-import { Sections, describeBars } from "./sections";
+import { Sections, describeBars, type Section } from "./sections";
 import { localSectionStore } from "./section-store";
 import { mountSectionsPanel } from "./sections-panel";
 import {
@@ -40,7 +41,7 @@ import {
 import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
 import type { BarRange, Score } from "./types";
-import type { LiveSnapshot, PagePan, Region, Scroller, Tape, ViewModule } from "./view";
+import type { KeyboardRegion, LiveSnapshot, PagePan, Region, Scroller, Tape, ViewModule } from "./view";
 // the piece the app opens on — bundled, so it loads the same way from the
 // dev server and from the deployed site
 import openingScoreUrl from "../scores/chopin_prelude_4.midi?url";
@@ -99,6 +100,7 @@ const liveSnapshot = (): LiveSnapshot => ({
   practice: PracticeState.snapshot(),
   pagePan,
   sheetScroll,
+  selection,
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
@@ -480,14 +482,46 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
 // Loading one IS selecting its bars, so it loops here and confines a lesson
 // in practice mode by the same path as every other bar control — and the
 // hand being practised is left exactly as it was.
-const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), (s) => {
-  AudioOut.ensure();
-  selectBars(s.range);
-  const what = s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range);
-  $("status").textContent = view === Practice
-    ? `Practice · ${what} · play the lit keys · ← → step`
-    : `Looping ${what} · ← → step through it · Play goes round it`;
+const sectionName = (s: Section): string =>
+  s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range);
+const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), {
+  onLoad(s) {
+    AudioOut.ensure();
+    selectBars(s.range);
+    $("status").textContent = view === Practice
+      ? `Practice · ${sectionName(s)} · play the lit keys · ← → step`
+      : `Looping ${sectionName(s)} · ← → step through it · Play goes round it`;
+  },
+  onIsolate: isolate,
 });
+
+// --- the isolated keyboard -------------------------------------------
+// A section's keys, enlarged, and nothing else on the stage but the header
+// above it. It is a view like any other (outputs/isolated-keys.ts), kept
+// out of the view picker because it is entered from a section and left for
+// the view the picker still names — by the header's button, or Escape.
+// The page hides the tray while it is showing (index.html, data-isolated).
+const leaveKeys = $<HTMLButtonElement>("leave-keys");
+const isolated = (): boolean => view === IsolatedKeys;
+
+/** Loop the section's bars on the keyboard they are played on. */
+function isolate(s: Section): void {
+  AudioOut.ensure();
+  tray.open = false;
+  applyView("keys"); // first, so the bars below loop rather than confine a lesson
+  selectBars(s.range);
+  // start at the top of the section, unless the playhead is already in it
+  const { start, end } = Core.barTime(score, selection);
+  const t = clock.now();
+  if (t < start || t >= end) clock.seek(start);
+  $("status").textContent = `Keys of ${sectionName(s)} · Play goes round it · ← → step · Esc leaves`;
+}
+
+function leaveIsolation(): void {
+  applyView(viewSelect.value);
+  if (view !== Practice) $("status").textContent = `Back to ${viewSelect.selectedOptions[0]?.text ?? "the view"}`;
+}
+leaveKeys.addEventListener("click", leaveIsolation);
 
 // --- view toggle (one reference swap) ------------------------------
 const VIEWS: Record<string, ViewModule> = {
@@ -499,6 +533,8 @@ const VIEWS: Record<string, ViewModule> = {
   both: Combo,
   nashville: Nashville,
   practice: Practice,
+  // not in the picker: entered from a section (see isolate)
+  keys: IsolatedKeys,
 };
 const gamepadHelpTonnetz = $<HTMLDetailsElement>("gamepad-help-tonnetz");
 const gamepadHelpNashville = $<HTMLDetailsElement>("gamepad-help-nashville");
@@ -595,7 +631,21 @@ const playOther = $<HTMLInputElement>("play-other");
 // off unless you ask for them, so the checkbox that is ON by default has to
 // be the one that means "hide".
 const hideArrows = $<HTMLInputElement>("hide-arrows");
-practiceHand.addEventListener("change", () => PracticeState.setHand(practiceHand.value as HandFilter));
+// The hand is one setting with two controls: the tray's select, and the
+// isolated keyboard's buttons in the header (the tray is hidden there).
+// Either sets both, and the lesson — or, with none running, the setting
+// the isolated keys read from the practice snapshot.
+const keysHand = $("keys-hand");
+function chooseHand(h: HandFilter): void {
+  practiceHand.value = h;
+  PracticeState.setHand(h);
+  for (const b of keysHand.querySelectorAll<HTMLButtonElement>("button"))
+    b.setAttribute("aria-pressed", String(b.dataset.hand === h));
+}
+practiceHand.addEventListener("change", () => chooseHand(practiceHand.value as HandFilter));
+for (const b of keysHand.querySelectorAll<HTMLButtonElement>("button"))
+  b.addEventListener("click", () => chooseHand(b.dataset.hand as HandFilter));
+chooseHand(practiceHand.value as HandFilter);
 showOther.addEventListener("change", () => PracticeState.setShowOther(showOther.checked));
 hideArrows.addEventListener("change", () => PracticeState.setShowArrows(!hideArrows.checked));
 playOther.addEventListener("change", () => {
@@ -631,6 +681,9 @@ function applyView(val: string): void {
   handsWrap.style.display = val === "std-keys" || val === "std-roll" ? "" : "none";
   practiceWrap.style.display = val === "practice" ? "" : "none";
   wholeScoreWrap.style.display = val === "practice" || val === "std-keys" ? "" : "none";
+  document.body.toggleAttribute("data-isolated", isolated());
+  leaveKeys.hidden = !isolated();
+  keysHand.hidden = !isolated();
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
   auditioning = false; // a parked step belongs to the view it was walked in
   pagePan = null; // ...and a panned page to the view it was panned in
@@ -681,7 +734,8 @@ const pointerVoice = new Map<number, Voice>(); // pointerId -> its live voice
 // reference-identity comparisons against specific module exports, which meant
 // a new view silently had no keyboard and any decorator around a view broke
 // hit-testing without an error.
-const rollRegion = (): Region | null => view.keyboardRegion(svg, liveSnapshot());
+const rollRegion = (): KeyboardRegion | null =>
+  view.keyboardRegion(svg, { score, t: clock.now(), live: liveSnapshot() });
 /** The music under the scroller is a second input surface: the view says
  *  which bar a click is on (view.ts, note 5), and this says what picking
  *  it means. In practice mode the bar is isolated, and shift-click grows
@@ -960,6 +1014,11 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && tray.open) {
     tray.open = false;
     tray.querySelector("summary")!.focus();
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "Escape" && isolated()) {
+    leaveIsolation();
     e.preventDefault();
     return;
   }

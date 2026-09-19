@@ -120,6 +120,7 @@ conceptual view.
 | `StaffFull` (`outputs/staff-full.ts`) | `View` | linear y = f(pitch), all 88 keys |
 | `StaffStd` (`outputs/staff-std.ts`) | `View` | grand staff, y = f(diatonic step) |
 | `PianoRoll` (`outputs/piano-roll.ts`) | `View` (+ `pitchAt`) | "Synthesia": x = f(pitch), notes fall onto a keyboard |
+| `IsolatedKeys` (`outputs/isolated-keys.ts`) | `View` (+ `focusOf`) | only the keys the selected bars play, enlarged, with 3 greyed white keys either side; entered from a section |
 | `StaffPiano` (`outputs/staff-piano.ts`) | two `View`s (+ `setHands`) | grand staff stacked over the piano: keys-only band, or the full falling-notes roll; optional hand coloring by `staff` |
 | `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
 | `MidiOut` (`outputs/midi-out.ts`) | `Sink` (+ `enable/disable`) | Web MIDI out, edge-triggered note-on/off |
@@ -148,6 +149,12 @@ A section is bars, not seconds, so the same one loops in the falling-notes views
 It deliberately does not remember a hand: the hand is chosen per sitting, and loading a section leaves it as it was.
 Loading one is just `selectBars(range)`, the same path a dragged flag takes.
 To change a saved section's span, select the bars you want (loading the section first is handy but not required) and press that row's "Use selection" in the Sections panel, which moves the section (name and all) onto the selection.
+A row's "Keys" isolates the section: it loads the section and switches the stage to `IsolatedKeys`, which draws nothing but the keys those bars play, enlarged to fill the window, with three greyed white keys either side for context.
+It is an ordinary clock-driven view, so Play, the loop, the scrub bar and ← → stepping work as in any other; it is kept out of the view picker, and the header's "✕ Keys only" button or Escape goes back to the view the picker still names.
+While it shows, the tray is hidden (`body[data-isolated]`), so the header is the only other thing on screen.
+Its keys light by hand, following the practice hand (read from the practice snapshot, which carries it with no lesson running): the chosen hand in gold, the other in its dim hand colour or not at all with "show other" off, and hands together each in its own colour, so one hand's run is not lost among the other's chords.
+The tray is hidden, so the header shows a Both / R / L toggle while isolated; it and the tray's practice-hand select are one setting (`chooseHand` in `main.ts`).
+The keyboard is `PianoRoll`'s own, handed a `KeySpan` (`pitch.ts`): a span of the keyboard is the same keyboard enlarged, its keys standing taller in proportion to how few share the width, and the region `keyboardRegion` returns carries the span so `pitchAt` hears the key drawn under the pointer.
 Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with

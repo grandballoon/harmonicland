@@ -106,10 +106,22 @@ export type Barline = number | {
 };
 
 /** A contiguous run of bars by index, both ends inclusive — `from === to`
- *  is one bar. The unit practice mode isolates and loops. */
+ *  is one bar. The unit practice mode isolates and loops.
+ *
+ *  Either end may be TRIMMED to a point inside its bar, counted in that
+ *  bar's own beats (`Bar.beats`, from 0) so a trimmed edge means the same
+ *  thing at any tempo, as a bar does. Absent is the barline: the range
+ *  begins at bar `from`'s opening barline and ends at bar `to`'s closing
+ *  one. A trimmed end is exclusive, like every interval here — `toBeat: 2`
+ *  stops as beat 3 of a 4/4 bar begins. Core.normalizeRange keeps a trim
+ *  strictly inside its bar, so "trimmed to the barline" has one spelling:
+ *  absent. Only the time conversions honour a trim; a view that shows
+ *  whole bars reads `from` and `to` and is right as it stands. */
 export interface BarRange {
   readonly from: number;
   readonly to: number;
+  readonly fromBeat?: number;
+  readonly toBeat?: number;
 }
 
 /** A stretch of score time in seconds, `start` inclusive and `end`

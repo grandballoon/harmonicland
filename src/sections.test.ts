@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { add, addAll, chunk, describeBars, find, keyForBytes, labelOf, parse, remove, rename } from "./sections";
+import { add, addAll, chunk, describeBars, find, keyForBytes, labelOf, parse, remove, rename, retarget } from "./sections";
 
 /* sections.ts is a list of named bar ranges and the rules for editing it.
    Bars from 0 here; only describeBars speaks bar numbers. */
@@ -41,6 +41,42 @@ describe("describing bars", () => {
     expect(describeBars({ from: 0, to: 0 })).toBe("bar 1");
     expect(describeBars({ from: 2, to: 7 })).toBe("bars 3–8");
     expect(describeBars(null)).toBe("the whole piece");
+  });
+});
+
+describe("sections that begin or end inside a bar", () => {
+  it("are their own sections, apart from the whole bars around them", () => {
+    const list = add(add(add([], { from: 2, to: 7 }), { from: 2, fromBeat: 1, to: 7 }), { from: 2, to: 7, toBeat: 2 });
+    expect(list.map((s) => s.id)).toEqual(["2-7@2", "2-7", "2@1-7"]);
+    expect(find(list, { from: 2, fromBeat: 1, to: 7 })?.id).toBe("2@1-7");
+  });
+
+  it("name their beats, counted from one", () => {
+    expect(describeBars({ from: 2, fromBeat: 1, to: 7 })).toBe("bar 3 beat 2 – bar 8");
+    expect(describeBars({ from: 2, to: 7, toBeat: 2.5 })).toBe("bar 3 – bar 8 beat 3.5");
+    expect(describeBars({ from: 4, fromBeat: 1, to: 4, toBeat: 3 })).toBe("bar 5 beat 2–4");
+    expect(describeBars({ from: 4, fromBeat: 1, to: 4 })).toBe("bar 5 beat 2–end");
+    expect(describeBars({ from: 1, fromBeat: 1 / 3, to: 2 })).toBe("bar 2 beat 1.33 – bar 3");
+  });
+
+  it("round-trip through JSON, trims and all, and drop a trim that is no beat", () => {
+    const list = add([], { from: 2, fromBeat: 1.5, to: 3, toBeat: 2 }, "Pickup");
+    expect(parse(JSON.parse(JSON.stringify(list)))).toEqual(list);
+    expect(parse([{ range: { from: 0, to: 1, fromBeat: -1 }, name: "" }, { range: { from: 0, to: 1, toBeat: "2" }, name: "" }])).toEqual([]);
+  });
+});
+
+describe("fine-tuning a saved section", () => {
+  it("moves it to new bars, keeping its name", () => {
+    const list = rename(add([], { from: 2, to: 7 }), "2-7", "Theme");
+    const moved = retarget(list, "2-7", { from: 2, fromBeat: 1, to: 7 });
+    expect(moved.map((s) => [s.id, s.name])).toEqual([["2@1-7", "Theme"]]);
+  });
+
+  it("refuses to move it onto bars that are already a section", () => {
+    const list = add(add([], { from: 2, to: 7 }), { from: 0, to: 1 });
+    expect(retarget(list, "2-7", { from: 0, to: 1 })).toBe(list);
+    expect(retarget(list, "gone", { from: 4, to: 5 })).toBe(list);
   });
 });
 

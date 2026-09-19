@@ -32,7 +32,7 @@
       points on a line it IS optimal, and it is also the only answer that
       draws arrows a hand could actually follow.
    ==================================================================== */
-import type { Bar, BarRange, Hand, Note, Pitch, Score } from "./types";
+import type { Hand, Note, Pitch, Score, TimeRange } from "./types";
 
 /** Which hands the learner is being asked to play. `both` is hands
  *  together; `upper`/`lower` name the same two streams `Hand` does, so
@@ -173,15 +173,15 @@ export function stepSounding(steps: readonly Step[], t: number): Step | null {
   return attack.length || sustain.length ? { ...s, attack, sustain } : null;
 }
 
-/** The steps that begin inside a run of bars: every step whose `at` falls
- *  in [bars[from].start, bars[to].end). Both edges are the same `stepAt`
- *  a scrub uses, so "isolate bar 3" and "scrub to the start of bar 3" land
- *  on the same step. A range with no steps in it (a bar of rests, or of
- *  the other hand only) comes back empty with `first === last`. */
-export function spanOf(steps: readonly Step[], bars: readonly Bar[], range: BarRange): Span {
-  const from = bars[Math.max(0, Math.min(range.from, bars.length - 1))];
-  const to = bars[Math.max(0, Math.min(range.to, bars.length - 1))];
-  return { first: stepAt(steps, from.start), last: stepAt(steps, to.end) };
+/** The steps that begin inside a stretch of time: every step whose `at`
+ *  falls in [start, end). Both edges are the same `stepAt` a scrub uses,
+ *  so "isolate bar 3" and "scrub to the start of bar 3" land on the same
+ *  step. Takes seconds, not bars: Core.barTime is the one place a range of
+ *  bars — trimmed or not — becomes time, and this stays a leaf. A stretch
+ *  with no steps in it (a bar of rests, or of the other hand only) comes
+ *  back empty with `first === last`. */
+export function spanOf(steps: readonly Step[], time: TimeRange): Span {
+  return { first: stepAt(steps, time.start), last: stepAt(steps, time.end) };
 }
 
 /** Pair the keys held during `current` with the keys struck in `next`, one

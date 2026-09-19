@@ -319,6 +319,10 @@ scrub.addEventListener("change", () => {
 // playhead, and a click on a bar of the practice page. ← → and ◀ ▶ walk
 // one step at a time, round the selection when it is looping.
 //
+// Edges snap to barlines. Finer, an edge may be trimmed into its bar, onto
+// a note (loop.ts, decision 2): Alt-drag a flag, or press { or } on the
+// step under the playhead. The boxes then show the beat beside the bar.
+//
 // The clock owns the loop in SECONDS and every view and sink follows the
 // clock, so nothing past this block knows loops exist; PracticeState owns
 // the lesson's copy. This block owns the selection itself and pushes it
@@ -332,6 +336,8 @@ const scrubTrack = $("scrub-track");
 const loopBtn = $<HTMLButtonElement>("loop");
 const barFrom = $<HTMLInputElement>("bar-from");
 const barTo = $<HTMLInputElement>("bar-to");
+const beatFrom = $("beat-from");
+const beatTo = $("beat-to");
 let selection: BarRange | null = null; // null is the whole piece
 // Outside practice mode, does playback go round the selection? Kept apart
 // from the selection so switching looping off never forgets the bars.
@@ -347,6 +353,8 @@ function applyBars(): void {
 
   barFrom.value = selection ? String(selection.from + 1) : "";
   barTo.value = selection ? String(selection.to + 1) : "";
+  showBeat(beatFrom, selection?.fromBeat, "starts on");
+  showBeat(beatTo, selection?.toBeat, "stops as");
   const max = String(Math.max(1, score.bars.length));
   barFrom.max = max;
   barTo.max = max;
@@ -366,11 +374,20 @@ function applyBars(): void {
   scrubTrack.style.setProperty("--loop-b", String(d > 0 ? span.end / d : 1));
 }
 
+/** A trimmed edge's beat beside its bar box, as a musician numbers it. */
+function showBeat(el: HTMLElement, beat: number | undefined, verb: string): void {
+  el.hidden = beat === undefined;
+  if (beat === undefined) return;
+  const n = String(Math.round((beat + 1) * 100) / 100);
+  el.textContent = `·${n}`;
+  el.title = `Trimmed: ${verb} beat ${n} of the bar`;
+}
+
 /** Choose bars. Choosing bars is asking to loop them, so it switches looping
  *  on — unless `loop` says otherwise, as "all" does: widening to the whole
  *  piece is not a request to go round it forever. */
 function selectBars(r: BarRange | null, loop = true): void {
-  selection = r && Core.clampRange(r, score.bars.length);
+  selection = r && Core.normalizeRange(score, r);
   if (loop) looping = true;
   applyBars();
   if (view !== Practice)
@@ -380,15 +397,21 @@ function selectBars(r: BarRange | null, loop = true): void {
 }
 
 /** Boxes -> selection. Either box empty means "from the first" / "to the
- *  last"; both empty means the whole piece. */
+ *  last"; both empty means the whole piece. A box names a whole bar, so
+ *  the edge typed into goes to its barline, and the other keeps its trim. */
 function readBarInputs(): void {
   const a = parseInt(barFrom.value, 10);
   const b = parseInt(barTo.value, 10);
   const hasA = Number.isFinite(a);
   const hasB = Number.isFinite(b);
-  selectBars(!hasA && !hasB ? null : {
-    from: (hasA ? a : 1) - 1,
-    to: (hasB ? b : score.bars.length) - 1,
+  if (!hasA && !hasB) return selectBars(null);
+  const from = (hasA ? a : 1) - 1;
+  const to = (hasB ? b : score.bars.length) - 1;
+  const was = selection;
+  selectBars({
+    from, to,
+    ...(was?.fromBeat !== undefined && was.from === from && { fromBeat: was.fromBeat }),
+    ...(was?.toBeat !== undefined && was.to === to && { toBeat: was.toBeat }),
   });
 }
 
@@ -406,7 +429,12 @@ const stepBy = (dir: 1 | -1): void => (view === Practice ? PracticeState.step(di
 
 /** [ / ]: pull one edge of the selection to the bar under the playhead. */
 const markBar = (edge: Edge): void =>
-  selectBars(Loop.withBar(selection, edge, Core.barAt(score, clock.now()).index, score.bars.length));
+  selectBars(Loop.withBar(score, selection, edge, Core.barAt(score, clock.now()).index));
+
+/** { / }: pull one edge to the step under the playhead — trimmed into its
+ *  bar, unless that step sits on the barline. */
+const markStep = (edge: Edge): void =>
+  selectBars(Loop.withEdge(score, selection, edge, Loop.stepEdge(score, steps, clock.now(), edge)));
 
 barFrom.addEventListener("change", readBarInputs);
 barTo.addEventListener("change", readBarInputs);
@@ -435,11 +463,14 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
     const rect = scrubTrack.getBoundingClientRect();
     const thumb = parseFloat(getComputedStyle(scrubTrack).getPropertyValue("--thumb"));
     const frac = Math.max(0, Math.min(1, (e.clientX - rect.left - thumb / 2) / (rect.width - thumb)));
-    const bar = Loop.snapBar(score.bars, frac * score.duration, edge, selection);
-    const next = Loop.withBar(selection, edge, bar, score.bars.length);
+    // bars by default; with Alt held, notes too — the trim (decision 2 of loop.ts)
+    const t = frac * score.duration;
+    const next = e.altKey
+      ? Loop.withEdge(score, selection, edge, Loop.snapFine(score, steps, t, edge, selection))
+      : Loop.withBar(score, selection, edge, Loop.snapBar(score.bars, t, edge, selection));
     const cur = selection ?? { from: 0, to: score.bars.length - 1 };
     // a wobble, not a move — unless it is the drag that switches looping on
-    if ((looping || view === Practice) && next.from === cur.from && next.to === cur.to) return;
+    if ((looping || view === Practice) && Core.sameRange(Core.normalizeRange(score, next), cur)) return;
     selectBars(next);
   });
 }
@@ -731,8 +762,52 @@ scoreScroll.addEventListener("wheel", (e) => {
 }, { passive: false });
 // a click, not a pointerdown: a finger that lands on a bar to scroll the
 // music must not isolate it. A click only fires when the pointer did not
-// scroll.
-scoreScroll.addEventListener("click", pickBar);
+// scroll — and one that ends a grip's drag picks nothing.
+scoreScroll.addEventListener("click", (e) => {
+  if (gripDragged) gripDragged = false;
+  else pickBar(e);
+});
+
+// The isolated range's grips (outputs/range-marks.ts): drag one to move
+// that end of the selection, to a barline or the gap before a note — the
+// same edge, and the same rules, as Alt-dragging a flag on the scrub bar.
+/** The end being dragged, or null. */
+let gripping: Edge | null = null;
+/** Did the pointer that just lifted drag a grip? Then its click is not a pick. */
+let gripDragged = false;
+const inScroll = (e: PointerEvent): [number, number] => {
+  const r = scoreScroll.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+};
+scoreScroll.addEventListener("pointerdown", (e) => {
+  gripDragged = false;
+  const edge = scrolling?.gripAt(...inScroll(e)) ?? null;
+  if (!edge || e.button !== 0) return;
+  gripping = edge;
+  scoreScroll.setPointerCapture(e.pointerId);
+  PracticeState.holdFocus(true);
+  e.preventDefault(); // no text selection, no scroll
+});
+scoreScroll.addEventListener("pointermove", (e) => {
+  if (!gripping) {
+    scoreScroll.style.cursor = scrolling?.gripAt(...inScroll(e)) ? "ew-resize" : "";
+    return;
+  }
+  const t = scrolling?.timeAt(...inScroll(e)) ?? null;
+  if (t === null) return;
+  const next = Core.normalizeRange(score,
+    Loop.withEdge(score, selection, gripping, Loop.snapFine(score, steps, t, gripping, selection)));
+  gripDragged = true;
+  if (!Core.sameRange(next, selection)) selectBars(next);
+});
+const releaseGrip = (e: PointerEvent): void => {
+  if (!gripping) return;
+  gripping = null;
+  if (scoreScroll.hasPointerCapture(e.pointerId)) scoreScroll.releasePointerCapture(e.pointerId);
+  PracticeState.holdFocus(false);
+};
+scoreScroll.addEventListener("pointerup", releaseGrip);
+scoreScroll.addEventListener("pointercancel", releaseGrip);
 
 /** What the scroller last followed, or null to follow afresh. */
 let followed: number | null = null;
@@ -891,7 +966,8 @@ window.addEventListener("keydown", (e) => {
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
   // In practice mode the arrow keys walk the cursor by hand — back to see a
   // transition again, forward to skip one — [ and ] mark the bar the
-  // cursor stands in, and nothing else on the keyboard means anything.
+  // cursor stands in, { and } the step, and nothing else on the keyboard
+  // means anything.
   // Not the harness below: it presses chords THROUGH LiveKeys, and the
   // practice cursor grades everything that arrives there. A stray "1" would sound a C major triad and advance the
   // lesson with it.
@@ -900,6 +976,8 @@ window.addEventListener("keydown", (e) => {
     else if (e.key === "ArrowRight") { PracticeState.step(1); e.preventDefault(); }
     else if ((e.key === "[" || e.key === "]") && !e.repeat && score.notes.length > 0)
       markBar(e.key === "[" ? "start" : "end"); // the clock stands on the cursor's step
+    else if ((e.key === "{" || e.key === "}") && !e.repeat && score.notes.length > 0)
+      markStep(e.key === "{" ? "start" : "end");
     return;
   }
   if (steps.length > 0) {
@@ -910,6 +988,10 @@ window.addEventListener("keydown", (e) => {
     }
     if ((e.key === "[" || e.key === "]") && !e.repeat) {
       markBar(e.key === "[" ? "start" : "end");
+      return;
+    }
+    if ((e.key === "{" || e.key === "}") && !e.repeat) {
+      markStep(e.key === "{" ? "start" : "end");
       return;
     }
   }

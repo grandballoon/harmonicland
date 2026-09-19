@@ -99,7 +99,9 @@
 import { PianoRoll, KEYB, type KeyStyle } from "./piano-roll";
 import { StaffBars } from "./staff-bars";
 import { StaffScore } from "./staff-score";
+import { RangeMarks } from "./range-marks";
 import { Core } from "../core";
+import { describeBars } from "../sections";
 import { glowFilter, glowAttr, text } from "./defs";
 import { isWhite, pitchLabel, PITCH_NAMES } from "../pitch";
 import {
@@ -669,9 +671,7 @@ export function whereLabel(s: PracticeSnapshot): string {
   const within = last - first;
   if (s.range === null)
     return s.current === null ? `done · ${s.total} steps` : `step ${s.index + 1} / ${s.total}`;
-  const bars = s.range.from === s.range.to
-    ? `bar ${s.range.from + 1}`
-    : `bars ${s.range.from + 1}–${s.range.to + 1}`;
+  const bars = describeBars(s.range);
   if (within === 0) return `${bars} · nothing to play`;
   return `${bars} · step ${s.index - first + 1} / ${within}`;
 }
@@ -817,6 +817,29 @@ function barIn(W: number, H: number, live: LiveSnapshot, x: number, y: number): 
   return StaffBars.barAt(mainW, s.score, s.focus, x, s.hand, s.showOther, s.pan);
 }
 
+/** The range's grip under a point, in `barIn`'s terms: on the whole
+ *  score's sheets or the single-line page, whichever is showing. */
+function gripIn(W: number, H: number, live: LiveSnapshot, x: number, y: number): "start" | "end" | null {
+  const s = live.practice;
+  if (!s.active || !s.score || !s.range) return null;
+  const mainW = W - chartBandW(W, s.chart !== null);
+  if (x >= mainW || y < 0) return null;
+  if (scoreShown(s))
+    return y > sheetsH(H, s.showArrows) ? null
+      : StaffScore.gripAt(mainW, s.score, s.hand, s.showOther, s.range, x, y + live.sheetScroll);
+  if (y > sheetBandH(H, s.showArrows)) return null;
+  return RangeMarks.gripAt(StaffBars.stripMarks(mainW, s.score, s.focus, s.hand, s.showOther, s.pan), s.range, x);
+}
+
+/** Where a grip dragged to a point would go, in `barIn`'s terms. */
+function timeIn(W: number, live: LiveSnapshot, x: number, y: number): number | null {
+  const s = live.practice;
+  if (!s.active || !s.score) return null;
+  const mainW = W - chartBandW(W, s.chart !== null);
+  if (scoreShown(s)) return StaffScore.timeAt(mainW, s.score, s.hand, s.showOther, x, y + live.sheetScroll);
+  return RangeMarks.timeAt(StaffBars.stripMarks(mainW, s.score, s.focus, s.hand, s.showOther, s.pan), x);
+}
+
 /** Where the music scrolls: the whole score down its sheets, or the page
  *  across the piece. Null when neither is showing, and there is nothing
  *  to scroll. */
@@ -836,6 +859,8 @@ function scroller(svg: SVGSVGElement, { live }: Frame): Scroller | null {
       follow: s.index,
       ...StaffScore.sightOf(w, h, s.score, s.hand, s.showOther, cursorBar(s)),
       barAt: (x, y) => barIn(W, H, live, x, y),
+      gripAt: (x, y) => gripIn(W, H, live, x, y),
+      timeAt: (x, y) => timeIn(W, live, x, y),
     };
   }
   const sheetH = sheetBandH(H, s.showArrows);
@@ -854,6 +879,8 @@ function scroller(svg: SVGSVGElement, { live }: Frame): Scroller | null {
     sight: [origin + a, origin + b],
     home: origin,
     barAt: (x, y) => barIn(W, H, live, x, y),
+    gripAt: (x, y) => gripIn(W, H, live, x, y),
+    timeAt: (x, y) => timeIn(W, live, x, y),
   };
 }
 

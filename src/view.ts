@@ -155,6 +155,14 @@ export interface Scroller {
    *  region's top-left, at the offset the frame was drawn at — or null off
    *  every bar. */
   barAt(x: number, y: number): number | null;
+  /** Which grip of the isolated range (outputs/range-marks.ts) a point is
+   *  on, measured as `barAt` measures — or null when it is on none, or
+   *  the view draws no range. */
+  gripAt(x: number, y: number): "start" | "end" | null;
+  /** The score time of the nearest place a range's end can sit to a
+   *  point, measured as `barAt` measures — or null off the music. Where a
+   *  grip dragged there would go, before loop.ts snaps it to a step. */
+  timeAt(x: number, y: number): number | null;
 }
 
 /** An output projection. Genuinely a function of its arguments now. */

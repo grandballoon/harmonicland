@@ -45,7 +45,8 @@
    THE RANGE is the third: which BARS the lesson is confined to. A learner
    breaks a piece down by isolating a bar, or a run of them, and drilling
    that alone; the cursor then walks only the steps that begin inside
-   those bars (a Span, cut by steps.spanOf from the score's own bars) and
+   those bars — or between a range's trims, when it begins or ends inside
+   a bar (a Span, cut by steps.spanOf from Core.barTime's seconds) — and
    LOOPS — finishing the last step of the range lands on its first, because
    a passage isolated to be repeated should repeat. The whole piece, with
    no range, still ends: `index === total` is "done", as it always was.
@@ -53,7 +54,7 @@
    cursor's, and the two meet only in `enter`.
    ==================================================================== */
 import { LiveKeys, type Voice } from "./live-keys";
-import { barAt, clampRange } from "./core";
+import { barAt, barTime, normalizeRange } from "./core";
 import { entryAfter, entryAt, type Chart, type ChartEntry } from "./harmony/progression";
 import {
   makeSteps, movesBetween, otherHand, soundingIn, spanOf, stepAt,
@@ -202,6 +203,11 @@ const HIT_MS = 620;
 const nowMs = (): number => performance.now();
 
 let session: Session | null = null;
+/** The bars the sheet shows, pinned while a grip of the range is dragged:
+ *  the single-line page lays itself out around the range, and re-laying it
+ *  under a pointer that is moving the range would move the bars out from
+ *  under it. Released, the page catches up with the range at once. */
+let heldFocus: BarRange | null = null;
 let fresh = new Set<Pitch>(); // struck since this step began
 /** pitch -> nowMs() of the press that was graded correct. Bounded by the
  *  keyboard (one entry per pitch, overwritten), so it never grows. */
@@ -303,7 +309,7 @@ function enter(i: number): void {
   // A range with no steps in it parks at the range's own start instead.
   session.seek(
     cur ? cur.at
-    : session.range ? session.score.bars[session.range.from].start
+    : session.range ? barTime(session.score, session.range).start
     : session.score.duration,
   );
   reconcileOther(cfg.playOther ? otherAt(cur) : new Set());
@@ -387,6 +393,7 @@ function end(): void {
   hits.clear();
   cachedMoves = [];
   session = null;
+  heldFocus = null;
 }
 
 /** Switch hands mid-lesson without losing your place: re-cut the score,
@@ -408,9 +415,9 @@ function setHand(hand: HandFilter): void {
  *  you out of it. */
 function setRange(range: BarRange | null): void {
   if (!session) return;
-  session.range = range && clampRange(range, session.score.bars.length);
+  session.range = range && normalizeRange(session.score, range);
   session.span = session.range
-    ? spanOf(session.steps.steps, session.score.bars, session.range)
+    ? spanOf(session.steps.steps, barTime(session.score, session.range))
     : wholeSpan(session.steps);
   const { first, last } = session.span;
   if (session.index < first || session.index >= last) enter(first);
@@ -419,11 +426,14 @@ function setRange(range: BarRange | null): void {
 /** Isolate one bar, or — with `extend` — grow the current range to reach
  *  it. The shape a click on a bar has: plain click selects, shift-click
  *  extends. A click with nothing isolated yet extends from nothing, which
- *  is the same as selecting. */
+ *  is the same as selecting. Extending moves only the edge it has to, so
+ *  a trim on the other one stays; a click inside the range extends nothing. */
 function isolate(bar: number, extend = false): void {
   if (!session) return;
   const r = session.range;
-  setRange(extend && r ? { from: Math.min(r.from, bar), to: Math.max(r.to, bar) } : { from: bar, to: bar });
+  if (!extend || !r) return setRange({ from: bar, to: bar });
+  if (bar < r.from) setRange({ from: bar, to: r.to, ...(r.toBeat !== undefined && { toBeat: r.toBeat }) });
+  else if (bar > r.to) setRange({ from: r.from, to: bar, ...(r.fromBeat !== undefined && { fromBeat: r.fromBeat }) });
 }
 
 /** Move the cursor by hand — back to see a transition again, forward to
@@ -464,6 +474,11 @@ function seekToTime(t: number): void {
 
 const reset = (): void => enter(session?.span.first ?? 0);
 
+/** Pin the bars the sheet shows, or let them go (see `heldFocus`). */
+function holdFocus(on: boolean): void {
+  heldFocus = on && session ? snapshot().focus : null;
+}
+
 const snapshot = (): PracticeSnapshot => {
   const cur = session && step(session.index);
   // the bar the sheet should open to: the isolated bars, or the one the
@@ -471,7 +486,7 @@ const snapshot = (): PracticeSnapshot => {
   // empty range shows itself.
   const here = session && barAt(session.score, cur ? cur.at : session.score.duration).index;
   const focus: BarRange = session
-    ? session.range ?? { from: here!, to: here! }
+    ? heldFocus ?? session.range ?? { from: here!, to: here! }
     : { from: 0, to: 0 };
   const held = LiveKeys.held();
   const autoPitches = new Set(liveAuto().map((v) => v.pitch));
@@ -521,6 +536,7 @@ const snapshot = (): PracticeSnapshot => {
 
 export const PracticeState = {
   begin,
+  holdFocus,
   end,
   setHand,
   setShowOther,

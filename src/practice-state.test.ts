@@ -640,6 +640,18 @@ describe("isolating bars", () => {
     expect(range()).toEqual({ from: 1, to: 1 });
   });
 
+  it("confines the lesson between a range's trims, and extending keeps the far one", () => {
+    // bar 2 from beat 3, up to beat 3 of bar 3: the steps at 1.5s and 2s
+    start(eight);
+    PracticeState.setRange({ from: 1, fromBeat: 2, to: 2, toBeat: 2 });
+    expect(PracticeState.snapshot().span).toEqual({ first: 3, last: 5 });
+    expect(at()).toBe(3);
+    PracticeState.isolate(3, true);
+    expect(range()).toEqual({ from: 1, fromBeat: 2, to: 3 });
+    PracticeState.isolate(2, true); // inside: nothing to extend
+    expect(range()).toEqual({ from: 1, fromBeat: 2, to: 3 });
+  });
+
   it("extends from nothing as a plain select", () => {
     start(eight);
     PracticeState.isolate(2, true);

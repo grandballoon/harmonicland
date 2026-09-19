@@ -164,5 +164,6 @@ export const Nashville: ViewModule & { markup: typeof markup } = {
   render,
   keyboardRegion: () => null,
   tape: () => null,
+  scroller: () => null,
   markup,
 };

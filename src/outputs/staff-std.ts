@@ -160,6 +160,7 @@ export const StaffStd: ViewModule & {
   render,
   keyboardRegion: () => null,
   tape: () => null,
+  scroller: () => null,
   markup,
   staves,
   notehead,

@@ -1,10 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { keysBandH, rollBandH } from "./staff-piano";
 import { PianoRoll, KEYB } from "./piano-roll";
 import { StaffPiano } from "./staff-piano";
 import { StaffBars } from "./staff-bars";
+import { StaffScore } from "./staff-score";
 import { makeSteps } from "../steps";
 import { Core } from "../core";
+import { PerfState } from "../perf-state";
+import { TonnetzState } from "../tonnetz-state";
+import { PracticeState } from "../practice-state";
+import type { Frame } from "../view";
 
 const score = Core.makeScore([{ pitch: 60, onset: 0, duration: 1 }]);
 const G = "testGlow"; // markup needs the caller to name its filter
@@ -130,5 +135,108 @@ describe("the page as a tape", () => {
 
   it("forgets a bar the score no longer has", () => {
     expect(StaffPiano.standAt(W, piece, t, { bar: 99, pan: 0 })).toBeNull();
+  });
+});
+
+describe("the whole score, over the keys", () => {
+  // a piece long enough to need a second sheet
+  const notes = Array.from({ length: 160 }, (_, i) => ({ pitch: 60 + (i % 12), onset: i * 0.25, duration: 0.25 }));
+  const piece = Core.makeScore(notes, Array.from({ length: 41 }, (_, i) => i));
+  const W = 1000;
+  const H = 700;
+  const topH = H - keysBandH(H);
+  const svg = { clientWidth: W, clientHeight: H } as SVGSVGElement;
+  const frame = (t: number, sheetScroll = 0): Frame => ({
+    score: piece,
+    t,
+    live: {
+      held: NONE,
+      perf: PerfState.snapshot(),
+      tonnetz: TonnetzState.snapshot(),
+      practice: PracticeState.snapshot(),
+      pagePan: null,
+      sheetScroll,
+    },
+  });
+  const drawn = (f: Frame, view = StaffPiano.keysView): string => {
+    const el = { ...svg, setAttribute: () => {}, innerHTML: "" } as unknown as SVGSVGElement;
+    view.render(el, f);
+    return el.innerHTML;
+  };
+  afterEach(() => StaffPiano.setWholeScore(false));
+
+  it("sets the sheets in place of the page, lit where the score sounds, over the same keys", () => {
+    const page = drawn(frame(2.3));
+    StaffPiano.setWholeScore(true);
+    const whole = drawn(frame(2.3));
+    expect(whole).toContain(StaffPiano.sheets(W, topH, piece, 2.3, "spGlow", 0));
+    expect(whole).toContain("var(--note-lit)");
+    const keys = (svg: string) => svg.slice(svg.indexOf(`<g transform="translate(0,${topH})">`));
+    expect(keys(whole)).toBe(keys(page));
+  });
+
+  it("draws the sheets where the reader scrolled them", () => {
+    StaffPiano.setWholeScore(true);
+    expect(drawn(frame(2.3, 400))).toContain(StaffPiano.sheets(W, topH, piece, 2.3, "spGlow", 400));
+    expect(drawn(frame(2.3, 400))).not.toBe(drawn(frame(2.3)));
+  });
+
+  it("scrolls without moving the playhead: a scroller, and no tape", () => {
+    expect(StaffPiano.keysView.scroller(svg, frame(2.3))).toBeNull();
+    expect(StaffPiano.keysView.tape(svg, frame(2.3))).not.toBeNull();
+    StaffPiano.setWholeScore(true);
+    expect(StaffPiano.keysView.tape(svg, frame(2.3))).toBeNull();
+    const sc = StaffPiano.keysView.scroller(svg, frame(2.3))!;
+    expect(sc.region).toEqual({ x: 0, y: 0, w: W, h: topH });
+    expect(sc.axis).toBe("y");
+    expect(sc.length).toBe(StaffScore.contentHeight(W, piece, "both", true));
+    expect(sc.length).toBeGreaterThan(topH);
+  });
+
+  it("follows the playhead's bar, and brings its line back into sight", () => {
+    StaffPiano.setWholeScore(true);
+    const early = StaffPiano.keysView.scroller(svg, frame(2.3))!;
+    expect(early.follow).toBe(2);
+    // the first line is in sight from the top of the first sheet
+    expect(early.sight![0]).toBeLessThanOrEqual(0);
+    expect(early.sight![1]).toBeGreaterThanOrEqual(0);
+    const late = StaffPiano.keysView.scroller(svg, frame(38.5))!;
+    expect(late.follow).toBe(38);
+    const [top] = StaffScore.lineSpan(W, piece, "both", true, 38)!;
+    expect(late.sight![1]).toBe(top);
+    expect(late.home).toBeGreaterThan(early.home);
+    expect(late.home).toBeGreaterThanOrEqual(late.sight![0]);
+    expect(late.home).toBeLessThanOrEqual(late.sight![1]);
+  });
+
+  it("names the bar a click on the sheets is over, where they are scrolled to", () => {
+    StaffPiano.setWholeScore(true);
+    const [top, bottom] = StaffScore.lineSpan(W, piece, "both", true, 38)!;
+    const y = (top + bottom) / 2;
+    const bars = (scroll: number) => {
+      const sc = StaffPiano.keysView.scroller(svg, frame(2.3, scroll))!;
+      const seen = new Set<number | null>();
+      for (let x = 0; x < W; x += 5) seen.add(sc.barAt(x, y - scroll));
+      return seen;
+    };
+    // the same line, reached by scrolling down to it
+    expect(bars(top - 50)).toContain(38);
+    expect(bars(top - 50)).toContain(null); // the desk beside the sheet
+    expect(bars(top - 150)).toEqual(bars(top - 50));
+    // ...and nothing but desk in the gap above the first sheet
+    const sc = StaffPiano.keysView.scroller(svg, frame(2.3))!;
+    expect(sc.barAt(W / 2, 5)).toBeNull();
+  });
+
+  it("leaves the falling-notes flavor on its page", () => {
+    StaffPiano.setWholeScore(true);
+    expect(StaffPiano.rollView.scroller(svg, frame(2.3))).toBeNull();
+    expect(StaffPiano.rollView.tape(svg, frame(2.3))).not.toBeNull();
+  });
+
+  it("names nothing to scroll before a score loads", () => {
+    StaffPiano.setWholeScore(true);
+    const empty = { ...frame(0), score: Core.makeScore([]) };
+    expect(StaffPiano.keysView.scroller(svg, empty)).toBeNull();
   });
 });

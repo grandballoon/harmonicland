@@ -47,7 +47,18 @@
       puts the playhead; main.ts owns the DOM in between. Required, like
       keyboardRegion, and `() => null` where there is none. Practice mode
       scrolls without moving anything but the page (the learner, not the
-      clock, is its transport), so its scroller is its own.
+      clock, is its transport), so it names a scroller instead (note 5).
+
+   5. A view may also name a SCROLLER: part of itself a native scroller is
+      laid over that moves only what the reader sees — the whole score's
+      sheets, practice's strip of bars. The scroll position is live state
+      like any other (`sheetScroll`, practice's `pan`) and reaches the
+      view through the frame. The view answers what it is following — the
+      learner's step, the playhead's bar — and where to scroll to bring it
+      back into sight when it moves out of it, and which bar a point on it
+      is over — so a click on the music can pick a bar, whatever picking
+      means where it is clicked. Required, like `tape`, and a view names
+      one or the other for a frame, never both.
    ==================================================================== */
 import type { Score, Pitch } from "./types";
 import type { PerfSnapshot } from "./perf-state";
@@ -68,6 +79,9 @@ export interface LiveSnapshot {
   /** Where the page has been panned away from resting on the playhead's
    *  bar, or null at rest. See `PagePan`. */
   pagePan: PagePan | null;
+  /** How far down the whole score's sheets the reader has scrolled, in
+   *  pixels — whichever view is showing them. See note 5. */
+  sheetScroll: number;
 }
 
 /** A page panned by its tape. At rest the page is fitted to the bar the
@@ -115,6 +129,34 @@ export interface Tape {
   seek(pos: number): { t: number; pagePan: PagePan | null };
 }
 
+/** A native scroller over part of a view, moving only what the reader
+ *  sees. See note 5. Positions are the scroller's own; the view's offset
+ *  is the position less `origin`. */
+export interface Scroller {
+  /** The region of the svg the scrolling music fills. */
+  region: Region;
+  /** Down the whole score's sheets (offset in `sheetScroll`), or across
+   *  practice's strip (offset in its `pan`). */
+  axis: "x" | "y";
+  /** Everything that scrolls, along the axis, in pixels. */
+  length: number;
+  /** The position at which the view's offset is 0. */
+  origin: number;
+  /** What the scroller follows, or null for nothing: when it changes and
+   *  is out of `sight`, the scroller goes `home`. Only when it CHANGES, so
+   *  a reader who scrolls away to look ahead is left there. */
+  follow: number | null;
+  /** The positions at which what is followed is in sight, or null when
+   *  there is nothing to follow. */
+  sight: [number, number] | null;
+  /** Where to scroll to bring what is followed back into sight. */
+  home: number;
+  /** Which bar a point in `region` is over, `x` and `y` measured from the
+   *  region's top-left, at the offset the frame was drawn at — or null off
+   *  every bar. */
+  barAt(x: number, y: number): number | null;
+}
+
 /** An output projection. Genuinely a function of its arguments now. */
 export type View = (svg: SVGSVGElement, f: Frame) => void;
 
@@ -135,4 +177,7 @@ export interface ViewModule {
    *  if it has none — see note 4. Answered from the same frame that was
    *  rendered, so the scroller always lies over what is on screen. */
   tape(svg: SVGSVGElement, f: Frame): Tape | null;
+  /** The part of this view a scroll moves only the reader's eye across,
+   *  or null if it has none — see note 5. Null whenever `tape` is not. */
+  scroller(svg: SVGSVGElement, f: Frame): Scroller | null;
 }

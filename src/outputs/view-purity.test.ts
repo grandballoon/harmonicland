@@ -116,6 +116,7 @@ describe("every view answers where its keyboard is", () => {
     tonnetz: TonnetzState.snapshot(),
     practice: PracticeState.snapshot(),
     pagePan: null,
+    sheetScroll: 0,
   };
   const VIEWS: Record<string, ViewModule> = {
     StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice,
@@ -142,6 +143,12 @@ describe("every view answers where its keyboard is", () => {
     expect(tape.region.w).toBeGreaterThan(0);
     expect(tape.region.h).toBeGreaterThan(0);
     expect(tape.seek(tape.pos).t).toBeCloseTo(0.5); // standing still is staying put
+  });
+
+  it.each(Object.keys(VIEWS))("%s names a scroller or a tape, never both", (name) => {
+    const f = { score, t: 0.5, live: idle };
+    const v = VIEWS[name];
+    expect(v.scroller(stubSvg, f) !== null && v.tape(stubSvg, f) !== null).toBe(false);
   });
 
   it("gives the two stacked flavors DIFFERENT regions", () => {

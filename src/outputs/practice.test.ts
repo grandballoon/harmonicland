@@ -86,6 +86,7 @@ const live = (practice: PracticeSnapshot, sheetScroll = 0): LiveSnapshot => ({
   practice,
   pagePan: null,
   sheetScroll,
+  selection: null,
 });
 /** ...and the frame around it, for what reads the whole frame. The lesson
  *  carries its own score, so the frame's is inert. */
@@ -449,7 +450,7 @@ describe("the view is a keyboard", () => {
   const stub = { clientWidth: W, clientHeight: H } as SVGSVGElement;
 
   it("puts its playable region at the bottom of the svg", () => {
-    const r = Practice.keyboardRegion(stub, live(snap()))!;
+    const r = Practice.keyboardRegion(stub, frame(snap()))!;
     expect(r.y + r.h).toBe(H);
     expect(r.w).toBe(W);
   });
@@ -458,7 +459,7 @@ describe("the view is a keyboard", () => {
     // The hit-test and the drawing must agree about where the keys stop.
     // They disagreed silently before: a region wider than the keyboard
     // sounds a wrong note near the edge and reports no error at all.
-    const r = Practice.keyboardRegion(stub, live(withChart()))!;
+    const r = Practice.keyboardRegion(stub, frame(withChart()))!;
     expect(r.w).toBe(W - Practice.chartBandW(W, true));
     expect(r.w).toBeLessThan(W);
   });
@@ -687,7 +688,7 @@ describe("the whole score", () => {
   });
 
   it("offers the same keyboard to the pointer as the step layout", () => {
-    expect(Practice.keyboardRegion(stub, live(whole()))).toEqual(Practice.keyboardRegion(stub, live(snap())));
+    expect(Practice.keyboardRegion(stub, frame(whole()))).toEqual(Practice.keyboardRegion(stub, frame(snap())));
   });
 
   it("keeps the sheets clear of the arrows and the keys", () => {

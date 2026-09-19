@@ -156,6 +156,7 @@ describe("the whole score, over the keys", () => {
       practice: PracticeState.snapshot(),
       pagePan: null,
       sheetScroll,
+      selection: null,
     },
   });
   const drawn = (f: Frame, view = StaffPiano.keysView): string => {

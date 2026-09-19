@@ -73,7 +73,7 @@
 
    It appears only when `snapshot.chart` does — a lesson from a MIDI file
    carries no analysis and gets no bar, and the layout is then exactly what
-   it always was. That is also why `keyboardRegion` takes the live state:
+   it always was. That is also why `keyboardRegion` takes the frame:
    the keyboard gives up the column the bar occupies, so the hit-test has
    to know whether the column is there. See view.ts, note 3.
 
@@ -787,7 +787,7 @@ export const render: View = (svg, { live }) => {
 // drawing does: a region wider than the keys it describes would silently
 // sound the wrong note near the right-hand edge. Both layouts draw the same
 // keys in the same place, so the region does not ask which is showing.
-const keyboardRegion = (svg: SVGSVGElement, live: LiveSnapshot): Region | null => {
+const keyboardRegion = (svg: SVGSVGElement, { live }: Frame): Region | null => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
   const band = rollBandH(H);

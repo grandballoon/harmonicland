@@ -6,7 +6,8 @@
    setSelection; what it gives back is a section to load, through onLoad.
    main.ts turns that into the one shared selection, so a loaded section
    loops in the falling notes and confines a lesson by the same path a
-   dragged flag does.
+   dragged flag does. A row's "Keys" gives the section back through
+   onIsolate instead: load it, and show only the keys it plays.
 
    A saved section's span is edited with the one bar selection, not a
    second editor: select the bars you want (loading the section first is
@@ -26,8 +27,16 @@ export interface SectionsPanel {
   setSelection(range: BarRange | null): void;
 }
 
+/** What a row hands back. Each is given the section as it now stands. */
+export interface SectionActions {
+  /** Select its bars. */
+  onLoad(s: Section): void;
+  /** Select its bars, and isolate the keys they play. */
+  onIsolate(s: Section): void;
+}
+
 export function mountSectionsPanel(
-  root: HTMLDetailsElement, store: SectionStore, onLoad: (s: Section) => void,
+  root: HTMLDetailsElement, store: SectionStore, { onLoad, onIsolate }: SectionActions,
 ): SectionsPanel {
   const q = <T extends HTMLElement>(sel: string): T => root.querySelector(sel) as T;
   const count = q<HTMLSpanElement>(".sections-count");
@@ -74,7 +83,9 @@ export function mountSectionsPanel(
     load.className = "section-load";
     load.textContent = Sections.describeBars(s.range);
     load.title = "Loop these bars, or practise them";
-    load.addEventListener("click", () => onLoad(list.find((x) => x.id === s.id) ?? s)); // the latest name
+    // the latest name, which a rename may have changed since this row was built
+    const latest = (): Section => list.find((x) => x.id === s.id) ?? s;
+    load.addEventListener("click", () => onLoad(latest()));
 
     const name = document.createElement("input");
     name.className = "section-name";
@@ -91,6 +102,13 @@ export function mountSectionsPanel(
         e.stopPropagation(); // leave the panel open; Escape meant the edit
       }
     });
+
+    const keys = document.createElement("button");
+    keys.className = "section-keys";
+    keys.textContent = "Keys";
+    keys.title = "Show only the keys these bars play, enlarged";
+    keys.setAttribute("aria-label", `Isolate the keys of ${Sections.labelOf(s)}`);
+    keys.addEventListener("click", () => onIsolate(latest()));
 
     const use = document.createElement("button");
     use.className = "section-use";
@@ -111,7 +129,7 @@ export function mountSectionsPanel(
       render();
     });
 
-    li.append(load, name, use, del);
+    li.append(load, name, keys, use, del);
     return li;
   }
 

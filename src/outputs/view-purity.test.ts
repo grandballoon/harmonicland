@@ -8,6 +8,7 @@ import { StaffStd } from "./staff-std";
 import { Combo } from "./combo";
 import { StaffPiano } from "./staff-piano";
 import { Practice } from "./practice";
+import { IsolatedKeys } from "./isolated-keys";
 import { Core } from "../core";
 import { PerfState, type PerfSnapshot } from "../perf-state";
 import { TonnetzState } from "../tonnetz-state";
@@ -117,19 +118,21 @@ describe("every view answers where its keyboard is", () => {
     practice: PracticeState.snapshot(),
     pagePan: null,
     sheetScroll: 0,
+    selection: null,
   };
+  const at = { score, t: 0.5, live: idle };
   const VIEWS: Record<string, ViewModule> = {
-    StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice,
+    StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice, IsolatedKeys,
     "StaffPiano.keysView": StaffPiano.keysView,
     "StaffPiano.rollView": StaffPiano.rollView,
   };
 
-  it("covers all eight views", () => {
-    expect(Object.keys(VIEWS)).toHaveLength(8);
+  it("covers all nine views", () => {
+    expect(Object.keys(VIEWS)).toHaveLength(9);
   });
 
   it.each(Object.keys(VIEWS))("%s returns a region or an explicit null", (name) => {
-    const r = VIEWS[name].keyboardRegion(stubSvg, idle);
+    const r = VIEWS[name].keyboardRegion(stubSvg, at);
     if (r === null) return;
     expect(r.w).toBeGreaterThan(0);
     expect(r.h).toBeGreaterThan(0);
@@ -154,8 +157,8 @@ describe("every view answers where its keyboard is", () => {
   it("gives the two stacked flavors DIFFERENT regions", () => {
     // They were previously distinguishable only by closure identity, so
     // hoisting the shared stacked(...) factory would have collapsed them.
-    expect(StaffPiano.keysView.keyboardRegion(stubSvg, idle))
-      .not.toEqual(StaffPiano.rollView.keyboardRegion(stubSvg, idle));
+    expect(StaffPiano.keysView.keyboardRegion(stubSvg, at))
+      .not.toEqual(StaffPiano.rollView.keyboardRegion(stubSvg, at));
   });
 
   it("no view reads live state behind its signature", () => {

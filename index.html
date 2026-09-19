@@ -27,6 +27,8 @@
     --key-white: #cdd7e2;   /* piano-roll white keys (cool off-white)  */
     --key-black: #11161d;   /* piano-roll black keys                   */
     --key-press: #46d39a;   /* a key you're HOLDING (cool green)       */
+    --key-mute-white:#5d6773; /* keys beside a passage, greyed: context  */
+    --key-mute-black:#2a313b;
     --hand-r:    #4ac1ff;   /* hand coloring: upper staff / right hand */
     --hand-l:    #c77dff;   /* hand coloring: lower staff / left hand  */
     --hand-r-dim:#20607f;   /* ...the same hands, receded: context, not a cue */
@@ -67,6 +69,8 @@
     --key-white: #fffefa;
     --key-black: #1c1b19;
     --key-press: #1e9563;
+    --key-mute-white:#d8d2c4;
+    --key-mute-black:#8a857b;
     --hand-r:    #1f6fd1;
     --hand-l:    #8b3fc6;
     --hand-r-dim:#a9c7ec;
@@ -148,7 +152,8 @@
   .section-name::placeholder { color: var(--ink-dim); }
   .section-name:hover { border-color: var(--line-acc); }
   .section-name:focus { outline: none; border-color: var(--note); background: #1d242e; }
-  .section-use { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
+  .section-keys, .section-use { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
+  .section-keys:hover { color: var(--note-lit); border-color: var(--note-lit); }
   .section-use:not(:disabled):hover { color: var(--loop); border-color: var(--loop); }
   .section-remove { padding: 5px 9px; color: var(--ink-dim); }
   .section-remove:hover { color: var(--wrong); border-color: var(--wrong); }
@@ -237,6 +242,20 @@
   .loop-edge.end::after { right: 0; }
   .scrub-track.loop-enabled .loop-edge { display: block; }
   .scrub-track.looping .loop-edge, .loop-edge:hover { opacity: 1; }
+
+  /* the way out of the isolated keyboard: shown only while it is, and lit,
+     since it is the one control that says the stage is showing less */
+  #leave-keys { color: var(--note-lit); border-color: var(--note-lit); white-space: nowrap; }
+  #leave-keys[hidden] { display: none; }
+  /* ...and beside it, which hand the keys light for: the practice hand */
+  .hand-pick { display: inline-flex; gap: 4px; }
+  .hand-pick[hidden] { display: none; }
+  .hand-pick button { padding-left: 10px; padding-right: 10px; color: var(--ink-dim); }
+  .hand-pick button[aria-pressed="true"] { color: var(--note-lit); border-color: var(--note-lit); }
+  .hand-pick button[data-hand="upper"][aria-pressed="true"] { color: var(--hand-r); border-color: var(--hand-r); }
+  .hand-pick button[data-hand="lower"][aria-pressed="true"] { color: var(--hand-l); border-color: var(--hand-l); }
+  /* ...and while it is, the keys are the only thing below the header */
+  body[data-isolated] #tray { display: none; }
 
   /* the Loop switch: lit in the edges' colour while looping */
   #loop[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
@@ -378,6 +397,16 @@
       <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>
     </span>
   </span>
+  <!-- Shown only while the stage is isolated to a section's keys (a
+       section's "Keys" button, in the tray); back to the chosen view. -->
+  <!-- The hand the isolated keys light for; the same setting as the
+       practice hand in the tray, which is hidden while they show. -->
+  <span class="hand-pick" id="keys-hand" role="group" aria-label="Hand" hidden>
+    <button data-hand="both" title="Both hands, each in its own colour">Both</button>
+    <button data-hand="upper" title="Right hand lit; the left dimmed">R</button>
+    <button data-hand="lower" title="Left hand lit; the right dimmed">L</button>
+  </span>
+  <button id="leave-keys" hidden title="Back to the full view (Esc)">✕ Keys only</button>
   <span class="status" id="status"></span>
 </div>
 

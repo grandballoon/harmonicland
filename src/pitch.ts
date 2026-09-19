@@ -70,3 +70,35 @@ export const spell = (n: Note): Spelt => ({
   acc: n.spelling.acc || "",
   octave: octaveFor(n.pitch, n.spelling),
 });
+
+/** A stretch of the keyboard: every key from `lo` to `hi`, inclusive.
+ *  Both ends are WHITE keys — a keyboard cut off on a black key would
+ *  leave half a key hanging over its edge, so `spanOf` rounds outward. */
+export interface KeySpan {
+  lo: Pitch;
+  hi: Pitch;
+}
+
+/** All 88 keys: what every keyboard draws unless told otherwise. */
+export const FULL_SPAN: KeySpan = { lo: LOW, hi: HIGH };
+
+/** The white keys of a span, low to high. */
+export const whitesIn = (s: KeySpan): Pitch[] => {
+  const out: Pitch[] = [];
+  for (let p = s.lo; p <= s.hi; p++) if (isWhite(p)) out.push(p);
+  return out;
+};
+
+/** The span that holds every key from `lo` to `hi` and `pad` white keys
+ *  more beyond each end — rounded outward to a white key where it would
+ *  otherwise stop on a black one, and clamped to the 88, so a pad past A0
+ *  or C8 is only as wide as there is keyboard. */
+export function spanOf(lo: Pitch, hi: Pitch, pad = 0): KeySpan {
+  let a = Math.max(LOW, lo);
+  let b = Math.min(HIGH, hi);
+  for (let i = 0; i < pad && a > LOW; i++) do a--; while (!isWhite(a));
+  for (let i = 0; i < pad && b < HIGH; i++) do b++; while (!isWhite(b));
+  if (!isWhite(a)) a--;
+  if (!isWhite(b)) b++;
+  return { lo: a, hi: b };
+}

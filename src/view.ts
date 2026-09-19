@@ -30,14 +30,16 @@
       silently broke hit-testing. ViewModule makes keyboardRegion a REQUIRED
       member: a new view cannot compile without answering the question.
 
-   3. keyboardRegion takes the FRAME'S live state, not just the svg. A
-      view's layout may legitimately depend on it — practice mode gives up
-      a column to the harmony bar when, and only when, the lesson has a
-      chart to put in it — and a region function that could not see that
-      would hand back a keyboard wider than the one it drew. Silently: a
-      hit-test disagreeing with the pixels by 200px produces no error, just
-      wrong notes near the edge. Most views ignore the parameter, which is
-      a statement that their geometry is a function of size alone.
+   3. keyboardRegion takes the FRAME, not just the svg. A view's layout
+      may legitimately depend on it — practice mode gives up a column to
+      the harmony bar when, and only when, the lesson has a chart to put in
+      it, and the isolated keyboard is as wide as the keys the selected
+      bars of the score play — and a region function that could not see
+      that would hand back a keyboard other than the one it drew.
+      Silently: a hit-test disagreeing with the pixels by 200px produces no
+      error, just wrong notes near the edge. Most views ignore the
+      parameter, which is a statement that their geometry is a function of
+      size alone.
 
    4. A view driven by the clock may name a TAPE: part of itself that a
       native scroller is laid over, standing for the playhead. Scrolling it
@@ -59,8 +61,14 @@
       is over — so a click on the music can pick a bar, whatever picking
       means where it is clicked. Required, like `tape`, and a view names
       one or the other for a frame, never both.
+
+   6. A keyboard need not be all 88 keys. The region a view hands back
+      for its keyboard says which stretch of keys it holds (`span`), so a
+      pointer on an enlarged octave is heard as the key drawn under it and
+      not as the key that would be there on the whole keyboard.
    ==================================================================== */
-import type { Score, Pitch } from "./types";
+import type { BarRange, Score, Pitch } from "./types";
+import type { KeySpan } from "./pitch";
 import type { PerfSnapshot } from "./perf-state";
 import type { TonnetzSnapshot } from "./tonnetz-state";
 import type { PracticeSnapshot } from "./practice-state";
@@ -82,6 +90,10 @@ export interface LiveSnapshot {
   /** How far down the whole score's sheets the reader has scrolled, in
    *  pixels — whichever view is showing them. See note 5. */
   sheetScroll: number;
+  /** The one bar selection every view shares, or null for the whole piece.
+   *  What the clock loops and a lesson is confined to; a view may also
+   *  draw to it, as the isolated keyboard draws only the keys it plays. */
+  selection: BarRange | null;
 }
 
 /** A page panned by its tape. At rest the page is fitted to the bar the
@@ -109,6 +121,12 @@ export interface Region {
   y: number;
   w: number;
   h: number;
+}
+
+/** Where a playable keyboard sits, and which of its keys — note 6. */
+export interface KeyboardRegion extends Region {
+  /** The keys drawn edge to edge across the region; absent for all 88. */
+  span?: KeySpan;
 }
 
 /** A native scroller over part of a view, standing for the playhead. See
@@ -178,9 +196,9 @@ export interface ViewModule {
    *  view must answer the question rather than be forgotten. Views with no
    *  keyboard write `() => null`, which is a declaration, not an omission.
    *
-   *  `live` is the SAME snapshot the frame was rendered from, so the
-   *  region can never describe a layout other than the one on screen. */
-  keyboardRegion(svg: SVGSVGElement, live: LiveSnapshot): Region | null;
+   *  `f` is the SAME frame that was rendered, so the region can never
+   *  describe a layout other than the one on screen. */
+  keyboardRegion(svg: SVGSVGElement, f: Frame): KeyboardRegion | null;
   /** The part of this view a scroll moves the playhead through, or null
    *  if it has none — see note 4. Answered from the same frame that was
    *  rendered, so the scroller always lies over what is on screen. */

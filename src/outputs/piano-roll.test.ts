@@ -171,3 +171,41 @@ describe("PianoRoll as a tape", () => {
     expect(PianoRoll.tapeFor(W, H, score, 0)).toBeNull();
   });
 });
+
+/* A span is the same keyboard, enlarged: its keys share the whole width,
+   stand taller in proportion, and are hit-tested from the same layout. */
+describe("PianoRoll drawing a span of the keyboard", () => {
+  const span = { lo: 59, hi: 72 }; // B3–C5: eight white keys
+  const svg = stubSvg(W, 1000);
+
+  it("draws only the span's keys, edge to edge", () => {
+    const L = PianoRoll.geometry(W, 1000, span);
+    expect(L.whites).toEqual([59, 60, 62, 64, 65, 67, 69, 71, 72]);
+    expect(L.ww * L.whites.length).toBeCloseTo(W);
+  });
+
+  it("stands taller in proportion to how few keys share the width", () => {
+    const L = PianoRoll.geometry(W, 1000, span);
+    expect(L.keyH).toBeCloseTo((KEYB * 52) / 9);
+    expect(PianoRoll.geometry(W, 1000).keyH).toBe(KEYB); // all 88: unchanged
+  });
+
+  it("hears the key drawn under the pointer, not the one the whole keyboard has there", () => {
+    const L = PianoRoll.geometry(W, 1000, span);
+    const region = { x: 0, y: 0, w: W, h: L.keyH, span };
+    const white = (i: number) => PianoRoll.pitchAt(svg, (i + 0.5) * L.ww, L.keyH - 5, region);
+    expect(white(0)).toBe(59);
+    expect(white(8)).toBe(72);
+    const cs = L.lane(61); // C♯4, between C4 and D4
+    expect(PianoRoll.pitchAt(svg, cs.x + cs.w / 2, 5, region)).toBe(61);
+  });
+
+  it("draws no black key hanging off either end", () => {
+    const m = PianoRoll.markup(W, 400, score, 0, { glowId: G, held: NONE, fall: false, span });
+    const xs = [...m.matchAll(/<rect x="([-\d.]+)"[^>]*width="([\d.]+)"/g)].map((r) => [+r[1], +r[2]]);
+    for (const [x, w] of xs) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x + w).toBeLessThanOrEqual(W + 1e-6);
+    }
+  });
+});

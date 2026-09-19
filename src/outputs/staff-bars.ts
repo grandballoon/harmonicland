@@ -255,6 +255,70 @@ export function panSpan(
   };
 }
 
+/** Score time and x along the page's strip at rest, each the other's
+ *  inverse: how a view that pans the page as it moves the playhead keeps
+ *  the two in step. Straight lines between the columns — a column is where
+ *  its instant is printed, and between two of them the time is spread
+ *  evenly — clamped at the ends of the piece. Also the strip's window,
+ *  [left, right), for saying whether an x is in sight. */
+export interface Timeline {
+  xOf(t: number): number;
+  timeAt(x: number): number;
+  view: readonly [number, number];
+}
+
+const timelines = new WeakMap<PageLayout, Timeline>();
+
+export function timeline(
+  W: number, score: Score, focus: BarRange, hand: HandFilter, showOther: boolean,
+): Timeline {
+  const [from, to] = focusOf(score.bars, focus);
+  const page = strip(W, score, from, to, visibleNotes(score, hand, showOther));
+  let tl = timelines.get(page);
+  if (!tl) timelines.set(page, (tl = timelineOf(page, W)));
+  return tl;
+}
+
+function timelineOf(page: PageLayout, W: number): Timeline {
+  const xs: number[] = [];
+  const ts: number[] = [];
+  const knot = (x: number, t: number): void => {
+    // strictly rising in both, so either way round is a function
+    if (xs.length && (x <= xs[xs.length - 1] || t <= ts[ts.length - 1])) return;
+    xs.push(x);
+    ts.push(t);
+  };
+  const { placed } = page;
+  // the piece's start sits on its first column; only a piece that opens on
+  // nothing at all needs the bar's edge to stand in for it
+  const first = placed[0];
+  const opening = first.eb.columns[0];
+  if (!opening || opening.t > first.eb.bar.start) knot(first.x0, first.eb.bar.start);
+  for (const p of placed) p.eb.columns.forEach((c, i) => knot(p.colX[i], c.t));
+  const last = placed[placed.length - 1];
+  knot(last.x1, last.eb.bar.end);
+  return {
+    xOf: (t) => interpolate(ts, xs, t),
+    timeAt: (x) => interpolate(xs, ts, x),
+    view: page.view ?? [0, W],
+  };
+}
+
+/** y at x on the line through the knots (xs rising), flat past either end. */
+function interpolate(xs: readonly number[], ys: readonly number[], x: number): number {
+  if (x <= xs[0]) return ys[0];
+  const n = xs.length - 1;
+  if (x >= xs[n]) return ys[n];
+  let lo = 0;
+  let hi = n;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] <= x) lo = mid;
+    else hi = mid;
+  }
+  return ys[lo] + ((ys[hi] - ys[lo]) * (x - xs[lo])) / (xs[hi] - xs[lo]);
+}
+
 /** A line seen through its window panned `pan` pixels from rest: the bars
  *  the window reaches, moved into place and torn at its edges. A line
  *  with no window is returned as it is. */
@@ -737,4 +801,4 @@ export function barAt(
   return null;
 }
 
-export const StaffBars = { markup, barAt, layout, panSpan, panTo, placeLine, drawLine, roomFor, naturalW, visibleNotes };
+export const StaffBars = { markup, barAt, layout, panSpan, panTo, timeline, placeLine, drawLine, roomFor, naturalW, visibleNotes };

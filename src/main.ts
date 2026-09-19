@@ -19,6 +19,7 @@ import { Nashville } from "./outputs/nashville";
 import { Practice, type Scroller } from "./outputs/practice";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
+import { Verovio } from "./outputs/verovio";
 import { LiveKeys, type Voice } from "./live-keys";
 import { TonnetzState } from "./tonnetz-state";
 import { LiveMidi } from "./live-midi";
@@ -39,7 +40,7 @@ import {
 import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
 import type { BarRange, Score } from "./types";
-import type { LiveSnapshot, Region, ViewModule } from "./view";
+import type { LiveSnapshot, PagePan, Region, Tape, ViewModule } from "./view";
 // the piece the app opens on — bundled, so it loads the same way from the
 // dev server and from the deployed site
 import openingScoreUrl from "../scores/chopin_prelude_4.midi?url";
@@ -76,6 +77,10 @@ let steps: readonly Step[] = [];
 // that should still be heard, so the loop hands them this instead. Any
 // other transport action ends it.
 let auditioning = false;
+// Where the page has been panned by its tape, or null at rest — see
+// view.ts's PagePan. Set by the scroller, dropped by the view once the
+// playhead leaves it behind, and forgotten with the view or the score.
+let pagePan: PagePan | null = null;
 
 const clock = makeClock(() => score.duration);
 
@@ -89,13 +94,14 @@ const liveSnapshot = (): LiveSnapshot => ({
   perf: PerfState.snapshot(),
   tonnetz: TonnetzState.snapshot(),
   practice: PracticeState.snapshot(),
+  pagePan,
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
 // is handed, with no ambient state reached for behind the signature.
 clock.onFrame((t) => {
   const live = liveSnapshot();
-  syncScoreScroll(live);
+  syncScoreScroll(live, t);
   view.render(svg, { score, t, live });
   const sounding = clock.isPlaying() || auditioning;
   AudioOut.at(score, t, sounding);
@@ -122,6 +128,7 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   chart = analysis;
   steps = StepModel.makeSteps(score, "both").steps;
   auditioning = false;
+  pagePan = null;
   // a bar selection is a stretch of ONE score
   selection = null;
   looping = false;
@@ -580,6 +587,7 @@ function applyView(val: string): void {
   practiceWrap.style.display = val === "practice" ? "" : "none";
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
   auditioning = false; // a parked step belongs to the view it was walked in
+  pagePan = null; // ...and a panned page to the view it was panned in
   // ...and forget which degree keys the Perfecto harness thinks are down.
   // Practice mode ignores its keyup, so without this a degree held across
   // the switch would look held forever, and the next release of any other
@@ -643,19 +651,29 @@ function pickBar(e: MouseEvent): boolean {
 }
 
 // --- the music's scroller -------------------------------------------
-// The whole score's sheets and the practice page's strip are drawn in the
-// svg like everything else, but scrolled by a native scroller laid over
-// them — down the sheets, across the strip — so the wheel, the trackpad's
-// momentum, touch and the scrollbar all behave as they do on any page. Its
-// position, less the view's origin, is copied into PracticeState, which is
-// how the view learns the offset.
+// The whole score's sheets, the practice page's strip and a view's tape
+// (view.ts, note 4) are drawn in the svg like everything else, but
+// scrolled by a native scroller laid over them — down the sheets, across
+// the strip, along the tape — so the wheel, the trackpad's momentum, touch
+// and the scrollbar all behave as they do on any page.
+//
+// What a position MEANS differs, and that is the one branch here. In
+// practice mode it is only where the reader is looking: its offset from
+// the view's origin is copied into PracticeState, which is how the view
+// learns it. On a tape it is the playhead: a scroll seeks the clock, and
+// every frame puts the scroller back where the playhead now stands.
 const scoreScroll = $<HTMLDivElement>("score-scroll");
 const scoreSpacer = scoreScroll.firstElementChild as HTMLDivElement;
-/** What the scroller is laid over now, or null while it is hidden. */
+/** The practice music the scroller is laid over, or null. */
 let scrolling: Scroller | null = null;
-const scrollPos = (): number => (scrolling?.axis === "x" ? scoreScroll.scrollLeft : scoreScroll.scrollTop);
+/** The tape the scroller is laid over, as the last frame drew it, or null. */
+let tape: Tape | null = null;
+/** Where this code last put the tape's scroller — anything else is a reader. */
+let tapeAt = 0;
+let axis: "x" | "y" = "y";
+const scrollPos = (): number => (axis === "x" ? scoreScroll.scrollLeft : scoreScroll.scrollTop);
 function setScrollPos(v: number): void {
-  if (scrolling?.axis === "x") scoreScroll.scrollLeft = v;
+  if (axis === "x") scoreScroll.scrollLeft = v;
   else scoreScroll.scrollTop = v;
 }
 /** Copy the scroller's position into the lesson, as the view's offset. */
@@ -665,11 +683,24 @@ function publishScroll(): void {
   if (scrolling.axis === "x") PracticeState.setPan(offset);
   else PracticeState.setScroll(offset);
 }
-scoreScroll.addEventListener("scroll", publishScroll);
+/** A reader moved the tape: the playhead goes with it. */
+function readTape(): void {
+  const pos = scrollPos();
+  if (!tape || Math.abs(pos - tapeAt) < 0.5) return;
+  const to = tape.seek(pos);
+  tapeAt = pos;
+  pagePan = to.pagePan;
+  auditioning = false;
+  clock.seek(to.t);
+}
+scoreScroll.addEventListener("scroll", () => {
+  publishScroll();
+  readTape();
+});
 // a mouse wheel only turns vertically, and a strip that scrolls only across
 // would ignore it; turn it into the axis there is
 scoreScroll.addEventListener("wheel", (e) => {
-  if (scrolling?.axis !== "x" || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+  if (scoreScroll.hidden || axis !== "x" || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
   scoreScroll.scrollLeft += e.deltaY;
   e.preventDefault();
 }, { passive: false });
@@ -682,33 +713,48 @@ scoreScroll.addEventListener("click", (e) => { pickBar(e); });
 let followed: number | null = null;
 let scrollBox = "";
 
-/** Lay the scroller over the music, size what it scrolls, and follow the
- *  cursor: when the learner's step moves out of sight, scroll back to it.
- *  Only when the step MOVES, so a reader who scrolls away to look ahead
- *  is left there until they play on. */
-function syncScoreScroll(live: LiveSnapshot): void {
+/** Lay the scroller over `r`, `length` long along `ax`. True when that
+ *  changed where it lies or what it scrolls — the position it held then
+ *  means nothing, and the caller puts it where the view is drawing. */
+function layScroller(r: Region, ax: "x" | "y", length: number, key: string): boolean {
+  const box = `${ax},${r.x},${r.y},${r.w},${r.h},${length},${key}`;
+  if (box === scrollBox) return false;
+  scrollBox = box;
+  axis = ax;
+  scoreScroll.dataset.axis = ax;
+  Object.assign(scoreScroll.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+  Object.assign(scoreSpacer.style, ax === "x"
+    ? { width: `${length}px`, height: "1px" }
+    : { width: "", height: `${length}px` });
+  scoreScroll.hidden = false;
+  return true;
+}
+
+/** Lay the scroller over whatever scrolls in this frame, or hide it. */
+function syncScoreScroll(live: LiveSnapshot, t: number): void {
   const sc = view === Practice ? Practice.scroller(svg, live) : null;
-  if (!sc) {
+  const tp = sc ? null : view.tape(svg, { score, t, live });
+  scrolling = sc;
+  tape = tp;
+  if (sc) followLesson(sc, live);
+  else if (tp) followPlayhead(tp);
+  else {
     scoreScroll.hidden = true;
-    scrolling = null;
     followed = null;
     scrollBox = "";
-    return;
   }
-  scrolling = sc;
-  const { region: r, axis, length, origin } = sc;
-  const box = `${axis},${r.x},${r.y},${r.w},${r.h},${length},${origin}`;
-  if (box !== scrollBox) {
+}
+
+/** Practice: size what the scroller scrolls, and follow the cursor — when
+ *  the learner's step moves out of sight, scroll back to it. Only when the
+ *  step MOVES, so a reader who scrolls away to look ahead is left there
+ *  until they play on. */
+function followLesson(sc: Scroller, live: LiveSnapshot): void {
+  const { region: r, axis: ax, length, origin } = sc;
+  if (layScroller(r, ax, length, `lesson,${origin}`)) {
     // the content changed under the scroller — a resize, or the page turned
     // to other bars — so put it back at the offset the view is drawing
-    scrollBox = box;
-    const offset = axis === "x" ? live.practice.pan : live.practice.scroll;
-    scoreScroll.dataset.axis = axis;
-    Object.assign(scoreScroll.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
-    Object.assign(scoreSpacer.style, axis === "x"
-      ? { width: `${length}px`, height: "1px" }
-      : { width: "", height: `${length}px` });
-    scoreScroll.hidden = false;
+    const offset = ax === "x" ? live.practice.pan : live.practice.scroll;
     setScrollPos(origin + offset);
     publishScroll();
   }
@@ -719,6 +765,19 @@ function syncScoreScroll(live: LiveSnapshot): void {
   if (pos < sc.sight[0] - 1 || pos > sc.sight[1] + 1) {
     setScrollPos(sc.home);
     publishScroll();
+  }
+}
+
+/** A tape: stand the scroller where the playhead is. A reader's scroll has
+ *  already moved the playhead there (scroll events run before the frame),
+ *  so this only ever moves it for the clock — playing, scrubbed, stepped. */
+function followPlayhead(tp: Tape): void {
+  followed = null;
+  pagePan = tp.pagePan; // drop a pan the playhead has left behind
+  const moved = layScroller(tp.region, tp.axis, tp.length, "tape");
+  if (moved || Math.abs(scrollPos() - tp.pos) >= 0.5) {
+    setScrollPos(tp.pos);
+    tapeAt = scrollPos();
   }
 }
 
@@ -883,3 +942,7 @@ function demoScore(): Score {
 // last, so every control and panel the view and the score touch exists
 applyView(viewSelect.value);
 void loadOpeningScore();
+// the engraving engine for the whole score: several megabytes, so it is
+// fetched in the background, and the sheets are set without it until it
+// arrives — the next frame after it does sets them with it
+void Verovio.load();

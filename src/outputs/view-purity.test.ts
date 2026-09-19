@@ -115,6 +115,7 @@ describe("every view answers where its keyboard is", () => {
     perf: PerfState.snapshot(),
     tonnetz: TonnetzState.snapshot(),
     practice: PracticeState.snapshot(),
+    pagePan: null,
   };
   const VIEWS: Record<string, ViewModule> = {
     StaffStd, PianoRoll, Tonnetz, Combo, Nashville, Practice,
@@ -133,6 +134,14 @@ describe("every view answers where its keyboard is", () => {
     expect(r.h).toBeGreaterThan(0);
     expect(r.y).toBeGreaterThanOrEqual(0);
     expect(r.y + r.h).toBeLessThanOrEqual(600);
+  });
+
+  it.each(Object.keys(VIEWS))("%s names its tape or an explicit null", (name) => {
+    const tape = VIEWS[name].tape(stubSvg, { score, t: 0.5, live: idle });
+    if (tape === null) return;
+    expect(tape.region.w).toBeGreaterThan(0);
+    expect(tape.region.h).toBeGreaterThan(0);
+    expect(tape.seek(tape.pos).t).toBeCloseTo(0.5); // standing still is staying put
   });
 
   it("gives the two stacked flavors DIFFERENT regions", () => {

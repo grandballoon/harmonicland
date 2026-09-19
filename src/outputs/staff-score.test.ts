@@ -27,7 +27,14 @@ const piece = (count: number, first: Barline = 0): Score => {
 };
 
 const opts = { glowId: "g", range: null, current: null, hand: "both" as const, showOther: true };
-const lay = (W: number, s: Score) => StaffScore.layout(W, s, "both", true);
+/** The built-in engraver's layout: Verovio is never loaded in this file,
+ *  so the sheets are the built-in flow's. verovio.test.ts sets them the
+ *  other way. */
+const lay = (W: number, s: Score) => {
+  const L = StaffScore.layout(W, s, "both", true);
+  if (L.engine !== "built-in") throw new Error("expected the built-in engraver");
+  return L;
+};
 const lines = (W: number, s: Score) => lay(W, s).sheets.flatMap((sh) => sh.systems);
 const count = (svg: string, re: RegExp): number => (svg.match(re) ?? []).length;
 const TREBLE = /\u{1D11E}/gu;

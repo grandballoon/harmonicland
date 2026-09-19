@@ -5,12 +5,7 @@
    the way a printed score is: each line opens with the clef and key, only
    the first also states the time, and the piece ends on a final barline.
 
-   It owns only the FLOW — which bars go on which line, which lines on
-   which sheet, and where the sheets sit. Each line is placed and drawn by
-   staff-bars.ts (`placeLine`, `drawLine`), so a bar on this page and the
-   same bar on the single-line page are the same drawing, at the same size.
-
-   Four decisions:
+   Five decisions:
 
    1. PAPER. A sheet is a fixed portrait page in A4's proportions, and the
       music on it is drawn at one fixed size. The window never reshapes the
@@ -20,32 +15,54 @@
       way a document viewer fits a page to a phone — rather than cutting
       off the ends of the lines.
 
-   2. LINE BREAKS. Greedy: bars go on a line while their natural widths,
-      loosened by LOOSE, still fit; then the line is justified to the
-      width. The last line is stretched no further than LOOSE, so a short
-      final line is spaced like the others instead of pulled across.
+   2. ENGRAVER. The sheets are set by Verovio (verovio.ts), from the
+      notation engrave.ts derives, written as MEI (mei.ts): the same notes,
+      values, ties, beams and accidentals as every other page here, placed
+      by a real engraving engine. The engine arrives asynchronously, so
+      until it has — or if it cannot run — the sheets are set by the
+      built-in engraver instead: each line placed and drawn by
+      staff-bars.ts (`placeLine`, `drawLine`), the way the single-line page
+      draws a bar. Both set the same paper at the same staff size, and
+      everything outside the sheets — hit-testing, following the cursor,
+      scrolling — asks the one engine-neutral layout, so it cannot tell
+      which engine drew them.
 
-   3. SHEETS. As many lines as fit between the margins. A full sheet
-      spreads them to its foot, as an engraver does; the last sheet keeps
-      them at their natural spacing from the top.
+   3. LINE BREAKS AND SHEETS are the engraver's. Verovio breaks and
+      justifies by its own rules. The built-in flow is greedy: bars go on a
+      line while their natural widths, loosened by LOOSE, still fit, and
+      the line is justified to the width, except a short last line, which
+      is stretched no further than LOOSE; as many lines as fit go on a
+      sheet, a full sheet spread to its foot, the last one left at its
+      natural spacing from the top.
 
-   4. SCROLLING is a number handed in, not a thing this module does. The
+   4. MARKS OVER THE MUSIC. On either engraver, the isolated range is a
+      panel under the bars, the current step's heads are lit in the strike
+      gold with a glow, and a playhead-coloured rule runs through the
+      column it strikes. On Verovio's sheets the engraving is never
+      re-set for any of that: the hands and the lit heads are a stylesheet
+      over the classes and ids mei.ts gave them, and the rule and panel are
+      placed from the geometry verovio.ts read off the page.
+
+   5. SCROLLING is a number handed in, not a thing this module does. The
       caller owns the scroll position (a native scroller, in the app) and
       this draws the sheets at that offset, skipping the ones out of view —
       so it stays a pure function, and a long piece costs no more per frame
       than a short one.
 
-   The layout is memoized because it engraves the whole piece and the view
-   redraws every frame; the memo is a cache, never a source of truth.
+   The layouts are memoized because they engrave the whole piece and the
+   view redraws every frame; the memos are caches, never a source of truth.
    ==================================================================== */
 import { StaffBars, type LineOpts, type PageLayout } from "./staff-bars";
+import { HALF } from "./staff-std";
 import { engrave } from "./engrave";
+import { headId, headPrefix, toMei } from "./mei";
+import { Verovio, type PageSpec, type VrvPage } from "./verovio";
 import { text } from "./defs";
-import type { HandFilter } from "../steps";
+import { soundingIn, type HandFilter } from "../steps";
 import type { Bar, Score } from "../types";
 
-/** One line's height: the grand staff with two ledger lines each way, its
- *  bar numbers above, and air before the next line. */
+/** One built-in line's height: the grand staff with two ledger lines each
+ *  way, its bar numbers above, and air before the next line. */
 export const SYS_H = 224;
 /** A sheet, in the music's own units: A4's proportions. */
 export const PAPER_W = 880;
@@ -58,42 +75,86 @@ const MARGIN_FOOT = 56;
 const GAP = 24;
 /** The least room either side of a sheet in a narrow window. */
 const GUTTER = 12;
-/** How loosely a line is packed, and the most a short last line stretches. */
+/** How loosely a built-in line is packed, and the most a short last line
+ *  stretches. */
 const LOOSE = 1.3;
 const LINE_W = PAPER_W - 2 * MARGIN_X;
 const PER_SHEET = Math.max(1, Math.floor((PAPER_H - MARGIN_TOP - MARGIN_FOOT) / SYS_H));
+/** The distance between two staff lines — the size the music is set at. */
+const SPACE = 2 * HALF;
+/** How far past its outer staff lines a Verovio line reaches, for the
+ *  panel, the rule, and what counts as on the line: two ledger lines. */
+const REACH = 3 * SPACE;
 
+/** The paper, for Verovio: decision 1's sheet, at decision 2's size. */
+const SPEC: PageSpec = {
+  width: PAPER_W,
+  height: PAPER_H,
+  margin: { top: MARGIN_TOP, bottom: MARGIN_FOOT, left: MARGIN_X, right: MARGIN_X },
+  space: SPACE,
+};
+
+/** A bar on a line, in its sheet's units. */
+export interface BarSpan {
+  readonly index: number;
+  readonly x0: number;
+  readonly x1: number;
+}
+
+/** One line of music, whichever engraver set it, in its sheet's units. */
 export interface System {
   /** First and last bar on the line, inclusive. */
   readonly from: number;
   readonly to: number;
-  readonly line: PageLayout;
-  /** The line's top on its sheet, in the sheet's units. */
+  /** The line's top on its sheet, and how tall it stands. */
   readonly y: number;
+  readonly h: number;
+  readonly bars: readonly BarSpan[];
 }
 
-export interface Sheet {
+/** A line the built-in engraver set, with how it placed its bars. */
+export interface BuiltInSystem extends System {
+  readonly line: PageLayout;
+}
+
+export interface Sheet<S extends System = System> {
   /** The sheet's top in the scrolling content, in pixels. */
   readonly top: number;
-  readonly systems: readonly System[];
+  readonly systems: readonly S[];
 }
 
-export interface ScoreLayout {
+export interface VerovioSheet extends Sheet {
+  readonly page: VrvPage;
+}
+
+interface Paper {
   /** Pixels per sheet unit: 1, unless the window is narrower than a sheet. */
   readonly k: number;
   /** The sheets' left edge, in pixels. */
   readonly x: number;
-  readonly sheets: readonly Sheet[];
   /** Everything that scrolls, top to bottom, in pixels. */
   readonly height: number;
 }
+
+export type ScoreLayout =
+  | (Paper & { readonly engine: "built-in"; readonly sheets: readonly Sheet<BuiltInSystem>[] })
+  | (Paper & { readonly engine: "verovio"; readonly sheets: readonly VerovioSheet[] });
+
+/** Decision 1: one size, unless the window cannot hold a sheet's width. */
+function paper(W: number, count: number): Paper & { tops: number[] } {
+  const k = Math.min(1, Math.max(0.1, (W - 2 * GUTTER) / PAPER_W));
+  const tops = Array.from({ length: count }, (_, i) => GAP + i * (PAPER_H * k + GAP));
+  return { k, x: (W - PAPER_W * k) / 2, height: GAP + count * (PAPER_H * k + GAP), tops };
+}
+
+// --- the built-in engraver --------------------------------------------------
 
 /** Does the line starting at bar `i` state the time? The first line does,
  *  and so does any line whose first bar changes the meter. */
 const opensWithTime = (bars: readonly Bar[], i: number): boolean =>
   i === 0 || bars[i].beats !== bars[i - 1].beats || bars[i].unit !== bars[i - 1].unit;
 
-/** Decision 2: the bars of each line, as [from, to] inclusive. */
+/** Decision 3: the bars of each line, as [from, to] inclusive. */
 function breakLines(W: number, bars: readonly Bar[], widths: readonly number[]): [number, number][] {
   const lines: [number, number][] = [];
   let from = 0;
@@ -112,52 +173,147 @@ function breakLines(W: number, bars: readonly Bar[], widths: readonly number[]):
   return lines;
 }
 
-function compute(W: number, score: Score, hand: HandFilter, showOther: boolean): ScoreLayout {
+function builtIn(W: number, score: Score, hand: HandFilter, showOther: boolean): ScoreLayout {
   const bars = score.bars;
   const ebs = engrave(StaffBars.visibleNotes(score, hand, showOther), bars, 0, bars.length - 1);
   const lines = breakLines(LINE_W, bars, ebs.map((eb) => StaffBars.naturalW(eb) * LOOSE));
-  const placed = lines.map(([from, to], i) => ({
-    from, to,
-    line: StaffBars.placeLine(LINE_W, {
+  const placed = lines.map(([from, to], i) => {
+    const line = StaffBars.placeLine(LINE_W, {
       bars: ebs.slice(from, to + 1),
       before: [],
       after: [],
       time: opensWithTime(bars, from),
       maxScale: i === lines.length - 1 ? LOOSE : Infinity,
       final: to === bars.length - 1,
-    }),
-  }));
-
-  // decision 1: one size, unless the window cannot hold a sheet's width
-  const k = Math.min(1, Math.max(0.1, (W - 2 * GUTTER) / PAPER_W));
-  const x = (W - PAPER_W * k) / 2;
-
-  // decision 3: fill each sheet; spread a full one to its foot
-  const sheets: Sheet[] = [];
-  const room = PAPER_H - MARGIN_TOP - MARGIN_FOOT;
-  for (let i = 0; i < placed.length; i += PER_SHEET) {
-    const on = placed.slice(i, i + PER_SHEET);
-    const last = i + PER_SHEET >= placed.length;
-    const spread = !last && on.length > 1 ? (room - on.length * SYS_H) / (on.length - 1) : 0;
-    sheets.push({
-      top: GAP + sheets.length * (PAPER_H * k + GAP),
-      systems: on.map((s, j) => ({ ...s, y: MARGIN_TOP + j * (SYS_H + spread) })),
     });
-  }
-  return { k, x, sheets, height: GAP + sheets.length * (PAPER_H * k + GAP) };
+    const spans = line.placed.map((p) => ({ index: p.eb.bar.index, x0: MARGIN_X + p.x0, x1: MARGIN_X + p.x1 }));
+    return { from, to, line, bars: spans };
+  });
+
+  const count = Math.ceil(placed.length / PER_SHEET);
+  const { tops, ...P } = paper(W, count);
+  const room = PAPER_H - MARGIN_TOP - MARGIN_FOOT;
+  const sheets = tops.map((top, s): Sheet<BuiltInSystem> => {
+    const on = placed.slice(s * PER_SHEET, (s + 1) * PER_SHEET);
+    const spread = s < count - 1 && on.length > 1 ? (room - on.length * SYS_H) / (on.length - 1) : 0;
+    return { top, systems: on.map((sys, j) => ({ ...sys, y: MARGIN_TOP + j * (SYS_H + spread), h: SYS_H })) };
+  });
+  return { ...P, engine: "built-in", sheets };
 }
+
+// --- Verovio ------------------------------------------------------------------
+
+let engraved: { key: readonly unknown[]; pages: VrvPage[] | null } | null = null;
+
+/** The piece set by Verovio for the notes the page shows — independent of
+ *  the window, so a resize never re-sets it. Null while the engine is not
+ *  loaded, and when it set nothing. */
+function verovioPages(score: Score, hand: HandFilter, showOther: boolean): VrvPage[] | null {
+  if (!Verovio.ready()) return null;
+  const key = [score, hand, showOther];
+  if (!engraved || !engraved.key.every((k, i) => k === key[i])) {
+    const bars = score.bars;
+    const ebs = engrave(StaffBars.visibleNotes(score, hand, showOther), bars, 0, bars.length - 1);
+    engraved = { key, pages: Verovio.engrave(toMei(ebs, hand), SPEC) };
+  }
+  const pages = engraved.pages;
+  return pages && pages.length > 0 ? pages : null;
+}
+
+function verovio(W: number, pages: readonly VrvPage[]): ScoreLayout {
+  const { tops, ...P } = paper(W, pages.length);
+  const sheets = pages.map((page, i): VerovioSheet => ({
+    top: tops[i],
+    page,
+    systems: page.systems.map((s) => ({
+      from: s.bars[0].index,
+      to: s.bars[s.bars.length - 1].index,
+      y: s.top - REACH,
+      h: s.bottom - s.top + 2 * REACH,
+      bars: s.bars,
+    })),
+  }));
+  return { ...P, engine: "verovio", sheets };
+}
+
+// --- the layout -----------------------------------------------------------------
 
 let memo: { key: readonly unknown[]; value: ScoreLayout } | null = null;
 
 /** The sheets for a region `W` wide, cut from the notes the page shows.
  *  The same arguments give the same layout — the one `markup` draws and
- *  `barAt` hit-tests. */
+ *  `barAt` hit-tests — until the engine arrives and re-sets it. */
 export function layout(W: number, score: Score, hand: HandFilter, showOther: boolean): ScoreLayout {
-  const key = [W, score, hand, showOther];
+  const pages = verovioPages(score, hand, showOther);
+  const key = [W, score, hand, showOther, pages];
   if (memo && memo.key.every((k, i) => k === key[i])) return memo.value;
-  const value = compute(W, score, hand, showOther);
+  const value = pages ? verovio(W, pages) : builtIn(W, score, hand, showOther);
   memo = { key, value };
   return value;
+}
+
+// --- drawing ----------------------------------------------------------------------
+
+/** Verovio's page in this app's colours. Its own stylesheet strokes every
+ *  path in `currentColor`, so colour is set by `color`, part by part:
+ *  furniture in the glyph ink, staff and ledger lines in the staff's,
+ *  and each hand in its page token — dimmed when it is not the one being
+ *  practised — the same tokens the built-in page reads. */
+const PAGE_STYLE = [
+  `.vrv svg{color:var(--glyph);fill:currentColor}`,
+  `.vrv g.staff{color:var(--staff-line)}`,
+  `.vrv g.staff>g{color:var(--glyph)}`,
+  `.vrv g.staff>g.ledgerLines{color:var(--staff-line)}`,
+  `.vrv g.barLine{color:var(--grid-oct)}`,
+  `.vrv g.mNum{color:var(--ink-dim)}`,
+  `.vrv .upper{color:var(--page-r)}`,
+  `.vrv .lower{color:var(--page-l)}`,
+  `.vrv .free{color:var(--note)}`,
+  `.vrv .upper.other{color:var(--hand-r-dim)}`,
+  `.vrv .lower.other{color:var(--hand-l-dim)}`,
+  `.vrv .free.other{color:var(--note-dim)}`,
+].join("");
+
+/** The current step's heads, lit: every head of every note it sounds —
+ *  tied continuations too, as on the built-in page. */
+function litStyle(o: LineOpts): string {
+  if (!o.current) return "";
+  const sel = soundingIn(o.current).map((n) => `.vrv g[id^="${headPrefix(n.id)}"]>g.notehead`);
+  return sel.length ? `${sel.join(",")}{color:var(--note-lit);filter:url(#${o.glowId})}` : "";
+}
+
+/** Where the current step strikes, on the sheet that holds it: the first
+ *  of its attacks Verovio set a head for. */
+function strikeAt(sheets: readonly VerovioSheet[], o: LineOpts): { sheet: number; x: number; system: number } | null {
+  if (!o.current) return null;
+  for (const n of o.current.attack)
+    for (let s = 0; s < sheets.length; s++) {
+      const head = sheets[s].page.heads.get(headId(n.id, 0));
+      if (head) return { sheet: s, x: head.x, system: head.system };
+    }
+  return null;
+}
+
+/** Decision 4, on one of Verovio's sheets: the panel under the isolated
+ *  bars, the page, and the rule through the struck column. */
+function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: { x: number; system: number } | null): string {
+  let out = "";
+  const r = o.range;
+  if (r)
+    for (const sys of sheet.systems) {
+      const on = sys.bars.filter((b) => b.index >= r.from && b.index <= r.to);
+      if (!on.length) continue;
+      const xa = on[0].x0;
+      const xb = on[on.length - 1].x1;
+      out += `<rect x="${xa}" y="${sys.y}" width="${Math.max(0, xb - xa)}" height="${sys.h}" rx="4" fill="var(--panel)"/>`;
+    }
+  out += `<g class="vrv">${sheet.page.svg}</g>`;
+  if (strike) {
+    const sys = sheet.systems[strike.system];
+    out += `<line x1="${strike.x}" y1="${sys.y}" x2="${strike.x}" y2="${sys.y + sys.h}" ` +
+      `stroke="var(--playhead)" stroke-width="1.5" opacity="0.9"/>`;
+  }
+  return out;
 }
 
 /** The sheets in view of a window `H` tall scrolled to `scroll`, drawn in
@@ -166,15 +322,21 @@ export function markup(W: number, H: number, scroll: number, score: Score, o: Li
   if (!W || !H || score.bars.length === 0) return "";
   const L = layout(W, score, o.hand, o.showOther);
   let out = `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--desk)"/>`;
-  L.sheets.forEach((sheet, p) => {
+  const strike = L.engine === "verovio" ? strikeAt(L.sheets, o) : null;
+  if (L.engine === "verovio") out += `<style>${PAGE_STYLE}${litStyle(o)}</style>`;
+  L.sheets.forEach((sheet: Sheet, p) => {
     const top = sheet.top - scroll;
     if (top > H || top + PAPER_H * L.k < 0) return;
     out += `<g transform="translate(${L.x},${top}) scale(${L.k})">` +
       `<rect x="0" y="0" width="${PAPER_W}" height="${PAPER_H}" fill="var(--bg)" stroke="var(--line-acc)" stroke-width="1"/>`;
-    for (const sys of sheet.systems) {
-      const y = top + sys.y * L.k;
-      if (y > H || y + SYS_H * L.k < 0) continue;
-      out += `<g transform="translate(${MARGIN_X},${sys.y})">` + StaffBars.drawLine(SYS_H, sys.line, o) + `</g>`;
+    if (L.engine === "verovio") {
+      out += verovioSheet(L.sheets[p], o, strike && strike.sheet === p ? strike : null);
+    } else {
+      for (const sys of L.sheets[p].systems) {
+        const y = top + sys.y * L.k;
+        if (y > H || y + sys.h * L.k < 0) continue;
+        out += `<g transform="translate(${MARGIN_X},${sys.y})">` + StaffBars.drawLine(SYS_H, sys.line, o) + `</g>`;
+      }
     }
     if (L.sheets.length > 1)
       out += text(PAPER_W / 2, PAPER_H - MARGIN_FOOT / 2, String(p + 1),
@@ -184,14 +346,16 @@ export function markup(W: number, H: number, scroll: number, score: Score, o: Li
   return out;
 }
 
+// --- reading the layout back ---------------------------------------------------------
+
 /** The line a point in the scrolling content is on, with the point in that
- *  line's own units — or null in a gap, a margin, or off the sheets. */
-function lineAt(L: ScoreLayout, x: number, y: number): { sys: System; lx: number } | null {
-  for (const sheet of L.sheets) {
+ *  line's sheet's units — or null in a gap, a margin, or off the sheets. */
+function lineAt(L: ScoreLayout, x: number, y: number): { sys: System; sx: number } | null {
+  for (const sheet of L.sheets as readonly Sheet[]) {
     const sy = (y - sheet.top) / L.k;
     if (sy < 0 || sy > PAPER_H) continue;
-    const sys = sheet.systems.find((s) => sy >= s.y && sy < s.y + SYS_H);
-    return sys ? { sys, lx: (x - L.x) / L.k - MARGIN_X } : null;
+    const sys = sheet.systems.find((s) => sy >= s.y && sy < s.y + s.h);
+    return sys ? { sys, sx: (x - L.x) / L.k } : null;
   }
   return null;
 }
@@ -204,8 +368,8 @@ export function barAt(
   if (!W || score.bars.length === 0) return null;
   const hit = lineAt(layout(W, score, hand, showOther), x, y);
   if (!hit) return null;
-  const p = hit.sys.line.placed.find((b) => hit.lx >= b.x0 && hit.lx < b.x1);
-  return p ? p.eb.bar.index : null;
+  const b = hit.sys.bars.find((s) => hit.sx >= s.x0 && hit.sx < s.x1);
+  return b ? b.index : null;
 }
 
 /** The top and bottom, in the scrolling content, of the line holding
@@ -215,10 +379,10 @@ export function lineSpan(
 ): [number, number] | null {
   if (!W || score.bars.length === 0) return null;
   const L = layout(W, score, hand, showOther);
-  for (const sheet of L.sheets)
+  for (const sheet of L.sheets as readonly Sheet[])
     for (const sys of sheet.systems)
       if (bar >= sys.from && bar <= sys.to)
-        return [sheet.top + sys.y * L.k, sheet.top + (sys.y + SYS_H) * L.k];
+        return [sheet.top + sys.y * L.k, sheet.top + (sys.y + sys.h) * L.k];
   return null;
 }
 

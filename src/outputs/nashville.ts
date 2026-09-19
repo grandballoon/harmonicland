@@ -163,5 +163,6 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
 export const Nashville: ViewModule & { markup: typeof markup } = {
   render,
   keyboardRegion: () => null,
+  tape: () => null,
   markup,
 };

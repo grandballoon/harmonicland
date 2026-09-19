@@ -95,6 +95,39 @@ describe("panning", () => {
   });
 });
 
+describe("timeline", () => {
+  const focus = { from: 1, to: 1 };
+  const tl = StaffBars.timeline(W, four, focus, "both", true);
+  const strip = StaffBars.layout(W, four, focus, four.notes, 0).placed;
+
+  it("puts each instant on its column", () => {
+    const bar1 = strip.find((p) => p.eb.bar.index === 1)!;
+    bar1.eb.columns.forEach((c, i) => {
+      expect(tl.xOf(c.t)).toBeCloseTo(bar1.colX[i]);
+      expect(tl.timeAt(bar1.colX[i])).toBeCloseTo(c.t);
+    });
+  });
+
+  it("runs both ways, rising, across the whole piece", () => {
+    let last = -Infinity;
+    for (let t = 0; t <= four.duration; t += 0.1) {
+      const x = tl.xOf(t);
+      expect(x).toBeGreaterThan(last);
+      expect(tl.timeAt(x)).toBeCloseTo(t);
+      last = x;
+    }
+  });
+
+  it("stops at the ends of the piece", () => {
+    expect(tl.timeAt(-1e6)).toBe(0);
+    expect(tl.timeAt(1e6)).toBe(four.duration);
+  });
+
+  it("names the window the strip is seen through", () => {
+    expect(tl.view).toEqual(StaffBars.layout(W, four, focus, four.notes, 0).view);
+  });
+});
+
 describe("hit-testing", () => {
   it("names the bar under x by what is visible there", () => {
     const seen: (number | null)[] = [];

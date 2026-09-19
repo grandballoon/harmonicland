@@ -62,4 +62,4 @@ const keyboardRegion = (svg: SVGSVGElement): Region => {
   return { x: 0, y: topH, w: W, h: rollH };
 };
 
-export const Combo: ViewModule = { render, keyboardRegion };
+export const Combo: ViewModule = { render, keyboardRegion, tape: () => null };

@@ -13,7 +13,7 @@ import { LOW, HIGH, isWhite, isC, octaveOf } from "../pitch";
 import { SCROLL } from "./scroll";
 import { glowFilter, glowAttr } from "./defs";
 import type { Note, Score, Pitch } from "../types";
-import type { View, ViewModule, Region } from "../view";
+import type { View, ViewModule, Region, Tape } from "../view";
 
 const { PPS } = SCROLL; // fall speed — the staves scroll at the same rate
 export const KEYB = 96; // keyboard band height (px)
@@ -230,6 +230,30 @@ const keyboardRegion = (svg: SVGSVGElement): Region => ({
   x: 0, y: 0, w: svg.clientWidth, h: svg.clientHeight,
 });
 
+/** The falling notes as a tape: the whole piece stood on end above the
+ *  strike line, `PPS` pixels a second, its start at the bottom. Scrolling
+ *  moves the notes exactly as far as the scroller moves its content, so a
+ *  swipe down brings them down onto the keys — the piece plays forward —
+ *  and a swipe up takes them back. The keyboard itself stays uncovered,
+ *  so it is still played by pointing at it. */
+export function tapeFor(W: number, H: number, score: Score, t: number): Tape | null {
+  const d = score.duration;
+  const { strikeY } = layout(W, H);
+  if (!W || d <= 0 || strikeY <= 0) return null;
+  const clamp = (x: number): number => Math.max(0, Math.min(d, x));
+  return {
+    region: { x: 0, y: 0, w: W, h: strikeY },
+    axis: "y",
+    length: d * PPS + strikeY,
+    pos: (d - t) * PPS,
+    pagePan: null,
+    seek: (pos) => ({ t: clamp(d - pos / PPS), pagePan: null }),
+  };
+}
+
+const tape = (svg: SVGSVGElement, f: { score: Score; t: number }): Tape | null =>
+  tapeFor(svg.clientWidth, svg.clientHeight, f.score, f.t);
+
 /** The keyboard's measurements for a region — see `Layout`. */
 export const geometry = (W: number, H: number): Layout => layout(W, H);
 
@@ -237,5 +261,6 @@ export const PianoRoll: ViewModule & {
   markup: typeof markup;
   pitchAt: typeof pitchAt;
   geometry: typeof geometry;
+  tapeFor: typeof tapeFor;
   KEYB: number;
-} = { render, keyboardRegion, markup, pitchAt, geometry, KEYB };
+} = { render, keyboardRegion, tape, markup, pitchAt, geometry, tapeFor, KEYB };

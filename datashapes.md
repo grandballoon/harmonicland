@@ -276,6 +276,7 @@ interface LiveSnapshot {
   perf: PerfSnapshot;
   tonnetz: TonnetzSnapshot;
   practice: PracticeSnapshot;
+  pagePan: PagePan | null;
 }
 ```
 
@@ -284,6 +285,8 @@ Everything live about this instant that is neither the score nor the clock.
 
 `practice` is new.
 It is inert (`active: false`) unless practice mode is running, the same way `perf` is inert unless a chord is being played, so every view receives it and all but one ignore it.
+
+`pagePan` is where a page has been panned by its tape, or null at rest; only the `StaffPiano` flavors read it.
 
 ### `Frame` — exported
 
@@ -306,6 +309,41 @@ interface Region { x: number; y: number; w: number; h: number; }
 A rectangle in an svg's local pixel space, used to say where a playable keyboard sits.
 It lived in `outputs/piano-roll.ts` before; it belongs here now because `ViewModule` names it.
 
+### `PagePan` — exported
+
+```ts
+interface PagePan {
+  bar: number; // the bar the page is fitted to
+  pan: number; // pixels along the strip from resting on it
+}
+```
+
+A page panned by its tape.
+At rest the page is fitted to the bar the playhead is in and turns as the playhead moves on.
+Panned, it stays fitted to the bar it was panned from, since a page that refitted itself to every bar the playhead crossed would change its scale under the reader's finger.
+It comes back to rest once the playhead leaves its window, which the view decides and reports back through `Tape.pagePan`.
+
+### `Tape` — exported
+
+```ts
+interface Tape {
+  region: Region;
+  axis: "x" | "y";
+  length: number;
+  pos: number;
+  pagePan: PagePan | null;
+  seek(pos: number): { t: number; pagePan: PagePan | null };
+}
+```
+
+The part of a clock-driven view that a native scroller is laid over, standing for the playhead.
+Scrolling it moves the playhead, so the notes, the keys, the sound and the scrub bar keep one "now" between them.
+`pos` is where the scroller stands for the frame drawn, and `seek` is where a scroller moved elsewhere puts the playhead.
+`main.ts` owns the DOM in between: it stands the scroller at `pos` every frame and seeks the clock on any position it did not set itself.
+The piano roll's tape is its falling notes, the whole piece stood on end with its start at the bottom, so a swipe down brings the notes down onto the keys.
+The `StaffPiano` flavors' tape is the page, panned across the piece, with the music sliding under a playhead that stays where it was on screen.
+Practice mode has none: its learner, not the clock, is the transport, so its scroller (`Scroller` in `practice.ts`) moves only the page.
+
 ### `View` — exported
 
 ```ts
@@ -321,6 +359,7 @@ An output projection, genuinely a function of its arguments now.
 interface ViewModule {
   render: View;
   keyboardRegion(svg: SVGSVGElement, live: LiveSnapshot): Region | null;
+  tape(svg: SVGSVGElement, f: Frame): Tape | null;
 }
 ```
 
@@ -332,6 +371,8 @@ Views with no keyboard write `() => null`, which is a declaration rather than an
 A view's layout may legitimately depend on live state: practice mode gives up a column to its harmony bar when, and only when, the lesson carries a `Chart`, and a region function that could not see that would hand back a keyboard wider than the one drawn.
 That failure is silent — a hit-test disagreeing with the pixels produces no error, just wrong notes near the edge — which is why the parameter is in the type rather than the region being recomputed from a global.
 Views whose geometry is a function of size alone simply ignore it, which is itself a statement.
+
+`tape` is required for the same reason, and answered from the whole frame because where a tape stands is a function of the playhead.
 
 Every renderer now exports one: `StaffStd`, `PianoRoll`, `Tonnetz`, `Combo`, `Nashville`, `Practice`, and `StaffPiano.keysView` / `StaffPiano.rollView` — eight in all, which `view-purity.test.ts` asserts.
 The two `StaffPiano` flavors each carry their own region function, which closes the old trap where `renderKeys` and `renderRoll` were distinguishable only because `stacked(...)` happened to be called twice.
@@ -1239,7 +1280,60 @@ interface PageLayout { placed: readonly PlacedBar[]; sigX: number; first: Bar; p
 The page in practice mode: the focus bars as sheet music, `markup(W, H, score, o)`.
 `layout(W, score, focus, notes)` decides every x — the opening key and time signatures, then the focus bars fitted to the width by **rhythm** (a column's natural width grows with the square root of the time it spans, so a bar of eighths is wider than a bar with one whole note but not eight times wider), with the bar before and the bar after engraved at the same scale and **clipped** to a margin either side, torn at the edge, so the last few notes of one and the first few of the other show as context.
 `barAt(W, score, focus, x, hand, showOther)` hit-tests that layout from the same notes, since leaving a hand off the page changes the spacing.
+`timeline(W, score, focus, hand, showOther)` returns a `Timeline`, `{ xOf(t), timeAt(x), view }`: score time and x along the strip at rest, each the other's inverse, straight between columns and clamped at the ends of the piece.
+It is how a page panned by its tape moves the playhead by exactly the music that slid under it.
 Every staff line, clef, ledger, position and accidental glyph comes from `staff-std.ts`; every value, rest, beam and printed accidental from `engrave.ts`; this file owns the layout and the glyphs only a page has — heads by value, stems, flags, beams, rests, dots, ties, signatures — drawn as paths so the page does not depend on which music font the viewer has.
+
+### `ScoreLayout`, `Sheet`, `System`, `BarSpan` — exported, `src/outputs/staff-score.ts`
+
+```ts
+interface BarSpan { index: number; x0: number; x1: number }        // a bar on a line, sheet units
+interface System  { from: number; to: number; y: number; h: number; bars: readonly BarSpan[] }
+interface BuiltInSystem extends System { line: PageLayout }        // how staff-bars.ts placed it
+interface Sheet<S extends System = System> { top: number; systems: readonly S[] }
+interface VerovioSheet extends Sheet { page: VrvPage }
+
+type ScoreLayout =
+  | { engine: "built-in"; k: number; x: number; height: number; sheets: readonly Sheet<BuiltInSystem>[] }
+  | { engine: "verovio";  k: number; x: number; height: number; sheets: readonly VerovioSheet[] };
+```
+
+The whole piece on sheets of paper, as practice mode's whole-score toggle shows it.
+`k` is pixels per sheet unit (1 unless the window is narrower than a sheet), `x` the sheets' left edge, `height` everything that scrolls, and a sheet's `top` is its place in the scrolling content.
+A `System`'s `y`, `h` and its bars' `x0`/`x1` are in the sheet's own units.
+
+The union is over **which engraver set the sheets**.
+Verovio sets them once it has loaded, and until then (or if it cannot run) the built-in flow does.
+Everything outside the sheets — `barAt`, `lineSpan`, `contentHeight`, the scroller — reads only the engine-neutral `System`, so it cannot tell the two apart.
+Only drawing asks for more: a built-in line is drawn from its `PageLayout` by `StaffBars.drawLine`, and a Verovio sheet is its page's SVG.
+
+### `PageSpec`, `VrvPage`, `VrvSystem`, `VrvBar` — exported, `src/outputs/verovio.ts`
+
+```ts
+interface PageSpec {
+  width: number; height: number;                                   // the paper, in the caller's pixels
+  margin: { top: number; bottom: number; left: number; right: number };
+  space: number;                                                   // staff-line distance: the music's size
+}
+interface VrvBar    { index: number; x0: number; x1: number }
+interface VrvSystem { top: number; bottom: number; bars: readonly VrvBar[] }   // outer staff lines
+interface VrvPage {
+  svg: string;                                                     // exactly width × height
+  systems: readonly VrvSystem[];
+  heads: ReadonlyMap<string, { x: number; y: number; system: number }>;        // notehead centres, by id
+}
+```
+
+The engraving engine's input and output.
+`verovio.ts` is the only module that imports the `verovio` package; it loads the WebAssembly engine asynchronously, and `engrave(mei, spec)` answers `null` until the engine has arrived.
+A `PageSpec` is given in the caller's pixels and converted to Verovio's units, so its pages and the built-in engraver's are the same paper, with the music at the same size.
+A `VrvPage`'s geometry is **read off the SVG Verovio drew**, not predicted, so hit-testing and the cursor cannot disagree with the pixels.
+Each page's ids are renamed for its page number, because Verovio gives every page of a document the same root id, which scopes the page's glyphs and stylesheet.
+
+What connects the SVG to the model is the id and class scheme `mei.ts` writes into the MEI and Verovio carries through.
+A notehead is `n<NoteId>h<k>`, the k-th head of that note counting from its attack, and a measure is `b<bar index>`.
+Every note, chord, beam and tie is classed by hand: `upper`, `lower`, or `free` for a note with no hand, plus `other` for the hand not being practised.
+So the hand colours and the lit current step are a stylesheet over one engraving, which is set again only when the score, the hand or the other-hand toggle changes.
 
 ### `KeyStyle` — exported, `src/outputs/piano-roll.ts`
 
@@ -1452,6 +1546,8 @@ It named chords by joystick cell alone and was blind to the degree's quality; `c
 | `Region` | interface | `view.ts` | exported |
 | `View` | function type | `view.ts` | exported |
 | `ViewModule` | interface | `view.ts` | exported |
+| `PagePan` | interface | `view.ts` | exported |
+| `Tape` | interface | `view.ts` | exported |
 | `PitchClass` | enum | `harmony/perfecto.ts` | exported |
 | `ScaleType` | union | `harmony/perfecto.ts` | exported |
 | `Key` | interface | `harmony/perfecto.ts` | exported |
@@ -1513,6 +1609,7 @@ It named chords by joystick cell alone and was blind to the degree's quality; `c
 | `BarsOpts` | interface | `outputs/staff-bars.ts` | exported |
 | `PlacedBar` | interface | `outputs/staff-bars.ts` | exported |
 | `PageLayout` | interface | `outputs/staff-bars.ts` | exported |
+| `Timeline` | interface | `outputs/staff-bars.ts` | exported |
 | `MarkupOpts` | interface | `outputs/piano-roll.ts` | exported |
 | `KeyStyle` | interface | `outputs/piano-roll.ts` | exported |
 | `MarkupOpts` | interface | `outputs/staff-std.ts` | exported |

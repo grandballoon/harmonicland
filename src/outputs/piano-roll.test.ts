@@ -135,3 +135,39 @@ describe("PianoRoll.geometry", () => {
     expect(PianoRoll.geometry(W, 400).strikeY).toBe(Number(strike![1]));
   });
 });
+
+describe("PianoRoll as a tape", () => {
+  const piece = Core.makeScore([{ pitch: 60, onset: 0, duration: 4 }]);
+  const H = 500;
+  const tape = (t: number) => PianoRoll.tapeFor(W, H, piece, t)!;
+  const { strikeY } = PianoRoll.geometry(W, H);
+
+  it("covers the falling notes and leaves the keyboard to be played", () => {
+    expect(tape(0).region).toEqual({ x: 0, y: 0, w: W, h: strikeY });
+    expect(tape(0).axis).toBe("y");
+  });
+
+  it("stands the start of the piece at the bottom, its end at the top", () => {
+    expect(tape(0).pos).toBe(piece.duration * 120);
+    expect(tape(piece.duration).pos).toBe(0);
+    expect(tape(0).length - strikeY).toBe(tape(0).pos); // the most it scrolls
+  });
+
+  it("plays forward as the notes are brought down, pixel for pixel with the fall", () => {
+    // content moves down as the scroller's position falls
+    const at = tape(1);
+    const { t } = at.seek(at.pos - 60);
+    expect(t).toBeCloseTo(1.5);
+    // and the frame drawn at the new time stands where the reader left it
+    expect(tape(t).pos).toBeCloseTo(at.pos - 60);
+  });
+
+  it("stops at either end of the piece", () => {
+    expect(tape(1).seek(1e6).t).toBe(0);
+    expect(tape(1).seek(-1e6).t).toBe(piece.duration);
+  });
+
+  it("is absent with nothing to scroll", () => {
+    expect(PianoRoll.tapeFor(W, H, score, 0)).toBeNull();
+  });
+});

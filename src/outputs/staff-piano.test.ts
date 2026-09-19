@@ -82,3 +82,53 @@ describe("hand coloring", () => {
     expect(PianoRoll.markup(800, 400, streamed, 0.5, { glowId: G, held: NONE, hands: true })).not.toContain("var(--hand-");
   });
 });
+
+describe("the page as a tape", () => {
+  // eight bars of quarter notes, a second a bar
+  const notes = Array.from({ length: 32 }, (_, i) => ({ pitch: 60 + (i % 12), onset: i * 0.25, duration: 0.25 }));
+  const piece = Core.makeScore(notes, Array.from({ length: 9 }, (_, i) => i));
+  const W = 900;
+  const H = 300;
+  const t = 2.3; // in bar 2
+  const tl = StaffBars.timeline(W, piece, { from: 2, to: 2 }, "both", true);
+
+  it("rests on the playhead's bar, and panning holds the bar it was panned from", () => {
+    const tape = StaffPiano.pageTape(W, H, piece, t, null)!;
+    expect(tape.axis).toBe("x");
+    expect(tape.pagePan).toBeNull();
+    expect(tape.seek(tape.pos + 200).pagePan).toEqual({ bar: 2, pan: 200 });
+  });
+
+  it("moves the playhead by what slid under it, so it stays put on screen", () => {
+    const tape = StaffPiano.pageTape(W, H, piece, t, null)!;
+    const to = tape.seek(tape.pos + 120);
+    expect(to.t).toBeGreaterThan(t);
+    expect(tl.xOf(to.t) - 120).toBeCloseTo(tl.xOf(t));
+    // the frame drawn there stands the scroller where the reader left it
+    const next = StaffPiano.pageTape(W, H, piece, to.t, to.pagePan)!;
+    expect(next.pos).toBeCloseTo(tape.pos + 120);
+    expect(next.pagePan).toEqual(to.pagePan);
+  });
+
+  it("draws the page where its tape holds it", () => {
+    const held = { bar: 2, pan: 120 };
+    const at = tl.timeAt(tl.xOf(t) + 120);
+    expect(StaffPiano.page(W, H, piece, at, G, held)).toBe(StaffBars.markup(W, H, piece, {
+      glowId: G, focus: { from: 2, to: 2 }, range: null,
+      current: makeSteps(piece, "both").steps.find((s) => s.at <= at && at < s.at + 0.25)!,
+      hand: "both", showOther: true, pan: 120,
+    }));
+  });
+
+  it("comes back to rest once the playhead leaves the window", () => {
+    const held = { bar: 2, pan: 0 };
+    expect(StaffPiano.standAt(W, piece, t, held)).toEqual(held);
+    expect(StaffPiano.standAt(W, piece, 7.5, held)).toBeNull();
+    expect(StaffPiano.pageTape(W, H, piece, 7.5, held)!.pagePan).toBeNull();
+    expect(StaffPiano.page(W, H, piece, 7.5, G, held)).toBe(StaffPiano.page(W, H, piece, 7.5, G));
+  });
+
+  it("forgets a bar the score no longer has", () => {
+    expect(StaffPiano.standAt(W, piece, t, { bar: 99, pan: 0 })).toBeNull();
+  });
+});

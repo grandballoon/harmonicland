@@ -85,6 +85,7 @@ const live = (practice: PracticeSnapshot): LiveSnapshot => ({
   perf: PerfState.snapshot(),
   tonnetz: TonnetzState.snapshot(),
   practice,
+  pagePan: null,
 });
 
 const W = 900;

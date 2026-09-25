@@ -1,0 +1,262 @@
+{
+  "repos": {
+    "MutopiaProject/MutopiaProject": { "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0" },
+    "humdrum-tools/bach-wtc": { "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6" },
+    "humdrum-tools/inventions": { "commit": "93183f6fdb9ab7aa1fa601e3aa200b40763469cf" },
+    "craigsapp/mozart-piano-sonatas": { "commit": "0f1f49d914494f8461709b2a2642153bb240c6da" },
+    "craigsapp/chopin-mazurkas": { "commit": "fc3a8fb6cba7fdad2183fee67853789bbfadb3a0" },
+    "craigsapp/chopin-humdrum-nifc": { "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb" },
+    "fosfrancesco/asap-dataset": { "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8", "license": "CC BY-NC-SA 4.0" }
+  },
+  "pieces": [
+    {
+      "id": "bach-bwv846", "composer": "Bach", "title": "Prelude and Fugue in C major (WTC I)", "catalogue": "BWV 846", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.ly", "ftp/BachJS/BWV846/wtk1-fugue1/wtk1-fugue1.ly"] },
+        { "repo": "humdrum-tools/bach-wtc", "entries": ["kern/wtc1p01.krn", "kern/wtc1f01.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Bach/Prelude/bwv_846/xml_score.musicxml", "Bach/Fugue/bwv_846/xml_score.musicxml"], "includes": ["Bach/Prelude/bwv_846/midi_score.mid", "Bach/Fugue/bwv_846/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "bach-bwv847", "composer": "Bach", "title": "Prelude and Fugue in C minor (WTC I)", "catalogue": "BWV 847", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV847/bwv847a/bwv847a.ly", "ftp/BachJS/BWV847/fuga2/fuga2.ly"] },
+        { "repo": "humdrum-tools/bach-wtc", "entries": ["kern/wtc1p02.krn", "kern/wtc1f02.krn"] }
+      ]
+    },
+    {
+      "id": "bach-bwv772", "composer": "Bach", "title": "Invention No. 1 in C major", "catalogue": "BWV 772", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV772/bach-invention-01/bach-invention-01.ly"] },
+        { "repo": "humdrum-tools/inventions", "entries": ["kern/inven01.krn"] }
+      ]
+    },
+    {
+      "id": "bach-bwv988-aria", "composer": "Bach", "title": "Goldberg Variations: Aria", "catalogue": "BWV 988", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV988/bwv-988-aria/bwv-988-aria.ly"] }
+      ]
+    },
+    {
+      "id": "bach-bwv795", "composer": "Bach", "title": "Sinfonia No. 9 in F minor", "catalogue": "BWV 795", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV795/bwv795/bwv795.ly"] },
+        { "repo": "humdrum-tools/inventions", "entries": ["kern/sinfo09.krn"] }
+      ]
+    },
+    {
+      "id": "bach-bwv853", "composer": "Bach", "title": "Prelude and Fugue in E-flat minor (WTC I)", "catalogue": "BWV 853", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV853/bwv853a/bwv853a.ly", "ftp/BachJS/BWV853/bwv853b/bwv853b.ly"] },
+        { "repo": "humdrum-tools/bach-wtc", "entries": ["kern/wtc1p08.krn", "kern/wtc1f08.krn"] }
+      ]
+    },
+    {
+      "id": "bach-bwv816-sarabande", "composer": "Bach", "title": "French Suite No. 5 in G major: Sarabande", "catalogue": "BWV 816", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV816/french-suite-5/french-suite-5-lys/french-suite-5-sarabande.ly"] }
+      ]
+    },
+    {
+      "id": "bach-bwv903", "composer": "Bach", "title": "Chromatic Fantasia and Fugue in D minor", "catalogue": "BWV 903", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BachJS/BWV903/bwv903fan/bwv903fan.ly", "ftp/BachJS/BWV903/bwv903fug/bwv903fug.ly"] }
+      ]
+    },
+
+    {
+      "id": "mozart-k545-1", "composer": "Mozart", "title": "Piano Sonata in C major, I. Allegro", "catalogue": "K. 545", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/MozartWA/KV545/K545-1/K545-1.ly"] },
+        { "repo": "craigsapp/mozart-piano-sonatas", "entries": ["kern/sonata15-1.krn"] }
+      ]
+    },
+    {
+      "id": "mozart-k331-3", "composer": "Mozart", "title": "Piano Sonata in A major, III. Rondo alla Turca", "catalogue": "K. 331", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurca.ly"], "includes": ["ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurcaNotes.ly"] },
+        { "repo": "craigsapp/mozart-piano-sonatas", "entries": ["kern/sonata11-3.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Mozart/Piano_Sonatas/11-3/xml_score.musicxml"], "includes": ["Mozart/Piano_Sonatas/11-3/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "mozart-k397", "composer": "Mozart", "title": "Fantasia in D minor", "catalogue": "K. 397", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/MozartWA/KV397/Fantasia/Fantasia.ly"] }
+      ]
+    },
+    {
+      "id": "mozart-k310-1", "composer": "Mozart", "title": "Piano Sonata in A minor, I. Allegro maestoso", "catalogue": "K. 310", "group": "well-known",
+      "sources": [
+        { "repo": "craigsapp/mozart-piano-sonatas", "entries": ["kern/sonata08-1.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Mozart/Piano_Sonatas/8-1/xml_score.musicxml"], "includes": ["Mozart/Piano_Sonatas/8-1/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "mozart-k574", "composer": "Mozart", "title": "Gigue in G major", "catalogue": "K. 574", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/MozartWA/KV574/k574/k574.ly"] }
+      ]
+    },
+
+    {
+      "id": "chopin-op9-2", "composer": "Chopin", "title": "Nocturne in E-flat major", "catalogue": "Op. 9 No. 2", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.ly"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/009-1-KI-002.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/009-1b-Sm-002.krn"] }
+      ]
+    },
+    {
+      "id": "chopin-op23", "composer": "Chopin", "title": "Ballade No. 1 in G minor", "catalogue": "Op. 23", "group": "well-known",
+      "sources": [
+        {
+          "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1.ly"], "includes": ["ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1-defs.ly"],
+          "lilypond": {
+            "keepWithTag": { "printed": "played" },
+            "why": "The typeset score keeps the 'printed' variant, which imitates the first edition's accidentals with glyphs drawn beside notes of the wrong pitch (ees with a drawn natural for E natural, f with a drawn sharp for F sharp); the 'played' variant is the same music at its true pitches with ordinary notation."
+          }
+        },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/023-1-BH.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/023-1a-Sm.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Chopin/Ballades/1/xml_score.musicxml"], "includes": ["Chopin/Ballades/1/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "chopin-op66", "composer": "Chopin", "title": "Fantaisie-Impromptu in C-sharp minor", "catalogue": "Op. 66", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/ChopinFF/O66/chopin_fantaisie-impromptu/chopin_fantaisie-impromptu.ly"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/066-1-Sam.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/066-1axx-COM.krn"] }
+      ]
+    },
+    {
+      "id": "chopin-op10-3", "composer": "Chopin", "title": "Étude in E major (\"Tristesse\")", "catalogue": "Op. 10 No. 3", "group": "well-known",
+      "sources": [
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/010-1b-Sm-003.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Chopin/Etudes_op_10/3/xml_score.musicxml"], "includes": ["Chopin/Etudes_op_10/3/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "chopin-op17-4", "composer": "Chopin", "title": "Mazurka in A minor", "catalogue": "Op. 17 No. 4", "group": "gem",
+      "sources": [
+        { "repo": "craigsapp/chopin-mazurkas", "entries": ["kern/mazurka17-4.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/017-1-BH-004.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/017-1a-Sm-004.krn"] }
+      ]
+    },
+    {
+      "id": "chopin-op45", "composer": "Chopin", "title": "Prelude in C-sharp minor", "catalogue": "Op. 45", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/ChopinFF/O45/chopin_prelude_op45/chopin_prelude_op45.ly"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/045-1a-ME-001.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/045-2-Sm.krn"] }
+      ]
+    },
+    {
+      "id": "chopin-op57", "composer": "Chopin", "title": "Berceuse in D-flat major", "catalogue": "Op. 57", "group": "gem",
+      "sources": [
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/057-1a-MEIj.krn"] },
+        { "repo": "craigsapp/chopin-humdrum-nifc", "entries": ["krn/057-2-BH.krn"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Chopin/Berceuse_op_57/xml_score.musicxml"], "includes": ["Chopin/Berceuse_op_57/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "chopin-op68-4", "composer": "Chopin", "title": "Mazurka in F minor", "catalogue": "Op. 68 No. 4", "group": "gem",
+      "sources": [
+        { "repo": "craigsapp/chopin-mazurkas", "entries": ["kern/mazurka68-4.krn"] }
+      ]
+    },
+
+    {
+      "id": "liszt-s141-3", "composer": "Liszt", "title": "La Campanella (Grandes études de Paganini No. 3)", "catalogue": "S. 141 No. 3", "group": "well-known",
+      "sources": [
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Liszt/Gran_Etudes_de_Paganini/2_La_campanella/xml_score.musicxml"], "includes": ["Liszt/Gran_Etudes_de_Paganini/2_La_campanella/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "liszt-s172-3", "composer": "Liszt", "title": "Consolation No. 3 in D-flat major", "catalogue": "S. 172 No. 3", "group": "gem",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/LisztF/S.172/liszt-consolation-no3/liszt-consolation-no3.ly"] }
+      ]
+    },
+
+    {
+      "id": "brahms-op39-15", "composer": "Brahms", "title": "Waltz in A-flat major", "catalogue": "Op. 39 No. 15", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BrahmsJ/O39/waltz-op39-15/waltz-op39-15.ly"] }
+      ]
+    },
+    {
+      "id": "brahms-op118-2", "composer": "Brahms", "title": "Intermezzo in A major", "catalogue": "Op. 118 No. 2", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/BrahmsJ/O118/intermezzo/intermezzo.ly"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Brahms/Six_Pieces_op_118/2/xml_score.musicxml"], "includes": ["Brahms/Six_Pieces_op_118/2/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "brahms-op10-1", "composer": "Brahms", "title": "Ballade in D minor (\"Edward\")", "catalogue": "Op. 10 No. 1", "group": "gem",
+      "sources": [
+        { "url": "https://kern.ccarh.org/cgi-bin/ksdata?l=users/craig/classical/brahms/op10&file=ballad10-1.krn&f=kern", "path": "kern.ccarh.org/users/craig/classical/brahms/op10/ballad10-1.krn" }
+      ]
+    },
+
+    {
+      "id": "debussy-l75-clair", "composer": "Debussy", "title": "Suite bergamasque: Clair de lune", "catalogue": "L. 75", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.ly"] }
+      ]
+    },
+    {
+      "id": "debussy-l66-1", "composer": "Debussy", "title": "Arabesque No. 1", "catalogue": "L. 66 No. 1", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.ly"] }
+      ]
+    },
+
+    {
+      "id": "satie-gymnopedie-1", "composer": "Satie", "title": "Gymnopédie No. 1", "catalogue": "", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/SatieE/gymnopedie_1/gymnopedie_1.ly"] }
+      ]
+    },
+    {
+      "id": "satie-gnossienne-1", "composer": "Satie", "title": "Gnossienne No. 1", "catalogue": "", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/SatieE/Gnossienne/no_1/no_1.ly"] }
+      ]
+    },
+    {
+      "id": "satie-gnossienne-3", "composer": "Satie", "title": "Gnossienne No. 3", "catalogue": "", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/SatieE/Gnossienne/no_3/no_3.ly"] }
+      ]
+    },
+
+    {
+      "id": "rachmaninoff-op3-2", "composer": "Rachmaninoff", "title": "Prelude in C-sharp minor", "catalogue": "Op. 3 No. 2", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/RachmaninoffS/O3/rach-prelude-op3-no2/rach-prelude-op3-no2.ly"] }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op23-5", "composer": "Rachmaninoff", "title": "Prelude in G minor", "catalogue": "Op. 23 No. 5", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/RachmaninoffS/O23/rach-prelude23-05/rach-prelude23-05.ly"] }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op23-4", "composer": "Rachmaninoff", "title": "Prelude in D major", "catalogue": "Op. 23 No. 4", "group": "well-known",
+      "sources": [
+        { "repo": "MutopiaProject/MutopiaProject", "entries": ["ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly"] },
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Rachmaninoff/Preludes_op_23/4/xml_score.musicxml"], "includes": ["Rachmaninoff/Preludes_op_23/4/midi_score.mid"] }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op32-10", "composer": "Rachmaninoff", "title": "Prelude in B minor", "catalogue": "Op. 32 No. 10", "group": "gem",
+      "sources": [
+        { "repo": "fosfrancesco/asap-dataset", "entries": ["Rachmaninoff/Preludes_op_32/10/xml_score.musicxml"], "includes": ["Rachmaninoff/Preludes_op_32/10/midi_score.mid"] }
+      ]
+    }
+  ]
+}

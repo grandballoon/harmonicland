@@ -209,6 +209,57 @@ describe("MusicxmlIn", () => {
     expect(score.notes.map((n) => n.stream)).toEqual([1, 2, 3, 4]);
     expect(score.notes.map((n) => n.hand)).toEqual(["upper", "lower", "lower", "lower"]);
   });
+
+  /* Ties are matched in time, not in document order: each voice is written
+     in turn, so a tie from one voice into another can put its stop before
+     its start in the file — and two voices can tie the same pitch at once. */
+  const note = (step: string, dur: number, voice: number, staff: number, tie = "") =>
+    `<note><pitch><step>${step}</step><octave>4</octave></pitch><duration>${dur}</duration>` +
+    `${tie.split(" ").filter(Boolean).map((t) => `<tie type="${t}"/>`).join("")}` +
+    `<voice>${voice}</voice><staff>${staff}</staff></note>`;
+
+  it("joins a tie whose stop is written before its start", () => {
+    // voice 1 holds the continuation at beat 2; voice 2, written after it,
+    // holds the note that ties into it from beat 1.
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1"><measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <forward><duration>1</duration><voice>1</voice></forward>
+      ${note("C", 1, 1, 1, "stop")}
+      <backup><duration>2</duration></backup>
+      ${note("C", 1, 2, 1, "start")}
+    </measure></part></score-partwise>`);
+    expect(score.notes.map((n) => [n.pitch, n.onset, n.duration])).toEqual([[60, 0, 1]]);
+  });
+
+  it("keeps two voices' simultaneous ties on one pitch apart", () => {
+    // voice 1: C dotted half tied over the barline to a quarter; voice 5
+    // (other staff): C quarter tied to C half. Keyed by pitch alone, the
+    // second tie took the first's.
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1">
+      <measure number="1"><attributes><divisions>1</divisions></attributes>
+        ${note("C", 3, 1, 1, "start")}
+        <backup><duration>3</duration></backup>
+        ${note("C", 1, 5, 2, "start")}
+        ${note("C", 2, 5, 2, "stop")}
+      </measure>
+      <measure number="2">
+        ${note("C", 1, 1, 1, "stop")}
+      </measure></part></score-partwise>`);
+    const got = score.notes.map((n) => [n.onset, n.duration, n.hand]);
+    expect(got).toEqual([[0, 2, "upper"], [0, 1.5, "lower"]]);
+  });
+
+  it("starts each measure at the barline even when the last stream backed up", () => {
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1">
+      <measure number="1"><attributes><divisions>1</divisions></attributes>
+        ${note("C", 2, 1, 1)}
+        <backup><duration>2</duration></backup>
+        <direction><direction-type><words>dolce</words></direction-type><staff>1</staff></direction>
+      </measure>
+      <measure number="2">${note("D", 2, 1, 1)}</measure></part></score-partwise>`);
+    expect(score.notes.map((n) => n.onset)).toEqual([0, 1]);
+    expect(spans(score)).toEqual([[0, 1], [1, 2]]);
+  });
 });
 
 /* ---- compressed MusicXML (.mxl = ZIP) ------------------------------

@@ -14,6 +14,7 @@ let root: HTMLDetailsElement;
 let store: SectionStore;
 let loaded: Section[];
 let isolated: Section[];
+let changes: (readonly Section[])[];
 let panel: SectionsPanel;
 
 const q = <T extends Element>(sel: string): T => root.querySelector(sel) as T;
@@ -25,9 +26,11 @@ beforeEach(() => {
   store = memorySectionStore();
   loaded = [];
   isolated = [];
+  changes = [];
   panel = mountSectionsPanel(root, store, {
     onLoad: (s) => loaded.push(s),
     onIsolate: (s) => isolated.push(s),
+    onChange: (list) => changes.push(list),
   });
 });
 
@@ -50,6 +53,20 @@ describe("the sections panel", () => {
     expect(rows()[0].classList.contains("current")).toBe(true);
     expect(q<HTMLButtonElement>(".section-save").disabled).toBe(true);
     expect(q(".sections-count").textContent).toBe("1");
+  });
+
+  it("saves and names from outside by the Save button's rules", () => {
+    expect(panel.save()).toBeNull(); // no score
+    panel.setScore("demo", 8);
+    expect(panel.save()).toBeNull(); // the whole piece
+    panel.setSelection({ from: 2, to: 3 });
+    const s = panel.save()!;
+    expect(s.id).toBe("2-3");
+    expect(panel.save()).toBeNull(); // saved already
+    panel.rename(s.id, "Bridge");
+    expect(store.load("demo")[0].name).toBe("Bridge");
+    expect(rows()[0].querySelector<HTMLInputElement>(".section-name")!.value).toBe("Bridge");
+    expect(changes[changes.length - 1][0].name).toBe("Bridge");
   });
 
   it("renames on commit without rebuilding the list", () => {
@@ -127,5 +144,18 @@ describe("the sections panel", () => {
     panel.setScore("file:b", 4);
     expect(rows()).toHaveLength(0);
     expect(q<HTMLParagraphElement>(".sections-empty").hidden).toBe(false);
+  });
+
+  it("hands out the list whenever it changes, and each score's list on load", () => {
+    store.save("file:a", add([], { from: 0, to: 0 }));
+    panel.setScore("file:a", 4);
+    expect(changes.at(-1)!.map((s) => s.id)).toEqual(["0-0"]);
+    panel.setSelection({ from: 1, to: 2 });
+    q<HTMLButtonElement>(".section-save").click();
+    expect(changes.at(-1)!.map((s) => s.id)).toEqual(["0-0", "1-2"]);
+    rows()[0].querySelector<HTMLButtonElement>(".section-remove")!.click();
+    expect(changes.at(-1)!.map((s) => s.id)).toEqual(["1-2"]);
+    panel.setScore(null, 0);
+    expect(changes.at(-1)).toEqual([]);
   });
 });

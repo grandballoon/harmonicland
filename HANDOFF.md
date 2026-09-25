@@ -27,10 +27,17 @@ src/
   outputs/  staff-full.ts  staff-std.ts  staff-piano.ts  piano-roll.ts
             tonnetz.ts  combo.ts  nashville.ts  audio.ts  midi-out.ts
   live-keys.ts      held-pitch set; press/release; the live-input seam
+  live-midi.ts      hardware MIDI keyboard -> LiveKeys
+  live-mic.ts       a real instrument through a microphone -> LiveKeys (silent voices)
+  mic-panel.ts      the tray's mic row: device, channel, response, sensitivity, meter
+  mic/              the listening pipeline: window, gate, note tracker, transcriber
+                    (pure, tested), Basic Pitch adapter, capture worklet, worker
   loop.ts           where loop edges sit and where a step lands (pure)
   sections.ts       saved sections: named bar ranges per score (pure)
   section-store.ts  sections in localStorage, keyed by score content
   sections-panel.ts the Sections dropdown (owns its DOM; hands back a range)
+  section-chips.ts  the header's section chips + the switch that marks sections
+                    on the sheet music (range-marks.ts, decision 4)
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module
@@ -124,7 +131,8 @@ conceptual view.
 | `StaffPiano` (`outputs/staff-piano.ts`) | two `View`s (+ `setHands`) | grand staff stacked over the piano: keys-only band, or the full falling-notes roll; optional hand coloring by `staff` |
 | `AudioOut` (`outputs/audio.ts`) | `Sink` (+ `liveOn/liveOff`) | WebAudio, edge-triggered voices |
 | `MidiOut` (`outputs/midi-out.ts`) | `Sink` (+ `enable/disable`) | Web MIDI out, edge-triggered note-on/off |
-| `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam |
+| `LiveKeys` (`live-keys.ts`) | `press/release/releaseAll/held` | held-pitch set; the live-input seam; `press(p, {silent})` holds without sounding |
+| `LiveMic` (`live-mic.ts`) | `inputs/enable/tune/setChannel/disable` | microphone → Basic Pitch (in a worker) → silent `LiveKeys` voices |
 | LOOP (`main.ts`) | — | ~12 lines wiring score + view fn + clock |
 
 `View`, `Sink`, `Parser`, and `Clock` are type aliases in `types.ts` — the
@@ -325,6 +333,17 @@ Plan:
 - **Velocity → loudness** is deliberately dropped at first; it's a later,
   isolated change inside `AudioOut.liveOn(pitch, velocity)` with no decoder or
   `LiveKeys` change.
+
+**Live microphone input** — *done (Phase 1 of `liveinput_options.md`).*
+A real instrument heard through any microphone feeds the same `LiveKeys` seam as MIDI.
+The pipeline runs off the main thread: `getUserMedia` (speech processing off) → an `AudioContext` pinned to 22.05 kHz, so the browser resamples any device → a capture `AudioWorklet` that keeps one channel or mixes them → a `MessagePort` → a Worker running Spotify's Basic Pitch on TF.js (WebGL, CPU fallback).
+Basic Pitch takes fixed ~2 s windows, so `mic/transcriber.ts` re-runs it on a sliding, frame-aligned window and settles only frames a `lookahead` short of the edge; runs are self-paced, so a slow machine lags more but never queues.
+`mic/gate.ts` follows each mic's noise floor, and `mic/note-tracker.ts` turns activations into note-on/off with hysteresis, frame-confirmed onsets (which reject overtones) and re-strikes (which practice mode needs).
+Those three are pure and model-agnostic: the model is an injected `Infer`, so Phase 2's causal piano model is a new `Infer`, not a rewrite.
+Mic voices are **silent** (`LiveKeys.press(p, { silent: true })`): they glow and count as played but never reach `AudioOut`/`MidiOut`, since the instrument sounds itself and speaker output would feed back into the mic.
+The tray's mic row (`mic-panel.ts`) picks the device and, for multi-input interfaces, the channel (remembered per device), plus response (lookahead 5 / 8 / 14 frames) and sensitivity, and shows a level meter against the gate's floor.
+Measured offline on the Salamander samples: every chord and re-strike found with no ghosts at lookahead ≥ 5; end-to-end lag is roughly lookahead + one model run + ~23 ms of capture buffering.
+The app's own playback reaches the mic through speakers, so headphones are needed while using it.
 
 **MidiOut output** (done) — `outputs/midi-out.ts`, a `Sink` that emits Web MIDI
 note-on/off instead of drawing, edge-triggered exactly like `AudioOut`. It opens

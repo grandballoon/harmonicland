@@ -11,8 +11,11 @@
      <sound tempo>— BPM; default 120
      <chord>      — note shares the previous note's onset, no advance
      <backup>/<forward> — move the cursor (multi-voice / multi-staff)
-     <tie>        — merge tied notes into one sustained note
-     <measure>    — a barline at each one's start, and one at the end
+     <tie>        — merge tied notes into one sustained note, matched in
+                    time (not file order), same voice first
+     <measure>    — a barline at each one's start, and one at the end;
+                    the next begins where the measure's furthest voice
+                    ended, wherever the last <backup> left the cursor
      <time>/<key> — the meter and key signature, carried on the barline
    Out of scope (kept isolated, like every limitation): timewise
    scores. Compressed .mxl arrives here already unwrapped by MxlIn.
@@ -76,7 +79,7 @@ export function parse(src: string): Score {
     let tempo = initialTempo;
     let cursor = 0; // seconds from piece start
     let lastOnset = 0; // onset of the previous note, for <chord>
-    const open = new Map<number, RawNote>(); // pitch -> note kept open by a tie
+    const tied: TiedNote[] = []; // this part's notes, before ties are joined
 
     const secPerDiv = () => 60 / tempo / divisions;
 
@@ -85,7 +88,9 @@ export function parse(src: string): Score {
       // are met — they come inside the measure they govern.
       const post: { at: number; beats?: number; unit?: number; fifths?: number } = { at: cursor };
       if (partOrdinal === 1) barlines.push(post);
+      let reached = cursor; // the furthest any voice got in this measure
       for (const el of measure.children) {
+        reached = Math.max(reached, cursor);
         switch (el.nodeName) {
           case "attributes": {
             const d = numOf(el, ":scope > divisions", NaN);
@@ -137,40 +142,75 @@ export function parse(src: string): Score {
             const acc = alter > 0 ? "#" : alter < 0 ? "b" : "";
             const spelling = { letter: step as Letter, acc } as const;
 
-            // ties: <tie type="stop"> extends the matching open note rather
-            // than emitting a new one; <tie type="start"> keeps it open.
             const tieTypes = [...el.querySelectorAll(":scope > tie")].map((t) => t.getAttribute("type"));
-            const tieStart = tieTypes.includes("start");
-            const tieStop = tieTypes.includes("stop");
-
-            if (tieStop && open.has(pitch)) {
-              const held = open.get(pitch)!;
-              held.duration = onset + durSec - held.onset;
-              if (!tieStart) open.delete(pitch); // chain fully closed
-              break;
-            }
 
             // provenance in this part's namespace, and the hand resolved from
             // it by the rule chosen above for the whole part.
             const stream = multiStaff ? numOf(el, ":scope > staff", 1) : partOrdinal;
             const hand: Hand = stream === 1 ? "upper" : "lower";
 
-            const note: RawNote = {
-              pitch, spelling, onset, duration: Math.max(0.02, durSec), hand, stream,
-            };
-            notes.push(note);
-            if (tieStart) open.set(pitch, note);
+            tied.push({
+              note: { pitch, spelling, onset, duration: Math.max(0.02, durSec), hand, stream },
+              end: onset + durSec,
+              voice: text(el, ":scope > voice"),
+              stream,
+              start: tieTypes.includes("start"),
+              stop: tieTypes.includes("stop"),
+            });
             break;
           }
         }
       }
+      cursor = Math.max(reached, cursor);
     }
+    notes.push(...joinTies(tied));
     // the closing post: where the last measure's content left the cursor.
     if (partOrdinal === 1) barlines.push({ at: cursor });
   }
 
   if (!notes.length) throw new Error("No pitched notes found in score.");
   return Core.makeScore(notes, barlines);
+}
+
+interface TiedNote {
+  note: RawNote;
+  /** Exact end, before the minimum audible duration is applied. */
+  end: number;
+  voice: string;
+  stream: number;
+  start: boolean;
+  stop: boolean;
+}
+
+// Seconds are sums of float divisions; two instants this close are one.
+const SAME_TIME = 1e-6;
+
+/** Joins tied notes into single sustained notes. A tie-stop continues the
+ *  open tie on its pitch that ends exactly where it begins — the same
+ *  voice's if there is one, else the same staff's, else any — so ties
+ *  resolve by time, whatever order the file wrote its voices in. A stop
+ *  with no such tie is a note of its own. */
+function joinTies(tied: TiedNote[]): RawNote[] {
+  const byTime = [...tied].sort((a, b) => a.note.onset - b.note.onset);
+  const open: TiedNote[] = [];
+  const out: RawNote[] = [];
+  for (const t of byTime) {
+    if (t.stop) {
+      const ends = open.filter((o) => o.note.pitch === t.note.pitch && Math.abs(o.end - t.note.onset) < SAME_TIME);
+      const held = ends.find((o) => o.voice === t.voice) ?? ends.find((o) => o.stream === t.stream) ?? ends[0];
+      if (held) {
+        held.end = t.end;
+        held.note.duration = held.end - held.note.onset;
+        held.voice = t.voice;
+        held.stream = t.stream;
+        if (!t.start) open.splice(open.indexOf(held), 1); // chain fully closed
+        continue;
+      }
+    }
+    out.push(t.note);
+    if (t.start) open.push(t);
+  }
+  return out;
 }
 
 export const MusicxmlIn = { parse };

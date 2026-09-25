@@ -1,0 +1,627 @@
+{
+  "_generated": "by tools/library/convert.ts — do not edit by hand",
+  "lilypond": "GNU LilyPond 2.26.0 (running Guile 3.0)",
+  "files": [
+    {
+      "piece": "bach-bwv846",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.ly",
+      "sha256": "9e4540143b5c5a9884f215428837fe91d1b471b02669f3a07ce50560736078e9",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv846/wtk1-prelude1.musicxml",
+      "measures": 35,
+      "verification": {
+        "ok": true,
+        "notes": 549,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv846",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV846/wtk1-fugue1/wtk1-fugue1.ly",
+      "sha256": "10d51eabac0fdfeddcbb7d76ad3bf361d4c095feec3ce7aa61d034d5b836c708",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv846/wtk1-fugue1.musicxml",
+      "measures": 27,
+      "verification": {
+        "ok": true,
+        "notes": 734,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv847",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV847/bwv847a/bwv847a.ly",
+      "sha256": "2923478f3436ddc12525fab5514e354025a9715205424944fd0e5f7f24ba70d9",
+      "warnings": [
+        "articulation-event on a spacer placed on the lowest note on its staff (line 89:113)"
+      ],
+      "lilypond": [
+        "compat: paper-conditional-define applied 1x in sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV847/bwv847a/bwv847a.ly"
+      ],
+      "output": "scores/bach-bwv847/bwv847a.musicxml",
+      "measures": 38,
+      "verification": {
+        "ok": true,
+        "notes": 1092,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv847",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV847/fuga2/fuga2.ly",
+      "sha256": "5b4ba90ea58a8daae5f74d9f022ef65ffccd6ab4faf8e9c58d099ed1426db6db",
+      "warnings": [],
+      "lilypond": [
+        "fuga2.ly:132:21: warning: cannot resolve rest collision: rest direction not set"
+      ],
+      "output": "scores/bach-bwv847/fuga2.musicxml",
+      "measures": 31,
+      "verification": {
+        "ok": true,
+        "notes": 754,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv772",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV772/bach-invention-01/bach-invention-01.ly",
+      "sha256": "3c01302f70efd1dd6f43becaf19b9b2aac49e25b3e89666e3e55bc576c6cd55d",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv772/bach-invention-01.musicxml",
+      "measures": 22,
+      "verification": {
+        "ok": true,
+        "notes": 458,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv988-aria",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV988/bwv-988-aria/bwv-988-aria.ly",
+      "sha256": "f86adfb84573bc7775fe48750f7ee9b6df2adf2fcc5e32fb52c09e589c9e12af",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv988-aria/bwv-988-aria.musicxml",
+      "measures": 32,
+      "verification": {
+        "ok": true,
+        "notes": 399,
+        "graces": 27,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv795",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV795/bwv795/bwv795.ly",
+      "sha256": "165ac68d570a95b49f352d663d615ad2baae3afee4922c6513d0e59e2b23f5c7",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv795/bwv795.musicxml",
+      "measures": 35,
+      "verification": {
+        "ok": true,
+        "notes": 650,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv853",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV853/bwv853a/bwv853a.ly",
+      "sha256": "94f07ea4fcbee4260186914689f5537c16f8b3982bc39217ae276f04d7d4b9ed",
+      "warnings": [],
+      "lilypond": [
+        "compat: paper-conditional-define applied 2x in sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV853/bwv853a/bwv853a.ly",
+        "warning: the property 'tupletNumberFormatFunction' does not exist (perhaps a typing error)"
+      ],
+      "output": "scores/bach-bwv853/bwv853a.musicxml",
+      "measures": 40,
+      "verification": {
+        "ok": true,
+        "notes": 682,
+        "graces": 1,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv853",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV853/bwv853b/bwv853b.ly",
+      "sha256": "73c9f6eb4407f3b9d0c9fe4691bb2f09fdfbd8bb9e04d6fb98d1f7cb5dced4c3",
+      "warnings": [],
+      "lilypond": [
+        "compat: paper-conditional-define applied 2x in sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV853/bwv853b/bwv853b.ly",
+        "warning: the property 'forced-distance' does not exist (perhaps a typing error)"
+      ],
+      "output": "scores/bach-bwv853/bwv853b.musicxml",
+      "measures": 87,
+      "verification": {
+        "ok": true,
+        "notes": 1385,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv816-sarabande",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV816/french-suite-5/french-suite-5-lys/french-suite-5-sarabande.ly",
+      "sha256": "9fe9cec21c722ca75e42490c563215e65016cc3476c47f82724d611e87607d67",
+      "warnings": [],
+      "lilypond": [
+        "french-suite-5-sarabande.ly:32:4: warning: cannot find or create context: Grace"
+      ],
+      "output": "scores/bach-bwv816-sarabande/french-suite-5-sarabande.musicxml",
+      "measures": 40,
+      "verification": {
+        "ok": true,
+        "notes": 409,
+        "graces": 7,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv903",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV903/bwv903fan/bwv903fan.ly",
+      "sha256": "ac63720d97949d0d8ba20dfe3eb55e43ada857d6d8bdd62f464ce623cb40d8d5",
+      "warnings": [
+        "slur-event ends with none open (LilyPond ignores it too) (line 510:34)"
+      ],
+      "lilypond": [
+        "compat: beat-length applied 2x in sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV903/bwv903fan/bwv903fan.ly",
+        "bwv903fan.ly:411:16: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:453:16: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:827:4: warning: unterminated tie",
+        "bwv903fan.ly:499:13: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:502:7: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:509:13: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:515:13: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:526:13: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:532:13: warning: not a grob name, `SeparationItem'",
+        "bwv903fan.ly:535:13: warning: not a grob name, `SeparationItem'"
+      ],
+      "output": "scores/bach-bwv903/bwv903fan.musicxml",
+      "measures": 79,
+      "verification": {
+        "ok": true,
+        "notes": 1859,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "bach-bwv903",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV903/bwv903fug/bwv903fug.ly",
+      "sha256": "ca12aebbc264f9340edfce6586237068d1891e574c7aa9cd79aee8be77094529",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/bach-bwv903/bwv903fug.musicxml",
+      "measures": 161,
+      "verification": {
+        "ok": true,
+        "notes": 2582,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "mozart-k545-1",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV545/K545-1/K545-1.ly",
+      "sha256": "84d0e951e6d8807d3286f31ed7878a35dfddb9850bbae9156be0f5ac0a3e2e10",
+      "warnings": [
+        "voice 3 overlaps itself; written as 2 MusicXML voices (line 98:60)"
+      ],
+      "lilypond": [
+        "K545-1.ly:83:31: programming error: cyclic dependency: calculation-in-progress encountered for Slur.control-points",
+        "K545-1.ly:192:15: programming error: cyclic dependency: calculation-in-progress encountered for Slur.control-points"
+      ],
+      "output": "scores/mozart-k545-1/K545-1.musicxml",
+      "measures": 73,
+      "verification": {
+        "ok": true,
+        "notes": 1271,
+        "graces": 17,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "mozart-k331-3",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurca.ly",
+      "sha256": "eb5aeab7ca2cd4299e7a99f95dee9c8d2d52d73c8327474b6249c1ee4d5a20d9",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/mozart-k331-3/KV331_3_RondoAllaTurca.musicxml",
+      "measures": 137,
+      "verification": {
+        "ok": true,
+        "notes": 1424,
+        "graces": 190,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "mozart-k397",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV397/Fantasia/Fantasia.ly",
+      "sha256": "67026a04b1dbd7ce9cb59c2f8f7ac72317dec9a62f5c44f1f7d43376f6f29b97",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/mozart-k397/Fantasia.musicxml",
+      "measures": 108,
+      "verification": {
+        "ok": true,
+        "notes": 1520,
+        "graces": 9,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "mozart-k574",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV574/k574/k574.ly",
+      "sha256": "6cdb9c0d45590a261ad688bb205a8ff57ba413976c540459ccc55cc4987ac8c9",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/mozart-k574/k574.musicxml",
+      "measures": 40,
+      "verification": {
+        "ok": true,
+        "notes": 457,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "chopin-op9-2",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.ly",
+      "sha256": "51a5a1cfed40eaee9d44f04b35673ff94240932a1f78c935d16016d0c42ac617",
+      "warnings": [
+        "slur-event ends with none open (LilyPond ignores it too) (line 282:11)"
+      ],
+      "lilypond": [
+        "compat: set-octavation applied 2x in sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.ly",
+        "chopin_nocturne_op9_n2.ly:282:12: warning: cannot end slur"
+      ],
+      "output": "scores/chopin-op9-2/chopin_nocturne_op9_n2.musicxml",
+      "measures": 35,
+      "verification": {
+        "ok": true,
+        "notes": 1232,
+        "graces": 15,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "chopin-op23",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1.ly",
+      "sha256": "53b9169fb8a4a49f51b076354d67da31af3cca29d3600beab517a84c061b2b6f",
+      "warnings": [
+        "an extra engraved score (3 notes, e.g. inside a markup) is not converted",
+        "voice 31 overlaps itself; written as 2 MusicXML voices (line 764:69)",
+        "slur-event ends with none open (LilyPond ignores it too) (line 528:28)",
+        "articulation-event on a spacer placed on the lowest note on its staff (line 1350:37)",
+        "articulation-event on a spacer placed on the lowest note on its staff (line 1351:37)",
+        "articulation-event on a spacer placed on the lowest note on its staff (line 1352:37)"
+      ],
+      "lilypond": [
+        "option: keepWithTag printed -> played applied 1x in sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1.ly",
+        "chopin-op23-ballade-1.ly:1497:11: warning: cannot find start of piano pedal",
+        "chopin-op23-ballade-1.ly:950:57: warning: cannot find start of piano pedal",
+        "chopin-op23-ballade-1.ly:144:59: programming error: cyclic dependency: calculation-in-progress encountered for OttavaBracket.stencil"
+      ],
+      "output": "scores/chopin-op23/chopin-op23-ballade-1.musicxml",
+      "measures": 264,
+      "verification": {
+        "ok": true,
+        "notes": 5144,
+        "graces": 32,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "chopin-op66",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O66/chopin_fantaisie-impromptu/chopin_fantaisie-impromptu.ly",
+      "sha256": "f1c7074d91ad89e2af12f7da89b582073a874f7321cb76ff5252153067065eae",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/chopin-op66/chopin_fantaisie-impromptu.musicxml",
+      "measures": 138,
+      "verification": {
+        "ok": true,
+        "notes": 3017,
+        "graces": 18,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "chopin-op45",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O45/chopin_prelude_op45/chopin_prelude_op45.ly",
+      "sha256": "97d88a99d11f6d695a426b44c4c98bd1ce2d5e7fc4beed902f336265b207ba50",
+      "warnings": [
+        "fingering-event on a spacer placed on the note held through it (line 113:11)",
+        "fingering-event on a spacer placed on the note held through it (line 138:7)",
+        "fingering-event on a spacer placed on the note held through it (line 202:7)",
+        "fingering-event on a spacer placed on the note held through it (line 230:7)",
+        "fingering-event on a spacer placed on the note held through it (line 514:7)",
+        "fingering-event on a spacer placed on the note held through it (line 539:7)"
+      ],
+      "lilypond": [
+        "warning: the property 'measureLengthAsMoment' is deprecated; use 'measureLength'",
+        "chopin_prelude_op45.ly:551:27: programming error: cyclic dependency: calculation-in-progress encountered for PhrasingSlur.control-points",
+        "chopin_prelude_op45.ly:670:13: programming error: cyclic dependency: calculation-in-progress encountered for PhrasingSlur.control-points"
+      ],
+      "output": "scores/chopin-op45/chopin_prelude_op45.musicxml",
+      "measures": 93,
+      "verification": {
+        "ok": true,
+        "notes": 1359,
+        "graces": 15,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "liszt-s172-3",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/LisztF/S.172/liszt-consolation-no3/liszt-consolation-no3.ly",
+      "sha256": "dab42ef825f345e19e2dda6ed95095be9438c176af821bf7b598c32a3e252dce",
+      "warnings": [],
+      "lilypond": [
+        "warning: compressing over-full page by 6.9 staff-spaces",
+        "warning: page 1 has been compressed"
+      ],
+      "output": "scores/liszt-s172-3/liszt-consolation-no3.musicxml",
+      "measures": 61,
+      "verification": {
+        "ok": true,
+        "notes": 1030,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "brahms-op39-15",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BrahmsJ/O39/waltz-op39-15/waltz-op39-15.ly",
+      "sha256": "64cef49cf056947e8d4f900535dbc28a4a841653ff1e2a936534e928e2209a65",
+      "warnings": [
+        "a tuplet over spacers only (LilyPond prints no bracket) (line 115:59)",
+        "a tuplet over spacers only (LilyPond prints no bracket) (line 119:75)",
+        "a tuplet over spacers only (LilyPond prints no bracket) (line 122:78)"
+      ],
+      "lilypond": [],
+      "output": "scores/brahms-op39-15/waltz-op39-15.musicxml",
+      "measures": 44,
+      "verification": {
+        "ok": true,
+        "notes": 720,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "brahms-op118-2",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BrahmsJ/O118/intermezzo/intermezzo.ly",
+      "sha256": "5bd64924ba0c1a72018144bbd9245ebef7d6892acb163fb282c3a25bd0f21623",
+      "warnings": [
+        "slur-event on a spacer placed on the highest note on its staff (line 486:9)"
+      ],
+      "lilypond": [
+        "intermezzo.ly:259:7: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:260:10: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:261:10: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:262:10: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:364:7: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:365:10: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:366:10: warning: no viable initial configuration found: may not find good beam slope",
+        "intermezzo.ly:367:10: warning: no viable initial configuration found: may not find good beam slope"
+      ],
+      "output": "scores/brahms-op118-2/intermezzo.musicxml",
+      "measures": 117,
+      "verification": {
+        "ok": true,
+        "notes": 1637,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "debussy-l75-clair",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.ly",
+      "sha256": "c78762a27972f0643a34b994bffa1d058b1bb51e3947c0b50029aa75359e2a49",
+      "warnings": [
+        "voice 10 overlaps itself; written as 2 MusicXML voices (line 130:14)"
+      ],
+      "lilypond": [
+        "debussy_Ste_Bergamesq_Clair.ly:243:14: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:244:13: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:244:40: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:250:3: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:251:13: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:251:40: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:267:3: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:267:33: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:272:3: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:272:35: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:291:14: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:292:8: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:292:34: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:297:3: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:298:9: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:298:35: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:328:61: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:524:3: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:524:35: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:524:61: warning: no viable initial configuration found: may not find good beam slope",
+        "debussy_Ste_Bergamesq_Clair.ly:529:3: warning: no viable initial configuration found: may not find good beam slope"
+      ],
+      "output": "scores/debussy-l75-clair/debussy_Ste_Bergamesq_Clair.musicxml",
+      "measures": 72,
+      "verification": {
+        "ok": true,
+        "notes": 1565,
+        "graces": 1,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "debussy-l66-1",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.ly",
+      "sha256": "4639d0220a0a242e2928348cdf6075a7e6cdd35a8b051d67612aa99a2d636a3a",
+      "warnings": [
+        "a breve held across the barline after bar 95 is written as tied notes (line 428:2)"
+      ],
+      "lilypond": [],
+      "output": "scores/debussy-l66-1/debussy_Arabesque_1.musicxml",
+      "measures": 107,
+      "verification": {
+        "ok": true,
+        "notes": 1500,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "satie-gymnopedie-1",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/gymnopedie_1/gymnopedie_1.ly",
+      "sha256": "420a52244e9fbe106dd33ba2cac84414fd66e0d01c6d472205bad39678d4ce04",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/satie-gymnopedie-1/gymnopedie_1.musicxml",
+      "measures": 47,
+      "verification": {
+        "ok": true,
+        "notes": 282,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "satie-gnossienne-1",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/Gnossienne/no_1/no_1.ly",
+      "sha256": "f1f5d6a0d94d6443e87909f797ad999022d7ec795c4015cdb7a1cafb57a37fdb",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/satie-gnossienne-1/no_1.musicxml",
+      "measures": 82,
+      "verification": {
+        "ok": true,
+        "notes": 760,
+        "graces": 100,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "satie-gnossienne-3",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/Gnossienne/no_3/no_3.ly",
+      "sha256": "40ba504763fc74972c293b15fabb206bf513bc8e4a25ccc3aa587f983324bad3",
+      "warnings": [],
+      "lilypond": [],
+      "output": "scores/satie-gnossienne-3/no_3.musicxml",
+      "measures": 54,
+      "verification": {
+        "ok": true,
+        "notes": 593,
+        "graces": 7,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "rachmaninoff-op3-2",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O3/rach-prelude-op3-no2/rach-prelude-op3-no2.ly",
+      "sha256": "debdb6768d1d365492315ced4d735704e56539ae967600538b6d3c123a7f6681",
+      "warnings": [
+        "slur-event ends with none open (LilyPond ignores it too) (line 389:34)",
+        "slur-event ends with none open (LilyPond ignores it too) (line 391:34)",
+        "slur-event ends with none open (LilyPond ignores it too) (line 436:32)",
+        "slur-event starts while one is open; ignored, as LilyPond does (line 1330:29)"
+      ],
+      "lilypond": [
+        "warning: compressing over-full page by 0.0 staff-spaces",
+        "warning: page 2 has been compressed",
+        "rach-prelude-op3-no2.ly:866:34: warning: no viable initial configuration found: may not find good beam slope",
+        "rach-prelude-op3-no2.ly:896:34: warning: no viable initial configuration found: may not find good beam slope",
+        "rach-prelude-op3-no2.ly:926:34: warning: no viable initial configuration found: may not find good beam slope"
+      ],
+      "output": "scores/rachmaninoff-op3-2/rach-prelude-op3-no2.musicxml",
+      "measures": 62,
+      "verification": {
+        "ok": true,
+        "notes": 1812,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "rachmaninoff-op23-5",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O23/rach-prelude23-05/rach-prelude23-05.ly",
+      "sha256": "5b94f752746d8d494ad040e90774c31905de69892704f0af1efcf4c8c319d486",
+      "warnings": [],
+      "lilypond": [
+        "compat: make-moment-4 applied 3x in sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O23/rach-prelude23-05/rach-prelude23-05.ly",
+        "warning: the property 'tempoWholesPerMinuteAsMoment' is deprecated; use 'tempoWholesPerMinute'",
+        "warning: too few pages: 6 (should have at least 7)"
+      ],
+      "output": "scores/rachmaninoff-op23-5/rach-prelude23-05.musicxml",
+      "measures": 86,
+      "verification": {
+        "ok": true,
+        "notes": 3874,
+        "graces": 0,
+        "problems": []
+      },
+      "schema": []
+    },
+    {
+      "piece": "rachmaninoff-op23-4",
+      "source": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly",
+      "sha256": "e22fe4d423cb400b4c1e92e137ccf710cf042e5d88c2075989878e9687dd0890",
+      "warnings": [],
+      "lilypond": [
+        "compat: script-name-symbols applied 3x in sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly",
+        "compat: script-alist-mutation applied 1x in sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly",
+        "programming error: TupletBracket.positions requested before line breaking",
+        "programming error: TupletBracket.Y-offset accessed before line breaking"
+      ],
+      "output": "scores/rachmaninoff-op23-4/rach-prelude23-04.musicxml",
+      "measures": 77,
+      "verification": {
+        "ok": true,
+        "notes": 1339,
+        "graces": 1,
+        "problems": []
+      },
+      "schema": []
+    }
+  ]
+}

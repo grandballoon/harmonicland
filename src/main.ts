@@ -24,6 +24,7 @@ import { Verovio } from "./outputs/verovio";
 import { LiveKeys, type Voice } from "./live-keys";
 import { TonnetzState } from "./tonnetz-state";
 import { LiveMidi } from "./live-midi";
+import { mountMicPanel } from "./mic-panel";
 import { LiveGamepad, keysMapping } from "./live-gamepad";
 import { perfectoMapping } from "./gamepad-perfecto";
 import { tonnetzMapping } from "./gamepad-tonnetz";
@@ -34,6 +35,8 @@ import { Loop, type Edge } from "./loop";
 import { Sections, describeBars, type Section } from "./sections";
 import { localSectionStore } from "./section-store";
 import { mountSectionsPanel } from "./sections-panel";
+import { mountSectionChips } from "./section-chips";
+import { mountSelectionTip } from "./selection-tip";
 import {
   chordName, degreeNumeral, PITCH_NAMES,
   type Degree, type JoystickDirection, type PitchClass,
@@ -101,6 +104,7 @@ const liveSnapshot = (): LiveSnapshot => ({
   pagePan,
   sheetScroll,
   selection,
+  marks,
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
@@ -254,6 +258,13 @@ gamepadBtn.addEventListener("click", () => {
   }
 });
 
+// --- live microphone input (a real instrument -> LiveKeys) ---------
+// The panel owns its row of the tray and the session; its voices reach
+// every view and practice mode through LiveKeys, silently.
+mountMicPanel($<HTMLButtonElement>("mic"), $("mic-readout"), $<HTMLDetailsElement>("mic-settings"), {
+  status: (text) => { $("status").textContent = text; },
+});
+
 // --- MIDI output (score sink -> hardware synth) --------------------
 // A Sink, not an input: the frame loop already calls MidiOut.at every
 // frame; enabling just opens an output port for it to send to. Behind a
@@ -372,6 +383,7 @@ function applyBars(): void {
   loopBtn.disabled = !enabled;
   loopBtn.setAttribute("aria-pressed", String(enabled && looping && !practising));
   sectionsPanel.setSelection(selection);
+  sectionChips.setSelection(selection);
   scrubTrack.style.setProperty("--loop-a", String(d > 0 ? span.start / d : 0));
   scrubTrack.style.setProperty("--loop-b", String(d > 0 ? span.end / d : 1));
 }
@@ -482,17 +494,56 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
 // Loading one IS selecting its bars, so it loops here and confines a lesson
 // in practice mode by the same path as every other bar control — and the
 // hand being practised is left exactly as it was.
+//
+// The tray's panel owns the list. The header's chips offer the same list a
+// click away, and the sheet music tints it while the chips' switch is on
+// (outputs/range-marks.ts, decision 4); a click on a tinted section selects
+// it (see pickBar), and the tip over it opens it on the keys alone.
 const sectionName = (s: Section): string =>
   s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range);
-const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), {
-  onLoad(s) {
-    AudioOut.ensure();
-    selectBars(s.range);
-    $("status").textContent = view === Practice
-      ? `Practice · ${sectionName(s)} · play the lit keys · ← → step`
-      : `Looping ${sectionName(s)} · ← → step through it · Play goes round it`;
+/** The loaded score's sections, as the panel last handed them out. */
+let sections: readonly Section[] = [];
+let showMarks = true;
+/** What the sheets mark: every section's bars, while the switch is on. */
+let marks: readonly BarRange[] = [];
+const syncMarks = (): void => {
+  marks = showMarks ? sections.map((s) => s.range) : [];
+};
+
+/** Put the playhead at the top of the selection, unless it is already in
+ *  it — so what follows the playhead (the sheets' scroller) goes there
+ *  too. A lesson's cursor needs no help: confining it does the same. */
+function enterSelection(): void {
+  if (view === Practice) return;
+  const { start, end } = Core.barTime(score, selection);
+  const t = clock.now();
+  if (t < start || t >= end) clock.seek(start);
+}
+
+function loadSection(s: Section): void {
+  AudioOut.ensure();
+  selectBars(s.range);
+  enterSelection();
+  $("status").textContent = view === Practice
+    ? `Practice · ${sectionName(s)} · play the lit keys · ← → step`
+    : `Looping ${sectionName(s)} · ← → step through it · Play goes round it`;
+}
+const sectionChips = mountSectionChips($("section-bar"), {
+  // on the isolated keys, a chip moves them to another section
+  onPick: (s) => (isolated() ? isolate(s) : loadSection(s)),
+  onShow(on) {
+    showMarks = on;
+    syncMarks();
   },
+});
+const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), {
+  onLoad: loadSection,
   onIsolate: isolate,
+  onChange(list) {
+    sections = list;
+    syncMarks();
+    sectionChips.setList(list);
+  },
 });
 
 // --- the isolated keyboard -------------------------------------------
@@ -510,10 +561,7 @@ function isolate(s: Section): void {
   tray.open = false;
   applyView("keys"); // first, so the bars below loop rather than confine a lesson
   selectBars(s.range);
-  // start at the top of the section, unless the playhead is already in it
-  const { start, end } = Core.barTime(score, selection);
-  const t = clock.now();
-  if (t < start || t >= end) clock.seek(start);
+  enterSelection();
   $("status").textContent = `Keys of ${sectionName(s)} · Play goes round it · ← → step · Esc leaves`;
 }
 
@@ -738,11 +786,17 @@ const rollRegion = (): KeyboardRegion | null =>
   view.keyboardRegion(svg, { score, t: clock.now(), live: liveSnapshot() });
 /** The music under the scroller is a second input surface: the view says
  *  which bar a click is on (view.ts, note 5), and this says what picking
- *  it means. In practice mode the bar is isolated, and shift-click grows
+ *  it means. On a marked section, its bars are selected.
+ *  Otherwise, in practice mode the bar is isolated, and shift-click grows
  *  the range to reach it; elsewhere the playhead goes to the bar. */
 function pickBar(e: MouseEvent): void {
   if (!scrolling) return;
   const r = scoreScroll.getBoundingClientRect();
+  // a grip standing on a mark's edge is the grip's, clicked or dragged
+  const onGrip = scrolling.gripAt(e.clientX - r.left, e.clientY - r.top) !== null;
+  const mark = onGrip ? null : scrolling.markAt(e.clientX - r.left, e.clientY - r.top);
+  const marked = Sections.find(sections, mark);
+  if (marked) return loadSection(marked);
   const bar = scrolling.barAt(e.clientX - r.left, e.clientY - r.top);
   if (bar === null) return;
   if (view === Practice) {
@@ -844,7 +898,8 @@ scoreScroll.addEventListener("pointerdown", (e) => {
 });
 scoreScroll.addEventListener("pointermove", (e) => {
   if (!gripping) {
-    scoreScroll.style.cursor = scrolling?.gripAt(...inScroll(e)) ? "ew-resize" : "";
+    const at = inScroll(e);
+    scoreScroll.style.cursor = scrolling?.gripAt(...at) ? "ew-resize" : scrolling?.markAt(...at) ? "pointer" : "";
     return;
   }
   const t = scrolling?.timeAt(...inScroll(e)) ?? null;
@@ -862,6 +917,21 @@ const releaseGrip = (e: PointerEvent): void => {
 };
 scoreScroll.addEventListener("pointerup", releaseGrip);
 scoreScroll.addEventListener("pointercancel", releaseGrip);
+
+// The selection tip (selection-tip.ts): over the selected bars, so saving
+// them — or, once saved, opening them on the keys alone — needs no trip to
+// the tray. Kept out of the way while a grip is being dragged — it would
+// only chase the pointer.
+const selectionTip = mountSelectionTip($("selection-tip"), {
+  onSave: () => sectionsPanel.save(),
+  onRename: (id, name) => sectionsPanel.rename(id, name),
+  onIsolate: isolate,
+});
+function showSelectionTip(sc: Scroller | null): void {
+  const box = sc && !gripping ? sc.rangeBox() : null;
+  selectionTip.show(box && { ...box, x: box.x + sc!.region.x, y: box.y + sc!.region.y },
+    selection, Sections.find(sections, selection));
+}
 
 /** What the scroller last followed, or null to follow afresh. */
 let followed: number | null = null;
@@ -890,6 +960,7 @@ function syncScoreScroll(live: LiveSnapshot, t: number): void {
   const tp = sc ? null : view.tape(svg, { score, t, live });
   scrolling = sc;
   tape = tp;
+  showSelectionTip(sc);
   if (sc) followReader(sc, live);
   else if (tp) followPlayhead(tp);
   else {

@@ -87,6 +87,7 @@ const live = (practice: PracticeSnapshot, sheetScroll = 0): LiveSnapshot => ({
   pagePan: null,
   sheetScroll,
   selection: null,
+  marks: [],
 });
 /** ...and the frame around it, for what reads the whole frame. The lesson
  *  carries its own score, so the frame's is inert. */
@@ -523,25 +524,25 @@ describe("the page", () => {
     expect(heads(p, "var(--note-lit)")).toBe(2);
   });
 
-  it("dims the notes outside the bars in focus", () => {
+  it("inks the notes outside the bars in focus as context", () => {
     // focus on bar 0; bar 1 is torn-off context: the D at 1.0s, and the
     // second half of the C3 whole note tied over the barline
     const p = page(Practice.markup(W, H, snap(), NONE))!;
-    expect(heads(p, "var(--ink-dim)")).toBe(2);
+    expect(heads(p, "var(--page-context)")).toBe(2);
     // ...and with both bars in focus it is a note of the lesson
     const both = page(Practice.markup(W, H, snap({ focus: { from: 0, to: 1 } }), NONE))!;
-    expect(heads(both, "var(--ink-dim)")).toBe(0);
+    expect(heads(both, "var(--page-context)")).toBe(0);
     expect(heads(both, "var(--page-r)")).toBe(1);
   });
 
-  it("wears the dim hand token for the hand not being practised", () => {
+  it("wears the page's own token for the hand not being practised", () => {
     const p = page(Practice.markup(W, H, snap(), NONE))!;
-    expect(heads(p, "var(--hand-l-dim)")).toBe(1);
+    expect(heads(p, "var(--page-l-dim)")).toBe(1);
   });
 
   it("leaves the other hand off the page when told to", () => {
     const p = page(Practice.markup(W, H, snap({ showOther: false }), NONE))!;
-    expect(heads(p, "var(--hand-l-dim)")).toBe(0);
+    expect(heads(p, "var(--page-l-dim)")).toBe(0);
   });
 
   it("sits the isolated bars on a panel, and a merely-followed bar on none", () => {
@@ -723,6 +724,24 @@ describe("the whole score", () => {
       for (let x = 0; x < W; x += 10)
         expect(sc.barAt(x, 112)).toBe(Practice.barAt(stub, x, sc.region.y + 112, live(s)));
     }
+  });
+
+  it("places the range's panel where its bars are, on either layout, and nothing without one", () => {
+    for (const s of [snap({ range: { from: 1, to: 1 } }), whole({ range: { from: 1, to: 1 } })]) {
+      const sc = Practice.scroller(stub, frame(s))!;
+      const b = sc.rangeBox()!;
+      expect(b.w).toBeGreaterThan(0);
+      expect(sc.barAt(b.x + b.w / 2, b.y + b.h / 2)).toBe(1);
+    }
+    expect(Practice.scroller(stub, frame(whole()))!.rangeBox()).toBeNull();
+  });
+
+  it("moves the range's panel with the sheets' scroll, and loses it out of sight", () => {
+    const s = whole({ range: { from: 0, to: 0 } });
+    const at = (scroll: number) => Practice.scroller(stub, { score, t: 0, live: live(s, scroll) })!.rangeBox();
+    const b = at(0)!;
+    expect(at(20)).toEqual({ ...b, y: b.y - 20, h: b.h });
+    expect(at(b.y + b.h + 10)).toBeNull();
   });
 
   it("hit-tests the sheets where they are scrolled to", () => {

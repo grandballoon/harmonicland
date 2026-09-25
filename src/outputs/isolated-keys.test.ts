@@ -34,6 +34,7 @@ const frame = (
     pagePan: null,
     sheetScroll: 0,
     selection,
+    marks: [],
   },
 });
 

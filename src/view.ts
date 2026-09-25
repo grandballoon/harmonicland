@@ -59,7 +59,8 @@
       learner's step, the playhead's bar — and where to scroll to bring it
       back into sight when it moves out of it, and which bar a point on it
       is over — so a click on the music can pick a bar, whatever picking
-      means where it is clicked. Required, like `tape`, and a view names
+      means where it is clicked — and which marked section it is on, so
+      a click there can open that section instead. Required, like `tape`, and a view names
       one or the other for a frame, never both.
 
    6. A keyboard need not be all 88 keys. The region a view hands back
@@ -94,6 +95,9 @@ export interface LiveSnapshot {
    *  What the clock loops and a lesson is confined to; a view may also
    *  draw to it, as the isolated keyboard draws only the keys it plays. */
   selection: BarRange | null;
+  /** The saved sections a page of sheet music tints, or none
+   *  when they are not being shown (outputs/range-marks.ts, decision 4). */
+  marks: readonly BarRange[];
 }
 
 /** A page panned by its tape. At rest the page is fitted to the bar the
@@ -177,10 +181,17 @@ export interface Scroller {
    *  on, measured as `barAt` measures — or null when it is on none, or
    *  the view draws no range. */
   gripAt(x: number, y: number): "start" | "end" | null;
+  /** Which marked section (`LiveSnapshot.marks`) a point is on,
+   *  measured as `barAt` measures — or null when it is on none. */
+  markAt(x: number, y: number): BarRange | null;
   /** The score time of the nearest place a range's end can sit to a
    *  point, measured as `barAt` measures — or null off the music. Where a
    *  grip dragged there would go, before loop.ts snaps it to a step. */
   timeAt(x: number, y: number): number | null;
+  /** Where the isolated range's panel shows in `region`, measured as
+   *  `barAt` measures and cut to what is in sight: its first stretch that
+   *  is — or null when none is, or the view draws no range. */
+  rangeBox(): Region | null;
 }
 
 /** An output projection. Genuinely a function of its arguments now. */

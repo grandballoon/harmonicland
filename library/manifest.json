@@ -1,0 +1,1447 @@
+{
+  "_generated": "by tools/library/fetch.ts from library/pieces.json — do not edit by hand",
+  "pieces": [
+    {
+      "id": "bach-bwv846",
+      "composer": "Bach",
+      "title": "Prelude and Fugue in C major (WTC I)",
+      "catalogue": "BWV 846",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.ly",
+              "sha256": "9e4540143b5c5a9884f215428837fe91d1b471b02669f3a07ce50560736078e9",
+              "bytes": 6432,
+              "license": "Public Domain",
+              "title": "Das Wohltemperierte Clavier I, Praeludium I"
+            },
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV846/wtk1-fugue1/wtk1-fugue1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV846/wtk1-fugue1/wtk1-fugue1.ly",
+              "sha256": "10d51eabac0fdfeddcbb7d76ad3bf361d4c095feec3ce7aa61d034d5b836c708",
+              "bytes": 5659,
+              "license": "Public Domain",
+              "title": "Das Wohltemperierte Clavier I, Fuga I"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:humdrum-tools/bach-wtc",
+          "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1p01.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1p01.krn",
+              "sha256": "7798ce2c4a9be03499edf2aaa61d59767428d3a14687c8019ba07ef3e4e5a5a7",
+              "bytes": 7188,
+              "license": "Rights to all derivative editions reserved",
+              "copyright": "Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities",
+              "title": "Prelude in C Major"
+            },
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1f01.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1f01.krn",
+              "sha256": "c61637a2d74bf0658eff6a32687a732fdc86c96bf615f2ef5d8ac96f28b8adbe",
+              "bytes": 6481,
+              "license": "Rights to all derivative electronic formats reserved.",
+              "copyright": "Copyright 1994, David Huron",
+              "title": "Fuga 1, Vol. 1"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Bach/Prelude/bwv_846/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Bach/Prelude/bwv_846/xml_score.musicxml",
+              "sha256": "1572209d1e24e600cc7758a3407a9ad3cb4cfbc5d55b821d452490d98a68307b",
+              "bytes": 267546,
+              "copyright": "Das Wohltemperierte Klavier I",
+              "title": "Das Wohltemperierte Klavier I"
+            },
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Bach/Fugue/bwv_846/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Bach/Fugue/bwv_846/xml_score.musicxml",
+              "sha256": "08bdd3ece9d84a5ec02baa53b8b86b5ef1369be0c9ef17a38c28951d6c7dc56d",
+              "bytes": 317164
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Bach/Prelude/bwv_846/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Bach/Prelude/bwv_846/midi_score.mid",
+              "sha256": "3e2f8b9f3cf6c710788f1963066b04850e0335e94a9558f642fa2cd6eb3fb45f",
+              "bytes": 3525
+            },
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Bach/Fugue/bwv_846/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Bach/Fugue/bwv_846/midi_score.mid",
+              "sha256": "965a7e3fd012bf555d3732ba36709a0b1f0f013406802c79f71997f6c79c305a",
+              "bytes": 4869
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv847",
+      "composer": "Bach",
+      "title": "Prelude and Fugue in C minor (WTC I)",
+      "catalogue": "BWV 847",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV847/bwv847a/bwv847a.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV847/bwv847a/bwv847a.ly",
+              "sha256": "2923478f3436ddc12525fab5514e354025a9715205424944fd0e5f7f24ba70d9",
+              "bytes": 7617,
+              "license": "Public Domain",
+              "title": "Das Wohltemperierte Clavier I, Praeludium II"
+            },
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV847/fuga2/fuga2.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV847/fuga2/fuga2.ly",
+              "sha256": "5b4ba90ea58a8daae5f74d9f022ef65ffccd6ab4faf8e9c58d099ed1426db6db",
+              "bytes": 6337,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Das Wohltemperierte Clavier I, Fuga II"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:humdrum-tools/bach-wtc",
+          "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1p02.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1p02.krn",
+              "sha256": "be4e9e6f9f24821dfc18a5e6b31d1504a96b4d2ad36a104b5af645a2c8b5b86f",
+              "bytes": 9017,
+              "license": "Rights to all derivative editions reserved",
+              "copyright": "Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities",
+              "title": "Prelude in C Minor"
+            },
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1f02.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1f02.krn",
+              "sha256": "a0d9c36a9b5bc56b7fa87a069116fd0d55a60e7b706661fa2fe67945b53c6e62",
+              "bytes": 5498,
+              "license": "Rights to all derivative electronic formats reserved.",
+              "copyright": "Copyright 1994, David Huron",
+              "title": "Fuga 2, Vol. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv772",
+      "composer": "Bach",
+      "title": "Invention No. 1 in C major",
+      "catalogue": "BWV 772",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV772/bach-invention-01/bach-invention-01.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV772/bach-invention-01/bach-invention-01.ly",
+              "sha256": "3c01302f70efd1dd6f43becaf19b9b2aac49e25b3e89666e3e55bc576c6cd55d",
+              "bytes": 4931,
+              "license": "Creative Commons Attribution-ShareAlike 3.0",
+              "title": "Invention 1"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:humdrum-tools/inventions",
+          "commit": "93183f6fdb9ab7aa1fa601e3aa200b40763469cf",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/humdrum-tools/inventions/kern/inven01.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/inventions/93183f6fdb9ab7aa1fa601e3aa200b40763469cf/kern/inven01.krn",
+              "sha256": "916e3ee201d79bced1baa698057d6798d44b9e5fbbb91351d60be6cb1649f0a7",
+              "bytes": 3439,
+              "license": "Rights to all derivative electronic formats reserved.",
+              "copyright": "Copyright 1994, David Huron",
+              "title": "Inventio 1",
+              "number": "No. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv988-aria",
+      "composer": "Bach",
+      "title": "Goldberg Variations: Aria",
+      "catalogue": "BWV 988",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV988/bwv-988-aria/bwv-988-aria.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV988/bwv-988-aria/bwv-988-aria.ly",
+              "sha256": "f86adfb84573bc7775fe48750f7ee9b6df2adf2fcc5e32fb52c09e589c9e12af",
+              "bytes": 8268,
+              "license": "Creative Commons Attribution-ShareAlike 3.0",
+              "title": "Goldberg Variations - Aria"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv795",
+      "composer": "Bach",
+      "title": "Sinfonia No. 9 in F minor",
+      "catalogue": "BWV 795",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV795/bwv795/bwv795.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV795/bwv795/bwv795.ly",
+              "sha256": "165ac68d570a95b49f352d663d615ad2baae3afee4922c6513d0e59e2b23f5c7",
+              "bytes": 5926,
+              "license": "Public Domain",
+              "title": "Sinfonia 9"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:humdrum-tools/inventions",
+          "commit": "93183f6fdb9ab7aa1fa601e3aa200b40763469cf",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/humdrum-tools/inventions/kern/sinfo09.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/inventions/93183f6fdb9ab7aa1fa601e3aa200b40763469cf/kern/sinfo09.krn",
+              "sha256": "22e342f301433878e7f291e25bf649b075c899c9a5281bd2472edfc4825e206f",
+              "bytes": 6097,
+              "title": "Sinfonia 9 in F minor"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv853",
+      "composer": "Bach",
+      "title": "Prelude and Fugue in E-flat minor (WTC I)",
+      "catalogue": "BWV 853",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV853/bwv853a/bwv853a.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV853/bwv853a/bwv853a.ly",
+              "sha256": "94f07ea4fcbee4260186914689f5537c16f8b3982bc39217ae276f04d7d4b9ed",
+              "bytes": 8200,
+              "license": "Public Domain",
+              "title": "Das Wohltemperierte Clavier I, Praeludium VIII"
+            },
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV853/bwv853b/bwv853b.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV853/bwv853b/bwv853b.ly",
+              "sha256": "73c9f6eb4407f3b9d0c9fe4691bb2f09fdfbd8bb9e04d6fb98d1f7cb5dced4c3",
+              "bytes": 11745,
+              "license": "Public Domain",
+              "title": "Das Wohltemperierte Clavier I, Fuga VIII"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:humdrum-tools/bach-wtc",
+          "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1p08.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1p08.krn",
+              "sha256": "b4b179cd6eee462d358265df041a1bf91d779d328d2dc2154e4b3ad55690b690",
+              "bytes": 7125,
+              "license": "Rights to all derivative editions reserved",
+              "copyright": "Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities",
+              "title": "Prelude in E-flat Minor"
+            },
+            {
+              "local": "sources/github/humdrum-tools/bach-wtc/kern/wtc1f08.krn",
+              "url": "https://raw.githubusercontent.com/humdrum-tools/bach-wtc/0b4f4d84b90b254615e7ac09730ec473c9611cb6/kern/wtc1f08.krn",
+              "sha256": "aeb6c5d214b55328ec9321a8ee7f44fe85a42fa94c05b88017afe4feaa13cd81",
+              "bytes": 10074,
+              "license": "Rights to all derivative electronic formats reserved.",
+              "copyright": "Copyright 1994, David Huron",
+              "title": "Fuga 8, Vol. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv816-sarabande",
+      "composer": "Bach",
+      "title": "French Suite No. 5 in G major: Sarabande",
+      "catalogue": "BWV 816",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV816/french-suite-5/french-suite-5-lys/french-suite-5-sarabande.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV816/french-suite-5/french-suite-5-lys/french-suite-5-sarabande.ly",
+              "sha256": "9fe9cec21c722ca75e42490c563215e65016cc3476c47f82724d611e87607d67",
+              "bytes": 5376,
+              "license": "Public Domain",
+              "title": "French Suite no. 5 in G major"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "bach-bwv903",
+      "composer": "Bach",
+      "title": "Chromatic Fantasia and Fugue in D minor",
+      "catalogue": "BWV 903",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV903/bwv903fan/bwv903fan.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV903/bwv903fan/bwv903fan.ly",
+              "sha256": "ac63720d97949d0d8ba20dfe3eb55e43ada857d6d8bdd62f464ce623cb40d8d5",
+              "bytes": 37768,
+              "license": "Public Domain",
+              "title": "Chromatic Fantasy and Fugue, BWV 903 (Fantasy)"
+            },
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BachJS/BWV903/bwv903fug/bwv903fug.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BachJS/BWV903/bwv903fug/bwv903fug.ly",
+              "sha256": "ca12aebbc264f9340edfce6586237068d1891e574c7aa9cd79aee8be77094529",
+              "bytes": 22050,
+              "license": "Public Domain",
+              "title": "Chromatic Fantasy and Fugue, BWV 903 (Fugue)"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "mozart-k545-1",
+      "composer": "Mozart",
+      "title": "Piano Sonata in C major, I. Allegro",
+      "catalogue": "K. 545",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/MozartWA/KV545/K545-1/K545-1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV545/K545-1/K545-1.ly",
+              "sha256": "84d0e951e6d8807d3286f31ed7878a35dfddb9850bbae9156be0f5ac0a3e2e10",
+              "bytes": 8195,
+              "license": "Creative Commons Attribution-ShareAlike 3.0",
+              "title": "Sonata Facile - First movement"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/mozart-piano-sonatas",
+          "commit": "0f1f49d914494f8461709b2a2642153bb240c6da",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/mozart-piano-sonatas/kern/sonata15-1.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/mozart-piano-sonatas/0f1f49d914494f8461709b2a2642153bb240c6da/kern/sonata15-1.krn",
+              "sha256": "69c1af12472251b00fb00fcd6a4db47e3566aedb4776e4b8af332baa1ecce542",
+              "bytes": 13427,
+              "license": "Licence: (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0",
+              "copyright": "2018 Craig Stuart Sapp",
+              "title": "Piano Sonata No. 15 in C major"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "mozart-k331-3",
+      "composer": "Mozart",
+      "title": "Piano Sonata in A major, III. Rondo alla Turca",
+      "catalogue": "K. 331",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurca.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurca.ly",
+              "sha256": "eb5aeab7ca2cd4299e7a99f95dee9c8d2d52d73c8327474b6249c1ee4d5a20d9",
+              "bytes": 1646,
+              "license": "Public Domain",
+              "title": "Sonate Opus KV 331 - Rondo Alla Turca"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurcaNotes.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV331/KV331_3_RondoAllaTurca/KV331_3_RondoAllaTurca-lys/KV331_3_RondoAllaTurcaNotes.ly",
+              "sha256": "281da85484e82f2c874d8ab6d710868b70b54d44b3a01b5b7d396b4086125d89",
+              "bytes": 8569
+            }
+          ]
+        },
+        {
+          "origin": "github:craigsapp/mozart-piano-sonatas",
+          "commit": "0f1f49d914494f8461709b2a2642153bb240c6da",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/mozart-piano-sonatas/kern/sonata11-3.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/mozart-piano-sonatas/0f1f49d914494f8461709b2a2642153bb240c6da/kern/sonata11-3.krn",
+              "sha256": "20986000444bfce93da6f23daf65663dfee20f25d2988c8e7635e29eb91bb0ab",
+              "bytes": 16148,
+              "license": "Licence: (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0",
+              "copyright": "2018 Craig Stuart Sapp",
+              "title": "Piano Sonata No. 11 in A major"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Mozart/Piano_Sonatas/11-3/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Mozart/Piano_Sonatas/11-3/xml_score.musicxml",
+              "sha256": "cfaeadb366fe8ca8c2302526320e3e3fb3165651f7144d3bd544dd1b43527521",
+              "bytes": 661314
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Mozart/Piano_Sonatas/11-3/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Mozart/Piano_Sonatas/11-3/midi_score.mid",
+              "sha256": "1cedcd67a6ae88328cbadf4aaf019b1c57223e83623f0286e69e2815686e962f",
+              "bytes": 18449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mozart-k397",
+      "composer": "Mozart",
+      "title": "Fantasia in D minor",
+      "catalogue": "K. 397",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/MozartWA/KV397/Fantasia/Fantasia.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV397/Fantasia/Fantasia.ly",
+              "sha256": "67026a04b1dbd7ce9cb59c2f8f7ac72317dec9a62f5c44f1f7d43376f6f29b97",
+              "bytes": 17833,
+              "license": "Public Domain",
+              "title": "Fantasy in D minor"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "mozart-k310-1",
+      "composer": "Mozart",
+      "title": "Piano Sonata in A minor, I. Allegro maestoso",
+      "catalogue": "K. 310",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:craigsapp/mozart-piano-sonatas",
+          "commit": "0f1f49d914494f8461709b2a2642153bb240c6da",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/mozart-piano-sonatas/kern/sonata08-1.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/mozart-piano-sonatas/0f1f49d914494f8461709b2a2642153bb240c6da/kern/sonata08-1.krn",
+              "sha256": "55e90fe7373367f470007ca41ed5e087033d3c1b6e0234440b9b2ae0fabe6658",
+              "bytes": 29173,
+              "license": "Licence: (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0",
+              "copyright": "2018 Craig Stuart Sapp",
+              "title": "Piano Sonata No. 8 in A minor"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Mozart/Piano_Sonatas/8-1/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Mozart/Piano_Sonatas/8-1/xml_score.musicxml",
+              "sha256": "d1573484bfd6b78f7c0d26e4db2832fd8417aaee7b972ae8de2ec0566fbfbc23",
+              "bytes": 1361073
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Mozart/Piano_Sonatas/8-1/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Mozart/Piano_Sonatas/8-1/midi_score.mid",
+              "sha256": "610f3de88b269de927fe8074a8c218c1e54d5e3386f93c658242c22a8f7d6af0",
+              "bytes": 20954
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mozart-k574",
+      "composer": "Mozart",
+      "title": "Gigue in G major",
+      "catalogue": "K. 574",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/MozartWA/KV574/k574/k574.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/MozartWA/KV574/k574/k574.ly",
+              "sha256": "6cdb9c0d45590a261ad688bb205a8ff57ba413976c540459ccc55cc4987ac8c9",
+              "bytes": 5738,
+              "license": "Public Domain",
+              "title": "Gigue in G Major"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "chopin-op9-2",
+      "composer": "Chopin",
+      "title": "Nocturne in E-flat major",
+      "catalogue": "Op. 9 No. 2",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.ly",
+              "sha256": "51a5a1cfed40eaee9d44f04b35673ff94240932a1f78c935d16016d0c42ac617",
+              "bytes": 16229,
+              "license": "Creative Commons Attribution-ShareAlike 3.0",
+              "title": "Nocturne"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/009-1-KI-002.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/009-1-KI-002.krn",
+              "sha256": "fc012fd00c1decd6c2bc4fe0caa9726b3de49303aeb5f08c3b9f5767deab6167",
+              "bytes": 17879,
+              "title": "2d Nocturne",
+              "opus": "Op. 9"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/009-1b-Sm-002.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/009-1b-Sm-002.krn",
+              "sha256": "09f3fbcf5fbcd08ae6608f10bce4eabc831fb13b1ad8a4473b94737fdde7e730",
+              "bytes": 16871,
+              "title": "Nocturne No. 2",
+              "opus": "Op. 9"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "chopin-op23",
+      "composer": "Chopin",
+      "title": "Ballade No. 1 in G minor",
+      "catalogue": "Op. 23",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1.ly",
+              "sha256": "53b9169fb8a4a49f51b076354d67da31af3cca29d3600beab517a84c061b2b6f",
+              "bytes": 119209,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Première Ballade"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1-defs.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O23/chopin-op23-ballade-1/chopin-op23-ballade-1-lys/chopin-op23-ballade-1-defs.ly",
+              "sha256": "dd893a716958365a96cb4bc6b467938bd7f96ccfc40e366d8aaa1cf288cabccd",
+              "bytes": 60033
+            }
+          ]
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/023-1-BH.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/023-1-BH.krn",
+              "sha256": "d2d3c2ce4d9d2bdb780d054ec00127f5cc5d74c9c51d0899958930f245d725e9",
+              "bytes": 60428,
+              "title": "BALLADE",
+              "opus": "Op. 23"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/023-1a-Sm.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/023-1a-Sm.krn",
+              "sha256": "cc2c0427ba73bf40e20d8624a7e2159620c93d52287897a9d02ddf35e1c791c0",
+              "bytes": 58890,
+              "title": "Ballade.",
+              "opus": "Op. 23"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Ballades/1/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Ballades/1/xml_score.musicxml",
+              "sha256": "cf4464f7c3873c48aa6abb45312961c2fb41bedb53e58758d0acec3ba533635e",
+              "bytes": 2349744
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Ballades/1/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Ballades/1/midi_score.mid",
+              "sha256": "1b8f2f90758dff8daf2dedf87e4d485bafb15c7b45d6d84c34ebf8e2b2c6a8be",
+              "bytes": 60351
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chopin-op66",
+      "composer": "Chopin",
+      "title": "Fantaisie-Impromptu in C-sharp minor",
+      "catalogue": "Op. 66",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O66/chopin_fantaisie-impromptu/chopin_fantaisie-impromptu.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O66/chopin_fantaisie-impromptu/chopin_fantaisie-impromptu.ly",
+              "sha256": "f1c7074d91ad89e2af12f7da89b582073a874f7321cb76ff5252153067065eae",
+              "bytes": 16296,
+              "license": "Public Domain",
+              "title": "Fantaisie-Impromptu"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/066-1-Sam.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/066-1-Sam.krn",
+              "sha256": "e9793e6428ad118e5a29f66e803bde976e59fd26d54e97213a52ec56e777a954",
+              "bytes": 39917,
+              "title": "FANTAISIE_IMPROMPTU",
+              "opus": "Op. 66"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/066-1axx-COM.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/066-1axx-COM.krn",
+              "sha256": "e9a08294c3e4defb3e6b394ab37e8e7e58882d7132aba6853e6bc6e047fa2bc1",
+              "bytes": 39670,
+              "title": "FANTAISIE-IMPROMPTU",
+              "opus": "Op. 66"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "chopin-op10-3",
+      "composer": "Chopin",
+      "title": "Étude in E major (\"Tristesse\")",
+      "catalogue": "Op. 10 No. 3",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/010-1b-Sm-003.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/010-1b-Sm-003.krn",
+              "sha256": "b3743fa533d2eba2f20c78240ea81f29f65eff533a120eeda630f7feee2e57d1",
+              "bytes": 25993,
+              "title": "Etude No. 3.",
+              "opus": "Op. 10"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Etudes_op_10/3/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Etudes_op_10/3/xml_score.musicxml",
+              "sha256": "55e93fedc14e0fd70557d71b81e679a05188955800456e3a3cd88283f9114001",
+              "bytes": 834343
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Etudes_op_10/3/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Etudes_op_10/3/midi_score.mid",
+              "sha256": "ba9c00cd33e53374a97600c85999f747ef956a54728ef24b37853d225640cfd1",
+              "bytes": 11920
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chopin-op17-4",
+      "composer": "Chopin",
+      "title": "Mazurka in A minor",
+      "catalogue": "Op. 17 No. 4",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:craigsapp/chopin-mazurkas",
+          "commit": "fc3a8fb6cba7fdad2183fee67853789bbfadb3a0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-mazurkas/kern/mazurka17-4.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-mazurkas/fc3a8fb6cba7fdad2183fee67853789bbfadb3a0/kern/mazurka17-4.krn",
+              "sha256": "c122e219f0b5c5c5ad455bd7aef076fd71fcd686ae5e6031f19b9e3e01dfa618",
+              "bytes": 13399,
+              "title": "Mazurka in A Minor, Op. 17, No. 4",
+              "opus": "Op. 17",
+              "number": "No. 4"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/017-1-BH-004.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/017-1-BH-004.krn",
+              "sha256": "99946217c5b03963043ce371beb1b107ca09fef387970dfef78decbd05deb1ea",
+              "bytes": 15794,
+              "title": "Mazourka No. 4.",
+              "opus": "Op. 17"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/017-1a-Sm-004.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/017-1a-Sm-004.krn",
+              "sha256": "e4e7a3a1c82875f41b340f64dd4961b35c039a5e7fa925fe7dbc3376f86fc54e",
+              "bytes": 16098,
+              "title": "Mazourka No. 4.",
+              "opus": "Op. 17"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "chopin-op45",
+      "composer": "Chopin",
+      "title": "Prelude in C-sharp minor",
+      "catalogue": "Op. 45",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/ChopinFF/O45/chopin_prelude_op45/chopin_prelude_op45.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/ChopinFF/O45/chopin_prelude_op45/chopin_prelude_op45.ly",
+              "sha256": "97d88a99d11f6d695a426b44c4c98bd1ce2d5e7fc4beed902f336265b207ba50",
+              "bytes": 23751,
+              "license": "Public Domain",
+              "title": "Prelude"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/045-1a-ME-001.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/045-1a-ME-001.krn",
+              "sha256": "b69c7c4f5d9f6a1775d19681a16ce8b3241afee58c1bd0fa08aa52aa77e10d3c",
+              "bytes": 23359,
+              "title": "Prelude",
+              "opus": "Op. 45"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/045-2-Sm.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/045-2-Sm.krn",
+              "sha256": "4d33d68fab08199f67c701c84952286a034ed0bdc4f02d555f1d3ff0c72600e9",
+              "bytes": 23175,
+              "title": "Prelude",
+              "opus": "Op. 45"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "chopin-op57",
+      "composer": "Chopin",
+      "title": "Berceuse in D-flat major",
+      "catalogue": "Op. 57",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/057-1a-MEIj.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/057-1a-MEIj.krn",
+              "sha256": "c895245b3678aa4d3f9af7e659609b225fb549f6bab0042e3ba3206f92bc84ea",
+              "bytes": 27250,
+              "title": "Berceuse",
+              "opus": "Op. 57"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:craigsapp/chopin-humdrum-nifc",
+          "commit": "ffa67d049182bc96c007c8abb26d77a1262d31bb",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-humdrum-nifc/krn/057-2-BH.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-humdrum-nifc/ffa67d049182bc96c007c8abb26d77a1262d31bb/krn/057-2-BH.krn",
+              "sha256": "b7562f498d71f1ca3965ed6a39ba4f09c95584c32fbd956de40cde1350cdaad6",
+              "bytes": 28834,
+              "title": "Berceuse",
+              "opus": "Op. 57"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Berceuse_op_57/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Berceuse_op_57/xml_score.musicxml",
+              "sha256": "f6a7d0370e83180a4f6b1ad4dddc62bf6b9a9d927acf2277121c1c1d98168184",
+              "bytes": 871224
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Chopin/Berceuse_op_57/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Chopin/Berceuse_op_57/midi_score.mid",
+              "sha256": "c191beda0bf57f05956be75c98159de6313b2928c5504243c08de899ea50450f",
+              "bytes": 11117
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chopin-op68-4",
+      "composer": "Chopin",
+      "title": "Mazurka in F minor",
+      "catalogue": "Op. 68 No. 4",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:craigsapp/chopin-mazurkas",
+          "commit": "fc3a8fb6cba7fdad2183fee67853789bbfadb3a0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/craigsapp/chopin-mazurkas/kern/mazurka68-4.krn",
+              "url": "https://raw.githubusercontent.com/craigsapp/chopin-mazurkas/fc3a8fb6cba7fdad2183fee67853789bbfadb3a0/kern/mazurka68-4.krn",
+              "sha256": "3d22b92f3e86b6e2a1312df21d2b82ee91cf2360198548c55bef769a32aa56e0",
+              "bytes": 4581,
+              "title": "Mazurka in F Minor, Op. 68, No. 4",
+              "opus": "Op. 68",
+              "number": "No. 4"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "liszt-s141-3",
+      "composer": "Liszt",
+      "title": "La Campanella (Grandes études de Paganini No. 3)",
+      "catalogue": "S. 141 No. 3",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Liszt/Gran_Etudes_de_Paganini/2_La_campanella/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Liszt/Gran_Etudes_de_Paganini/2_La_campanella/xml_score.musicxml",
+              "sha256": "37143165fa62fca7286cd9f1ce32b8fc7a62f07741831494b812d10a2f921cd0",
+              "bytes": 2105011,
+              "title": "La Campanella"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Liszt/Gran_Etudes_de_Paganini/2_La_campanella/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Liszt/Gran_Etudes_de_Paganini/2_La_campanella/midi_score.mid",
+              "sha256": "94e4d22529f16356058d5742aaa725baf8a12d96abce4bed993664b246402e3d",
+              "bytes": 26761
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "liszt-s172-3",
+      "composer": "Liszt",
+      "title": "Consolation No. 3 in D-flat major",
+      "catalogue": "S. 172 No. 3",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/LisztF/S.172/liszt-consolation-no3/liszt-consolation-no3.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/LisztF/S.172/liszt-consolation-no3/liszt-consolation-no3.ly",
+              "sha256": "dab42ef825f345e19e2dda6ed95095be9438c176af821bf7b598c32a3e252dce",
+              "bytes": 14564,
+              "license": "Creative Commons Attribution 3.0",
+              "title": "Consolation, S.172 No.3"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "brahms-op39-15",
+      "composer": "Brahms",
+      "title": "Waltz in A-flat major",
+      "catalogue": "Op. 39 No. 15",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BrahmsJ/O39/waltz-op39-15/waltz-op39-15.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BrahmsJ/O39/waltz-op39-15/waltz-op39-15.ly",
+              "sha256": "64cef49cf056947e8d4f900535dbc28a4a841653ff1e2a936534e928e2209a65",
+              "bytes": 6064,
+              "license": "Public Domain",
+              "title": "Waltz No. 15"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "brahms-op118-2",
+      "composer": "Brahms",
+      "title": "Intermezzo in A major",
+      "catalogue": "Op. 118 No. 2",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/BrahmsJ/O118/intermezzo/intermezzo.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/BrahmsJ/O118/intermezzo/intermezzo.ly",
+              "sha256": "5bd64924ba0c1a72018144bbd9245ebef7d6892acb163fb282c3a25bd0f21623",
+              "bytes": 23764,
+              "license": "Public Domain",
+              "title": "2. Intermezzo"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Brahms/Six_Pieces_op_118/2/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Brahms/Six_Pieces_op_118/2/xml_score.musicxml",
+              "sha256": "d0255807351bc0b836067784c1cb6d4e923979bdf55105c1f8d533d724ccfe08",
+              "bytes": 767618,
+              "title": "Intermezzo"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Brahms/Six_Pieces_op_118/2/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Brahms/Six_Pieces_op_118/2/midi_score.mid",
+              "sha256": "f363fc5f6a475b8a80b751c3f3ffe34d3a7655ac818e91ae207fbae621e7695a",
+              "bytes": 12086
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "brahms-op10-1",
+      "composer": "Brahms",
+      "title": "Ballade in D minor (\"Edward\")",
+      "catalogue": "Op. 10 No. 1",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "kern.ccarh.org",
+          "commit": null,
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/kern.ccarh.org/users/craig/classical/brahms/op10/ballad10-1.krn",
+              "url": "https://kern.ccarh.org/cgi-bin/ksdata?l=users/craig/classical/brahms/op10&file=ballad10-1.krn&f=kern",
+              "sha256": "46d733f9aff1b4e9c92294c0094b5423833e2e29be3c6856ca3b539a4e87cb19",
+              "bytes": 14330,
+              "title": "Ballad No. 1 in D Minor, Op. 10",
+              "opus": "Op. 10",
+              "number": "No. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "debussy-l75-clair",
+      "composer": "Debussy",
+      "title": "Suite bergamasque: Clair de lune",
+      "catalogue": "L. 75",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.ly",
+              "sha256": "c78762a27972f0643a34b994bffa1d058b1bb51e3947c0b50029aa75359e2a49",
+              "bytes": 18080,
+              "license": "Public Domain",
+              "title": "Suite Bergamasque: Clair de Lune"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "debussy-l66-1",
+      "composer": "Debussy",
+      "title": "Arabesque No. 1",
+      "catalogue": "L. 66 No. 1",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.ly",
+              "sha256": "4639d0220a0a242e2928348cdf6075a7e6cdd35a8b051d67612aa99a2d636a3a",
+              "bytes": 16845,
+              "license": "Public Domain",
+              "title": "Première Arabesque"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "satie-gymnopedie-1",
+      "composer": "Satie",
+      "title": "Gymnopédie No. 1",
+      "catalogue": "",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/SatieE/gymnopedie_1/gymnopedie_1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/gymnopedie_1/gymnopedie_1.ly",
+              "sha256": "420a52244e9fbe106dd33ba2cac84414fd66e0d01c6d472205bad39678d4ce04",
+              "bytes": 5588,
+              "license": "Public Domain",
+              "title": "Gymnopédie No. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "satie-gnossienne-1",
+      "composer": "Satie",
+      "title": "Gnossienne No. 1",
+      "catalogue": "",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/SatieE/Gnossienne/no_1/no_1.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/Gnossienne/no_1/no_1.ly",
+              "sha256": "f1f5d6a0d94d6443e87909f797ad999022d7ec795c4015cdb7a1cafb57a37fdb",
+              "bytes": 8292,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Gnossienne No. 1"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "satie-gnossienne-3",
+      "composer": "Satie",
+      "title": "Gnossienne No. 3",
+      "catalogue": "",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/SatieE/Gnossienne/no_3/no_3.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/SatieE/Gnossienne/no_3/no_3.ly",
+              "sha256": "40ba504763fc74972c293b15fabb206bf513bc8e4a25ccc3aa587f983324bad3",
+              "bytes": 15780,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Gnossienne No. 3"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op3-2",
+      "composer": "Rachmaninoff",
+      "title": "Prelude in C-sharp minor",
+      "catalogue": "Op. 3 No. 2",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O3/rach-prelude-op3-no2/rach-prelude-op3-no2.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O3/rach-prelude-op3-no2/rach-prelude-op3-no2.ly",
+              "sha256": "debdb6768d1d365492315ced4d735704e56539ae967600538b6d3c123a7f6681",
+              "bytes": 32219,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Prelude in C# minor"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op23-5",
+      "composer": "Rachmaninoff",
+      "title": "Prelude in G minor",
+      "catalogue": "Op. 23 No. 5",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O23/rach-prelude23-05/rach-prelude23-05.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O23/rach-prelude23-05/rach-prelude23-05.ly",
+              "sha256": "5b94f752746d8d494ad040e90774c31905de69892704f0af1efcf4c8c319d486",
+              "bytes": 28914,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Prelude Op. 23, No. 5"
+            }
+          ],
+          "includes": []
+        }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op23-4",
+      "composer": "Rachmaninoff",
+      "title": "Prelude in D major",
+      "catalogue": "Op. 23 No. 4",
+      "group": "well-known",
+      "sources": [
+        {
+          "origin": "github:MutopiaProject/MutopiaProject",
+          "commit": "2144afd6f52d56c5b6995b8b589ef1268b3139f0",
+          "datasetLicense": null,
+          "entries": [
+            {
+              "local": "sources/github/MutopiaProject/MutopiaProject/ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly",
+              "url": "https://raw.githubusercontent.com/MutopiaProject/MutopiaProject/2144afd6f52d56c5b6995b8b589ef1268b3139f0/ftp/RachmaninoffS/O23/rach-prelude23-04/rach-prelude23-04.ly",
+              "sha256": "e22fe4d423cb400b4c1e92e137ccf710cf042e5d88c2075989878e9687dd0890",
+              "bytes": 24539,
+              "license": "Creative Commons Attribution-ShareAlike 4.0",
+              "title": "Prelude Op. 23, No. 4"
+            }
+          ],
+          "includes": []
+        },
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Rachmaninoff/Preludes_op_23/4/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Rachmaninoff/Preludes_op_23/4/xml_score.musicxml",
+              "sha256": "6852ddedbbc738d0d907e25bc2582efb3505c2213c4cef2a72ac75aeed5f41e3",
+              "bytes": 757551,
+              "title": "10 Preludes"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Rachmaninoff/Preludes_op_23/4/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Rachmaninoff/Preludes_op_23/4/midi_score.mid",
+              "sha256": "4c17213ba073e3855377b0c5de8b0a06c9f5c8e6eb1924892146dc8c346227fa",
+              "bytes": 9085
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rachmaninoff-op32-10",
+      "composer": "Rachmaninoff",
+      "title": "Prelude in B minor",
+      "catalogue": "Op. 32 No. 10",
+      "group": "gem",
+      "sources": [
+        {
+          "origin": "github:fosfrancesco/asap-dataset",
+          "commit": "afc815c75c42e83a79c03feb6da8a35e77d4c6b8",
+          "datasetLicense": "CC BY-NC-SA 4.0",
+          "entries": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Rachmaninoff/Preludes_op_32/10/xml_score.musicxml",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Rachmaninoff/Preludes_op_32/10/xml_score.musicxml",
+              "sha256": "b8eace17ff2c18a49ff1fd8a4753e45ab97857e3d75495fce75f2b89a88c5e10",
+              "bytes": 1609045,
+              "title": "X"
+            }
+          ],
+          "includes": [
+            {
+              "local": "sources/github/fosfrancesco/asap-dataset/Rachmaninoff/Preludes_op_32/10/midi_score.mid",
+              "url": "https://raw.githubusercontent.com/fosfrancesco/asap-dataset/afc815c75c42e83a79c03feb6da8a35e77d4c6b8/Rachmaninoff/Preludes_op_32/10/midi_score.mid",
+              "sha256": "d9c19b9d23f076df7c2570633a72dec5b53331df5f9b5473ff16a51996ee9649",
+              "bytes": 18021
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

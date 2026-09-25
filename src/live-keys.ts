@@ -28,6 +28,14 @@
    difference, and polling held() per frame would miss a release and
    re-press inside one 16ms frame.
 
+   SILENT VOICES. A voice pressed with { silent: true } is held, glows,
+   and is published to onPress like any other, but never reaches the
+   sinks. It is for surfaces that listen to an instrument that already
+   makes its own sound — the microphone: sounding the sample back would
+   double the piano, and through the speakers it would feed back into
+   the mic that heard it. The sinks follow the AUDIBLE voices only, so a
+   pointer press on a key the mic is already holding still sounds.
+
    There is deliberately no onRelease. Nothing needs one: a release only
    ever makes a set smaller, so every question about it is already
    answered by reading held() at the moment you care. An unused symmetric
@@ -45,6 +53,18 @@ export interface Voice {
 }
 
 const voices = new Map<Pitch, Set<Voice>>(); // pitch -> the voices holding it
+const silent = new WeakSet<Voice>(); // voices that hold a key without sounding it
+
+export interface PressOptions {
+  /** Hold and glow, but leave the sinks alone (see SILENT VOICES above). */
+  silent?: boolean;
+}
+
+// does any voice other than `except` sound this pitch?
+function audibleOn(pitch: Pitch, except: Voice): boolean {
+  for (const v of voices.get(pitch) ?? []) if (v !== except && !silent.has(v)) return true;
+  return false;
+}
 
 /** Press subscribers. Same shape as clock.onFrame: add, and hand back the
  *  removal. Notified per VOICE, not per pitch — the refcounted sinks above
@@ -58,15 +78,15 @@ export function onPress(fn: PressListener): () => void {
   return () => pressSubs.delete(fn);
 }
 
-function press(pitch: Pitch): Voice {
+function press(pitch: Pitch, { silent: quiet = false }: PressOptions = {}): Voice {
   const v: Voice = { pitch };
-  let set = voices.get(pitch);
-  if (!set) {
-    set = new Set<Voice>();
-    voices.set(pitch, set);
+  if (quiet) silent.add(v);
+  else if (!audibleOn(pitch, v)) {
     AudioOut.liveOn(pitch);
     MidiOut.liveOn(pitch); // no-op until a MIDI-out port is enabled
   }
+  let set = voices.get(pitch);
+  if (!set) voices.set(pitch, (set = new Set<Voice>()));
   set.add(v);
   // after the map and the sinks agree, so a listener that reads held()
   // synchronously sees this press already in it. Iterating a copy so a
@@ -80,8 +100,8 @@ function press(pitch: Pitch): Voice {
 function release(v: Voice): void {
   const set = voices.get(v.pitch);
   if (!set?.delete(v)) return;
-  if (set.size === 0) {
-    voices.delete(v.pitch);
+  if (set.size === 0) voices.delete(v.pitch);
+  if (!silent.has(v) && !audibleOn(v.pitch, v)) {
     AudioOut.liveOff(v.pitch);
     MidiOut.liveOff(v.pitch);
   }

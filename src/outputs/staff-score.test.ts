@@ -144,6 +144,17 @@ describe("scrolling", () => {
     expect(StaffScore.contentHeight(1200, s, "both", true)).toBe(L.height);
   });
 
+  it("places the range's panel on each line it covers, over its bars", () => {
+    const s = piece(40);
+    const ls = lines(1200, s);
+    const r = { from: ls[0].to, to: ls[1].from };
+    const boxes = StaffScore.rangeBoxes(1200, s, "both", true, r);
+    expect(boxes).toHaveLength(2);
+    expect(boxes[1].y).toBeGreaterThan(boxes[0].y);
+    expect(boxes.map((b) => StaffScore.barAt(1200, s, "both", true, b.x + b.w / 2, b.y + b.h / 2)))
+      .toEqual([r.from, r.to]);
+  });
+
   it("answers null in the margins and between the sheets", () => {
     const s = piece(4);
     const L = lay(1200, s);

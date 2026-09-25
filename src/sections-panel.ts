@@ -7,13 +7,21 @@
    main.ts turns that into the one shared selection, so a loaded section
    loops in the falling notes and confines a lesson by the same path a
    dragged flag does. A row's "Keys" gives the section back through
-   onIsolate instead: load it, and show only the keys it plays.
+   onIsolate instead: load it, and show only the keys it plays. Every
+   change to the list is handed out through onChange, so what else shows
+   the sections — the chips in the header, the marks on the sheets —
+   follows this one list rather than keeping a copy of its own.
 
    A saved section's span is edited with the one bar selection, not a
    second editor: select the bars you want (loading the section first is
    handy, not required), then press that row's "Use selection", which
    moves the section — name and all — onto them. Loading leaves the panel
    open, so load, adjust, and use-selection happen in one place.
+
+   The panel's list is the only list, so a save made elsewhere — the tip
+   over the selection on the sheet music (selection-tip.ts) — comes through
+   save and rename here, by the same rules as the Save button and a row's
+   name box.
    ==================================================================== */
 import { Sections, type Section } from "./sections";
 import type { SectionStore } from "./section-store";
@@ -25,6 +33,12 @@ export interface SectionsPanel {
   setScore(key: string | null, bars: number): void;
   /** The bars currently selected, or null for the whole piece. */
   setSelection(range: BarRange | null): void;
+  /** Save the selected bars as a section, as the Save button does, and
+   *  hand it back — or null when there is nothing to save: no score, the
+   *  whole piece, or bars that are a section already. */
+  save(): Section | null;
+  /** Name section `id`, as typing in its row does. */
+  rename(id: string, name: string): void;
 }
 
 /** What a row hands back. Each is given the section as it now stands. */
@@ -33,10 +47,13 @@ export interface SectionActions {
   onLoad(s: Section): void;
   /** Select its bars, and isolate the keys they play. */
   onIsolate(s: Section): void;
+  /** The list changed — a score loaded, or a section saved, split,
+   *  renamed, moved or deleted. */
+  onChange(list: readonly Section[]): void;
 }
 
 export function mountSectionsPanel(
-  root: HTMLDetailsElement, store: SectionStore, { onLoad, onIsolate }: SectionActions,
+  root: HTMLDetailsElement, store: SectionStore, { onLoad, onIsolate, onChange }: SectionActions,
 ): SectionsPanel {
   const q = <T extends HTMLElement>(sel: string): T => root.querySelector(sel) as T;
   const count = q<HTMLSpanElement>(".sections-count");
@@ -54,6 +71,7 @@ export function mountSectionsPanel(
   const commit = (next: readonly Section[]): void => {
     list = next;
     if (key !== null) store.save(key, list);
+    onChange(list);
   };
 
   const nameBox = (id: string): HTMLInputElement | null =>
@@ -158,11 +176,16 @@ export function mountSectionsPanel(
       : current ? `${Sections.describeBars(selection)} saved` : `Save ${Sections.describeBars(selection)}`;
   }
 
-  saveBtn.addEventListener("click", () => {
-    if (selection === null) return;
+  function save(): Section | null {
+    if (key === null || selection === null || Sections.find(list, selection)) return null;
     commit(Sections.add(list, selection));
     render();
-    nameBox(Sections.find(list, selection)!.id)?.focus(); // name it now, if you like
+    return Sections.find(list, selection)!;
+  }
+
+  saveBtn.addEventListener("click", () => {
+    const s = save();
+    if (s) nameBox(s.id)?.focus(); // name it now, if you like
   });
 
   splitBtn.addEventListener("click", () => {
@@ -180,10 +203,17 @@ export function mountSectionsPanel(
       bars = n;
       list = k === null ? [] : store.load(k);
       render();
+      onChange(list);
     },
     setSelection(r) {
       selection = r;
       mark();
+    },
+    save,
+    rename(id, name) {
+      commit(Sections.rename(list, id, name));
+      const box = nameBox(id);
+      if (box) box.value = list.find((x) => x.id === id)?.name ?? "";
     },
   };
 }

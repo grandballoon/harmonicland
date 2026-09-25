@@ -49,6 +49,46 @@ describe("LiveKeys refcounting", () => {
   });
 });
 
+/* The microphone's voices: the instrument sounds itself, so the sinks must
+   stay out of it — but a key it holds still glows and still counts. */
+describe("LiveKeys silent voices", () => {
+  it("holds a silent voice without sounding it", () => {
+    const v = LiveKeys.press(60, { silent: true });
+    expect(LiveKeys.held()).toEqual(new Set([60]));
+    LiveKeys.release(v);
+    expect(sink.on).toEqual([]);
+    expect(sink.off).toEqual([]);
+  });
+
+  it("publishes a silent press to onPress like any other", () => {
+    const seen: number[] = [];
+    const off = LiveKeys.onPress((v) => seen.push(v.pitch));
+    LiveKeys.press(64, { silent: true });
+    expect(seen).toEqual([64]);
+    off();
+  });
+
+  it("sounds an audible press on a key a silent voice already holds", () => {
+    const mic = LiveKeys.press(60, { silent: true });
+    const finger = LiveKeys.press(60);
+    expect(sink.on).toEqual([60]);
+    LiveKeys.release(finger); // the mic still holds it: glowing, but silent now
+    expect(sink.off).toEqual([60]);
+    expect(LiveKeys.held().has(60)).toBe(true);
+    LiveKeys.release(mic);
+    expect(sink.off).toEqual([60]);
+  });
+
+  it("keeps sounding when a silent voice lifts from under an audible one", () => {
+    const finger = LiveKeys.press(60);
+    const mic = LiveKeys.press(60, { silent: true });
+    LiveKeys.release(mic);
+    expect(sink.off).toEqual([]);
+    LiveKeys.release(finger);
+    expect(sink.off).toEqual([60]);
+  });
+});
+
 describe("LiveKeys.isLive", () => {
   it("is true while held and false once released", () => {
     const v = LiveKeys.press(64);

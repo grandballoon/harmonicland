@@ -83,6 +83,18 @@ Because Phase 1 isolates the model behind a frame-in/activations-out interface, 
 
 **Do not** build on YIN/MPM for the primary path, and **do not** build on Onsets and Frames, which cannot stream.
 
+## Status
+
+Phase 1 is built (see *Live microphone input* in `HANDOFF.md`).
+Two findings from running Basic Pitch on the bundled piano samples changed the plan above:
+
+- Onsets alone let overtones through: the octave and twelfth above a struck key reach onset 0.8, against ≥ 0.85 for the key itself.
+  Their frame activations separate cleanly (under 0.4 against ≥ 0.6), so a strike must be confirmed by its frame activation within three frames.
+- Lookahead can be shorter than the receptive field suggests: 5 frames (~58 ms) still found every chord and repeated chord; 2 frames missed a re-strike.
+  The panel's response setting spans 5, 8 and 14 frames.
+
+On pure white noise the model produced no notes even with the gate open, so the gate is a safeguard against real room sounds rather than a necessity; its margin is 6 dB over the tracked floor.
+
 ## Open questions for the behavioral spec
 
 - What latency is acceptable before the app should visibly say "listening, slightly behind" rather than pretend to be instantaneous?

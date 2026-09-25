@@ -113,7 +113,7 @@ import {
   changeColor, changeColorLabel, changeName, changeOf, changePitchClasses,
   changeQuality, homeNumeral, type Change,
 } from "../harmony/progression";
-import type { Hand, Note, Pitch, Score } from "../types";
+import type { BarRange, Hand, Note, Pitch, Score } from "../types";
 import type { PracticeSnapshot } from "../practice-state";
 import type { View, ViewModule, Region, LiveSnapshot, Frame, Scroller } from "../view";
 
@@ -550,6 +550,7 @@ const names = (ns: readonly Note[]): string =>
  *  a fabricated moment mid-pulse is as renderable as any other. */
 export const markup = (
   W: number, H: number, s: PracticeSnapshot, held: ReadonlySet<Pitch>, sheetScroll = 0,
+  marks: readonly BarRange[] = [],
 ): string => {
   if (!W || !H) return "";
 
@@ -570,7 +571,7 @@ export const markup = (
       `<g transform="translate(0,${SHEET_TOP})"><g clip-path="url(#${GLOW_ID}-sheets)">` +
       StaffScore.markup(mainW, h, sheetScroll, s.score!, {
         glowId: GLOW_ID, range: s.range, current: s.current, hand: s.hand, showOther: s.showOther,
-        wrong: s.wrong,
+        wrong: s.wrong, marks,
       }) + `</g></g>` +
       keyLayer(mainW, H, s, held) +
       harmonyBar(mainW, W, H, s);
@@ -583,7 +584,7 @@ export const markup = (
     ? `<g transform="translate(0,${SHEET_TOP})">` +
       StaffBars.markup(mainW, sheetH, s.score!, {
         glowId: GLOW_ID, focus: s.focus, range: s.range, current: s.current,
-        hand: s.hand, showOther: s.showOther, pan: s.pan, wrong: s.wrong,
+        hand: s.hand, showOther: s.showOther, pan: s.pan, wrong: s.wrong, marks,
       }) + `</g>`
     : "";
 
@@ -778,7 +779,7 @@ export const render: View = (svg, { live }) => {
   const H = svg.clientHeight;
   if (!W || !H) return;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.innerHTML = markup(W, H, live.practice, live.held, live.sheetScroll);
+  svg.innerHTML = markup(W, H, live.practice, live.held, live.sheetScroll, live.marks);
 };
 
 // the keys are pointer-playable here like anywhere else — you can practise
@@ -834,6 +835,21 @@ function gripIn(W: number, H: number, live: LiveSnapshot, x: number, y: number):
   return RangeMarks.gripAt(StaffBars.stripMarks(mainW, s.score, s.focus, s.hand, s.showOther, s.pan), s.range, x);
 }
 
+/** The marked section under a point, in `barIn`'s terms. */
+function markIn(W: number, H: number, live: LiveSnapshot, x: number, y: number): BarRange | null {
+  const s = live.practice;
+  if (!s.active || !s.score || live.marks.length === 0) return null;
+  const mainW = W - chartBandW(W, s.chart !== null);
+  if (x >= mainW || y < 0) return null;
+  if (scoreShown(s))
+    return y > sheetsH(H, s.showArrows) ? null
+      : StaffScore.markAt(mainW, s.score, s.hand, s.showOther, live.marks, x, y + live.sheetScroll);
+  const sheetH = sheetBandH(H, s.showArrows);
+  if (y > sheetH) return null;
+  const marks = StaffBars.stripMarks(mainW, s.score, s.focus, s.hand, s.showOther, s.pan);
+  return RangeMarks.markAt(marks, live.marks, x, y, ...StaffBars.panelBand(sheetH));
+}
+
 /** Where a grip dragged to a point would go, in `barIn`'s terms. */
 function timeIn(W: number, live: LiveSnapshot, x: number, y: number): number | null {
   const s = live.practice;
@@ -841,6 +857,38 @@ function timeIn(W: number, live: LiveSnapshot, x: number, y: number): number | n
   const mainW = W - chartBandW(W, s.chart !== null);
   if (scoreShown(s)) return StaffScore.timeAt(mainW, s.score, s.hand, s.showOther, x, y + live.sheetScroll);
   return RangeMarks.timeAt(StaffBars.stripMarks(mainW, s.score, s.focus, s.hand, s.showOther, s.pan), x);
+}
+
+/** Where the range's panel shows, in `barIn`'s terms: its first stretch
+ *  on the sheets that is in sight, cut to the part in sight — or null
+ *  when none of it is. */
+function rangeIn(W: number, H: number, live: LiveSnapshot): Region | null {
+  const s = live.practice;
+  if (!s.active || !s.score || !s.range) return null;
+  const mainW = W - chartBandW(W, s.chart !== null);
+  const whole = scoreShown(s);
+  const h = whole ? sheetsH(H, s.showArrows) : sheetBandH(H, s.showArrows);
+  const boxes = whole
+    ? StaffScore.rangeBoxes(mainW, s.score, s.hand, s.showOther, s.range)
+      .map((b) => ({ ...b, y: b.y - live.sheetScroll }))
+    : stripBoxes(mainW, h, s);
+  for (const b of boxes) {
+    const x0 = Math.max(0, b.x);
+    const x1 = Math.min(mainW, b.x + b.w);
+    const y0 = Math.max(0, b.y);
+    const y1 = Math.min(h, b.y + b.h);
+    if (x1 > x0 && y1 > y0) return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  return null;
+}
+
+/** The range's panel on the single-line page, `sheetH` tall. */
+function stripBoxes(W: number, sheetH: number, s: PracticeSnapshot): Region[] {
+  if (sheetH === 0 || !s.score || !s.range) return [];
+  const span = RangeMarks.spanOnLine(StaffBars.stripMarks(W, s.score, s.focus, s.hand, s.showOther, s.pan), s.range);
+  if (!span) return [];
+  const [y, h] = StaffBars.panelBand(sheetH);
+  return [{ x: span.xa, y, w: span.xb - span.xa, h }];
 }
 
 /** Where the music scrolls: the whole score down its sheets, or the page
@@ -863,7 +911,9 @@ function scroller(svg: SVGSVGElement, { live }: Frame): Scroller | null {
       ...StaffScore.sightOf(w, h, s.score, s.hand, s.showOther, cursorBar(s)),
       barAt: (x, y) => barIn(W, H, live, x, y),
       gripAt: (x, y) => gripIn(W, H, live, x, y),
+      markAt: (x, y) => markIn(W, H, live, x, y),
       timeAt: (x, y) => timeIn(W, live, x, y),
+      rangeBox: () => rangeIn(W, H, live),
     };
   }
   const sheetH = sheetBandH(H, s.showArrows);
@@ -883,7 +933,9 @@ function scroller(svg: SVGSVGElement, { live }: Frame): Scroller | null {
     home: origin,
     barAt: (x, y) => barIn(W, H, live, x, y),
     gripAt: (x, y) => gripIn(W, H, live, x, y),
+    markAt: (x, y) => markIn(W, H, live, x, y),
     timeAt: (x, y) => timeIn(W, live, x, y),
+    rangeBox: () => rangeIn(W, H, live),
   };
 }
 

@@ -13,10 +13,14 @@ export default defineConfig({
     // ~120 kB, and that is the number to watch.
     chunkSizeWarningLimit: 8 * 1024,
   },
+  // TF.js is imported only by the microphone's worker, so the dev server
+  // would discover it on the first "Enable mic" and reload the page under
+  // the listener. Pre-bundle it up front instead.
+  optimizeDeps: { include: ["@tensorflow/tfjs"] },
   test: {
     // MusicxmlIn uses DOMParser and the renderers touch SVG geometry, so the
     // test runner needs a DOM. jsdom is enough for parsing + math.
     environment: "jsdom",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "tools/**/*.test.ts"],
   },
 });

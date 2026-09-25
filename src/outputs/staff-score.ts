@@ -43,7 +43,10 @@
       engraving is never re-set for any of that: the hands and the lit
       heads are a stylesheet over the classes and ids mei.ts gave them,
       and the rule, the panel and the red heads are placed from the
-      geometry verovio.ts read off the page.
+      geometry verovio.ts read off the page. Saved sections, when they are
+      shown, are tinted over the same stretch the panel would
+      cover (range-marks.ts, decision 4), above the panel and under the
+      music.
 
    5. SCROLLING is a number handed in, not a thing this module does. The
       caller owns the scroll position (a native scroller, in the app) and
@@ -58,7 +61,9 @@ import { StaffBars, type LineOpts, type PageLayout } from "./staff-bars";
 import { HALF, posFromMiddleC } from "./staff-std";
 import { STEP_ASIDE, ledgerLines, ledgerPositions, strayGlyph, straysAt, type Stray } from "./strays";
 import { engrave, type EngravedBar } from "./engrave";
-import { RangeMarks, gripsMarkup, panelMarkup, stopsOf, type End, type MarkBar } from "./range-marks";
+import {
+  RangeMarks, gripsMarkup, panelMarkup, sectionMarkup, spanOnLine, stopsOf, type End, type MarkBar,
+} from "./range-marks";
 import { headId, headPrefix, toMei } from "./mei";
 import { Verovio, type PageSpec, type VrvPage } from "./verovio";
 import { glowAttr, text } from "./defs";
@@ -299,9 +304,9 @@ const PAGE_STYLE = [
   `.vrv .upper{color:var(--page-r)}`,
   `.vrv .lower{color:var(--page-l)}`,
   `.vrv .free{color:var(--note)}`,
-  `.vrv .upper.other{color:var(--hand-r-dim)}`,
-  `.vrv .lower.other{color:var(--hand-l-dim)}`,
-  `.vrv .free.other{color:var(--note-dim)}`,
+  `.vrv .upper.other{color:var(--page-r-dim)}`,
+  `.vrv .lower.other{color:var(--page-l-dim)}`,
+  `.vrv .free.other{color:var(--page-dim)}`,
 ].join("");
 
 /** The current step's heads, lit: every head of every note it sounds —
@@ -364,6 +369,7 @@ function verovioSheet(sheet: VerovioSheet, o: LineOpts, strike: Strike | null): 
   let out = "";
   const r = o.range;
   if (r) for (const sys of sheet.systems) out += panelMarkup(sys.bars, r, sys.y, sys.h);
+  for (const m of o.marks ?? []) for (const sys of sheet.systems) out += sectionMarkup(sys.bars, m, sys.y, sys.h);
   out += `<g class="vrv">${sheet.page.svg}</g>`;
   if (r) for (const sys of sheet.systems) out += gripsMarkup(sys.bars, r, sys.y, sys.h);
   if (strike) {
@@ -409,14 +415,23 @@ export function markup(W: number, H: number, scroll: number, score: Score, o: Li
 
 /** The line a point in the scrolling content is on, with the point in that
  *  line's sheet's units — or null in a gap, a margin, or off the sheets. */
-function lineAt(L: ScoreLayout, x: number, y: number): { sys: System; sx: number } | null {
+function lineAt(L: ScoreLayout, x: number, y: number): { sys: System; sx: number; sy: number } | null {
   for (const sheet of L.sheets as readonly Sheet[]) {
     const sy = (y - sheet.top) / L.k;
     if (sy < 0 || sy > PAPER_H) continue;
     const sys = sheet.systems.find((s) => sy >= s.y && sy < s.y + s.h);
-    return sys ? { sys, sx: (x - L.x) / L.k } : null;
+    return sys ? { sys, sx: (x - L.x) / L.k, sy } : null;
   }
   return null;
+}
+
+/** Where a line's panel and marks are drawn, top and height, in its
+ *  sheet's units: a Verovio line's whole reach, and a built-in line's
+ *  panel band, which staff-bars.ts places in the line it draws. */
+function bandOf(L: ScoreLayout, sys: System): [number, number] {
+  if (L.engine === "verovio") return [sys.y, sys.h];
+  const [y, h] = StaffBars.panelBand(SYS_H);
+  return [sys.y + y, h];
 }
 
 /** Which bar a point is over — `x` across the region, `y` down the
@@ -474,6 +489,17 @@ export function gripAt(
   return hit ? RangeMarks.gripAt(hit.sys.bars, range, hit.sx, RangeMarks.GRIP_REACH / L.k) : null;
 }
 
+/** Which marked section a point is on — `x`
+ *  across the region, `y` down the scrolling content — or null. */
+export function markAt(
+  W: number, score: Score, hand: HandFilter, showOther: boolean, marks: readonly BarRange[], x: number, y: number,
+): BarRange | null {
+  if (!W || score.bars.length === 0 || marks.length === 0) return null;
+  const L = layout(W, score, hand, showOther);
+  const hit = lineAt(L, x, y);
+  return hit ? RangeMarks.markAt(hit.sys.bars, marks, hit.sx, hit.sy, ...bandOf(L, hit.sys)) : null;
+}
+
 /** The score time of the nearest place a range's end can sit to a point
  *  (range-marks.ts, decision 3), or null off every line. */
 export function timeAt(
@@ -484,4 +510,23 @@ export function timeAt(
   return hit ? RangeMarks.timeAt(hit.sys.bars, hit.sx) : null;
 }
 
-export const StaffScore = { markup, barAt, gripAt, timeAt, layout, lineSpan, sightOf, contentHeight };
+/** Where the range's panel stands on each line it covers, in pixels —
+ *  `x` across the region, `y` down the scrolling content — in reading
+ *  order. What a control that belongs to the selection is placed by. */
+export function rangeBoxes(
+  W: number, score: Score, hand: HandFilter, showOther: boolean, range: BarRange,
+): { x: number; y: number; w: number; h: number }[] {
+  if (!W || score.bars.length === 0) return [];
+  const L = layout(W, score, hand, showOther);
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  for (const sheet of L.sheets as readonly Sheet[])
+    for (const sys of sheet.systems) {
+      const s = spanOnLine(sys.bars, range);
+      if (!s) continue;
+      const [y, h] = bandOf(L, sys);
+      out.push({ x: L.x + s.xa * L.k, y: sheet.top + y * L.k, w: (s.xb - s.xa) * L.k, h: h * L.k });
+    }
+  return out;
+}
+
+export const StaffScore = { markup, barAt, gripAt, markAt, timeAt, rangeBoxes, layout, lineSpan, sightOf, contentHeight };

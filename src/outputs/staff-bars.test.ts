@@ -282,18 +282,18 @@ describe("colour", () => {
     });
   });
 
-  it("hues the focus by hand and the context in ink-dim", () => {
+  it("hues the focus by hand and the context in the page's context ink", () => {
     const svg = StaffBars.markup(W, H, four, { ...opts, focus: { from: 1, to: 1 } });
     expect(heads(svg, "var(--page-r)")).toBe(5);
     expect(heads(svg, "var(--page-l)")).toBe(1);
-    expect(heads(svg, "var(--ink-dim)")).toBeGreaterThan(0);
+    expect(heads(svg, "var(--page-context)")).toBeGreaterThan(0);
   });
 
-  it("dims the hand not being practised, and leaves it off when told", () => {
+  it("inks the hand not being practised in the page's own token, and leaves it off when told", () => {
     const shown = StaffBars.markup(W, H, four, { ...opts, focus: { from: 0, to: 0 }, hand: "upper" });
-    expect(heads(shown, "var(--hand-l-dim)")).toBe(1);
+    expect(heads(shown, "var(--page-l-dim)")).toBe(1);
     const hidden = StaffBars.markup(W, H, four, { ...opts, focus: { from: 0, to: 0 }, hand: "upper", showOther: false });
-    expect(heads(hidden, "var(--hand-l-dim)")).toBe(0);
+    expect(heads(hidden, "var(--page-l-dim)")).toBe(0);
   });
 
   it("sits the isolated bars on a panel", () => {

@@ -40,9 +40,14 @@
     --glyph:     #6b7785;   /* engraved furniture: clefs and rests     */
     --page-r:    #4ac1ff;   /* the engraved page's notes, by hand      */
     --page-l:    #c77dff;
+    --page-r-dim:#20607f;   /* ...the hand not being practised          */
+    --page-l-dim:#5f3f80;
+    --page-dim:  #38404c;   /* ...a note of neither hand, not practised  */
+    --page-context:#353c45; /* ...and the bars either side of the page's focus */
     --minor:     #5b7fff;   /* minor chords: the cool half of the quality pair */
     --desk:      #080a0e;   /* behind the sheets of the whole score    */
     --grip:      #6b7785;   /* the isolated range's drag handles       */
+    --mark:      rgba(127, 216, 176, .09); /* a saved section's bars: a wash of the loop's mint */
   }
 
   /* ---- paper: the light scheme ----------------------------------------
@@ -80,9 +85,16 @@
     --glyph:     #1c1b19;
     --page-r:    #141414;
     --page-l:    #141414;
+    /* on paper a note is always printed black, whichever hand is being
+       practised and whether or not its bar is the focus */
+    --page-r-dim:#141414;
+    --page-l-dim:#141414;
+    --page-dim:  #141414;
+    --page-context:#141414;
     --minor:     #4a76e8;
     --desk:      #e4ddcd;
     --grip:      #a8946a;   /* the panel's own warm, deepened           */
+    --mark:      rgba(30, 149, 99, .09);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -257,6 +269,31 @@
   /* ...and while it is, the keys are the only thing below the header */
   body[data-isolated] #tray { display: none; }
 
+  /* the saved sections, in the header's top right: the switch that marks
+     them on the sheet music, then one chip each, scrolling sideways when
+     there are more than fit. The switch's swatch is the marks' tint. */
+  .section-bar {
+    margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 50%;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-bar[hidden] { display: none; }
+  .section-chips {
+    display: flex; gap: 4px; min-width: 0; overflow-x: auto;
+    scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent;
+  }
+  .section-bar button { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  .section-chip { color: var(--ink-dim); }
+  .section-chip[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
+  .marks-toggle { color: var(--ink-dim); }
+  .marks-toggle::before {
+    content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 0;
+    border-radius: 2px; background: var(--loop); opacity: .35;
+  }
+  .marks-toggle[aria-pressed="true"] { color: var(--ink); }
+  .marks-toggle[aria-pressed="true"]::before { opacity: 1; }
+  /* no sheet music to mark on the isolated keys: the chips switch sections */
+  body[data-isolated] .marks-toggle { display: none; }
+
   /* the Loop switch: lit in the edges' colour while looping */
   #loop[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
   /* the times hang under the track, just below the thumb, in the row's
@@ -283,6 +320,29 @@
   #score-scroll { position: absolute; overflow-x: hidden; overflow-y: auto; scrollbar-color: var(--grid-oct) transparent; }
   #score-scroll[data-axis="x"] { overflow-x: auto; overflow-y: hidden; }
   #score-scroll[hidden] { display: none; }
+  /* The selection tip: a small inverted callout standing on the selection's
+     panel, its arrow pointing down at it — or, with no room above, tucked
+     just inside the panel's top, arrowless. Placed by selection-tip.ts from its
+     anchor, the arrow's tip, hence the transform. */
+  .selection-tip {
+    position: absolute; transform: translate(-50%, -100%); z-index: 1;
+    padding: 3px; border-radius: 6px;
+    background: var(--ink); box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  }
+  .selection-tip[hidden] { display: none; }
+  .selection-tip[data-side="above"]::after {
+    content: ""; position: absolute; left: 50%; top: 100%; margin-left: -5px;
+    border: 5px solid transparent; border-top-color: var(--ink); border-bottom-width: 0;
+  }
+  .selection-tip button, .selection-tip input {
+    display: block; font: inherit; font-size: 12px; line-height: 16px; white-space: nowrap;
+    color: var(--bg); background: transparent; border: 0; border-radius: 4px; padding: 3px 8px;
+  }
+  .selection-tip button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
+  .selection-tip button:focus-visible, .selection-tip input:focus-visible { outline: 2px solid var(--note); outline-offset: 1px; }
+  .selection-tip input { width: 13em; cursor: text; outline: none; background: color-mix(in srgb, var(--bg) 12%, transparent); }
+  .selection-tip input::placeholder { color: color-mix(in srgb, var(--bg) 55%, transparent); }
+  .selection-tip [hidden] { display: none; }
 
   .toggle { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 12px; }
   .toggle .hand-r { color: var(--hand-r); font-weight: 600; }
@@ -330,6 +390,23 @@
     background: transparent;
   }
   .tray-panel .sections-panel { min-width: 0; }
+
+  /* the microphone: a readout beside the toggle, settings behind it ------ */
+  .mic-readout { color: var(--ink-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .mic-readout:empty { display: none; }
+  .mic-panel { display: grid; gap: 8px; max-width: 420px; }
+  .mic-field { display: grid; grid-template-columns: 6.5em 1fr; align-items: center; gap: 10px; color: var(--ink-dim); font-size: 12px; }
+  .mic-field select { min-width: 0; width: 100%; text-overflow: ellipsis; }
+  .mic-field input[type=range] { width: 100%; margin: 0; accent-color: var(--note); }
+  .mic-meter {
+    position: relative; height: 8px; border-radius: 4px;
+    background: var(--grid); overflow: hidden;
+  }
+  .mic-level { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--note-dim); transition: width 60ms linear; }
+  .mic-meter.open .mic-level { background: var(--key-press); }
+  .mic-floor { position: absolute; top: 0; bottom: 0; width: 2px; left: 0; background: var(--ink-dim); display: none; }
+  .mic-meter.on .mic-floor { display: block; }
+  .mic-hint { margin: 2px 0 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
   .tray-credits { color: var(--ink-dim); font-size: 12px; }
   .tray-credits a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tray-credits a:hover { color: var(--ink); }
@@ -408,11 +485,27 @@
   </span>
   <button id="leave-keys" hidden title="Back to the full view (Esc)">✕ Keys only</button>
   <span class="status" id="status"></span>
+  <!-- The loaded score's saved sections, a click away: section-chips.ts
+       builds a chip per section from the tray's list, and hides the bar
+       when there are none. The switch tints them on the sheet music; a
+       click on a tinted section selects it. -->
+  <div class="section-bar" id="section-bar" hidden>
+    <button class="marks-toggle" aria-pressed="true" title="Tint the saved sections on the sheet music; click one to select it">Marks</button>
+    <div class="section-chips" role="group" aria-label="Saved sections"></div>
+  </div>
 </div>
 
 <div id="stage">
   <svg id="staff" preserveAspectRatio="none"></svg>
   <div id="score-scroll" hidden><div></div></div>
+  <!-- Over the selected bars on the sheet music: save them as a section,
+       then name it; once saved, open them on the keys alone.
+       selection-tip.ts places it and shows one control at a time. -->
+  <div id="selection-tip" class="selection-tip" hidden>
+    <button class="selection-tip-save" type="button"></button>
+    <input class="selection-tip-name" type="text" placeholder="Name it… (Enter)" aria-label="Name for the section just saved" hidden>
+    <button class="selection-tip-keys" type="button" title="Show only the keys these bars play" hidden>Keys only</button>
+  </div>
 </div>
 
 <!-- The tray: every control not needed while reading, folded behind one
@@ -507,6 +600,36 @@
         </div>
       </details>
     </div>
+    <!-- A real instrument through a microphone. Rows and options that
+         depend on the device are filled in by mic-panel.ts. -->
+    <div class="tray-row">
+      <span class="tray-label">mic</span>
+      <button id="mic">Enable mic</button>
+      <span class="mic-readout" id="mic-readout"></span>
+      <details id="mic-settings" class="dropdown">
+        <summary title="Choose the microphone and tune how it listens">Mic settings</summary>
+        <div class="dropdown-panel mic-panel">
+          <label class="mic-field"><span>Input</span>
+            <select class="mic-device" title="The microphone or audio interface to listen to"></select></label>
+          <label class="mic-field"><span>Channel</span>
+            <select class="mic-channel" title="Which input of the device the instrument is on"></select></label>
+          <label class="mic-field"><span>Response</span>
+            <select class="mic-response" title="How long to listen before deciding a note: faster reacts sooner, more accurate misses fewer repeated notes">
+              <option value="fast">Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="accurate">Accurate</option>
+            </select></label>
+          <label class="mic-field"><span>Sensitivity</span>
+            <input type="range" class="mic-sensitivity" min="0" max="1" step="0.05"
+              title="Higher catches softer notes, and more wrong ones"></label>
+          <div class="mic-field"><span>Level</span>
+            <div class="mic-meter" title="Input level; the tick is the room's noise floor, and the bar lights while the mic hears playing">
+              <div class="mic-level"></div><div class="mic-floor"></div>
+            </div></div>
+          <p class="mic-hint">Listening runs a little behind the instrument. Use headphones for the app's own sound: the mic hears the speakers too.</p>
+        </div>
+      </details>
+    </div>
     <div class="tray-row">
       <span class="tray-label">view</span>
       <label class="toggle">
@@ -567,7 +690,9 @@
       <span class="tray-label">credits</span>
       <span class="tray-credits">piano:
         <a href="https://sfzinstruments.github.io/pianos/salamander/">Salamander</a>
-        by Alexander Holm (CC&nbsp;BY)</span>
+        by Alexander Holm (CC&nbsp;BY) · listening:
+        <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a>
+        by Spotify (Apache&nbsp;2.0)</span>
     </div>
   </div>
 </details>

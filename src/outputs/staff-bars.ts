@@ -47,7 +47,7 @@ import { glowAttr, text } from "./defs";
 import {
   engrave, type Chord, type EngravedBar, type Head, type Staff, type Value,
 } from "./engrave";
-import { gripsMarkup, panelMarkup, stopsOf, type MarkBar } from "./range-marks";
+import { gripsMarkup, panelMarkup, sectionMarkup, stopsOf, type MarkBar } from "./range-marks";
 import { inHand, soundingIn, type HandFilter, type Step } from "../steps";
 import { STEP_ASIDE, strayGlyph, straysAt } from "./strays";
 import type { Bar, BarRange, Hand, Note, Pitch, Score } from "../types";
@@ -92,6 +92,9 @@ export interface BarsOpts {
   /** Keys held that the current step never asked for, written in red in
    *  its column (strays.ts). Absent is none. */
   wrong?: ReadonlySet<Pitch>;
+  /** Saved sections to tint over the bars (range-marks.ts,
+   *  decision 4). Absent is none. */
+  marks?: readonly BarRange[];
 }
 
 /** One bar with its pixels decided. */
@@ -447,7 +450,7 @@ export function placeLine(W: number, spec: LineSpec): PageLayout {
 const handHue = (h: Hand | undefined): string =>
   h === "lower" ? "var(--page-l)" : h === "upper" ? "var(--page-r)" : "var(--note)";
 const handDim = (h: Hand | undefined): string =>
-  h === "lower" ? "var(--hand-l-dim)" : h === "upper" ? "var(--hand-r-dim)" : "var(--note-dim)";
+  h === "lower" ? "var(--page-l-dim)" : h === "upper" ? "var(--page-r-dim)" : "var(--page-dim)";
 
 interface Style {
   fill: string;
@@ -457,7 +460,7 @@ interface Style {
   rank: number;
 }
 
-const CONTEXT: Style = { fill: "var(--ink-dim)", opacity: 0.45, glow: "", rank: 0 };
+const CONTEXT: Style = { fill: "var(--page-context)", opacity: 1, glow: "", rank: 0 };
 const REST: Style = { fill: "var(--glyph)", opacity: 0.9, glow: "", rank: 0 };
 const loudest = (a: Style, b: Style): Style => (b.rank > a.rank ? b : a);
 
@@ -583,6 +586,12 @@ const beamLevels = (c: Chord): number => (c.value.base === 8 ? 0 : c.value.base 
  *  the window is — a placed line already knows both. */
 export type LineOpts = Omit<BarsOpts, "focus" | "pan">;
 
+/** Where a line `H` tall draws the isolated range's panel, and a marked
+ *  section's tint: the staves' reach and a little air, centred —
+ *  as [top, height]. What a mark is hit-tested against, too. */
+export const panelBand = (H: number): [number, number] =>
+  [H / 2 - STAFF_REACH - 6, 2 * STAFF_REACH + 12];
+
 /** The single-line page: the focus bars, with the rest of the piece
  *  either side of them, seen through the window at `pan`. */
 export function markup(W: number, H: number, score: Score, o: BarsOpts): string {
@@ -621,9 +630,10 @@ export function drawLine(H: number, page: PageLayout, o: LineOpts): string {
 
   // the isolated bars, as a panel under everything, with a grip at each
   // end over everything (range-marks.ts)
-  const marks = o.range ? marksOf(page) : [];
-  const [panelY, panelH] = [top - 6, bottom - top + 12];
+  const marks = o.range || o.marks?.length ? marksOf(page) : [];
+  const [panelY, panelH] = panelBand(H);
   if (o.range) out += panelMarkup(marks, o.range, panelY, panelH);
+  for (const m of o.marks ?? []) out += sectionMarkup(marks, m, panelY, panelH);
 
   const panel = out;
   out = "";
@@ -835,4 +845,4 @@ export const stripMarks = (
 ): MarkBar[] =>
   !W || score.bars.length === 0 ? [] : marksOf(layout(W, score, focus, visibleNotes(score, hand, showOther), pan));
 
-export const StaffBars = { markup, barAt, stripMarks, marksOf, layout, panSpan, panTo, timeline, placeLine, drawLine, roomFor, naturalW, visibleNotes };
+export const StaffBars = { markup, barAt, stripMarks, panelBand, marksOf, layout, panSpan, panTo, timeline, placeLine, drawLine, roomFor, naturalW, visibleNotes };

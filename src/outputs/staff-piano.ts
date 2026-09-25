@@ -53,7 +53,7 @@ import { PianoRoll, KEYB } from "./piano-roll";
 import { glowFilter } from "./defs";
 import { Core } from "../core";
 import { makeSteps, stepSounding, type Step } from "../steps";
-import type { Score } from "../types";
+import type { BarRange, Score } from "../types";
 import type { View, ViewModule, Region, Frame, PagePan, Tape, Scroller } from "../view";
 
 // band heights (pure, exported for tests). Keys: exactly the keyboard.
@@ -126,19 +126,24 @@ export function page(
 /** The whole piece on sheets, in a W×H region scrolled `scroll` down
  *  (origin at 0,0; no <defs>), lit where the score sounds at `t` — the page
  *  above, set as a printed score. */
-export function sheets(W: number, H: number, score: Score, t: number, glowId: string, scroll: number): string {
+export function sheets(
+  W: number, H: number, score: Score, t: number, glowId: string, scroll: number, marks: readonly BarRange[] = [],
+): string {
   return StaffScore.markup(W, H, scroll, score, {
     glowId,
     range: null,
     current: stepSounding(stepsFor(score), t),
     hand: "both",
     showOther: true,
+    marks,
   });
 }
 
 /** The sheets' scroller over a W×H region scrolled `scroll` down,
  *  following the bar the playhead is in. */
-export function sheetsScroller(W: number, H: number, score: Score, t: number, scroll: number): Scroller | null {
+export function sheetsScroller(
+  W: number, H: number, score: Score, t: number, scroll: number, marks: readonly BarRange[] = [],
+): Scroller | null {
   if (!W || !H || score.bars.length === 0) return null;
   const bar = Core.barAt(score, t).index;
   return {
@@ -150,7 +155,9 @@ export function sheetsScroller(W: number, H: number, score: Score, t: number, sc
     ...StaffScore.sightOf(W, H, score, "both", true, bar),
     barAt: (x, y) => StaffScore.barAt(W, score, "both", true, x, y + scroll),
     gripAt: () => null, // this page draws no range
+    markAt: (x, y) => StaffScore.markAt(W, score, "both", true, marks, x, y + scroll),
     timeAt: () => null,
+    rangeBox: () => null,
   };
 }
 
@@ -205,7 +212,7 @@ const stacked =
       `<clipPath id="spBand"><rect x="0" y="0" width="${W}" height="${band}"/></clipPath>` +
       `</defs>`;
     const top = scoreShown(canScore, score)
-      ? sheets(W, topH, score, t, GLOW_ID, live.sheetScroll)
+      ? sheets(W, topH, score, t, GLOW_ID, live.sheetScroll, live.marks)
       : page(W, topH, score, t, GLOW_ID, live.pagePan);
     const staff = `<g clip-path="url(#spTop)">${top}</g>`;
     const piano =
@@ -235,7 +242,7 @@ const scroller = (bandH: (H: number) => number, canScore: boolean) =>
   (svg: SVGSVGElement, { score, t, live }: Frame): Scroller | null => {
     if (!scoreShown(canScore, score)) return null;
     const H = svg.clientHeight;
-    return sheetsScroller(svg.clientWidth, H - bandH(H), score, t, live.sheetScroll);
+    return sheetsScroller(svg.clientWidth, H - bandH(H), score, t, live.sheetScroll, live.marks);
   };
 
 // Each flavor is a ViewModule carrying its OWN region function, so the two

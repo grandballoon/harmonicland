@@ -200,6 +200,25 @@ describe("the whole score on Verovio's pages", () => {
     expect(panel).toBeLessThan(svg.indexOf('<g class="vrv">'));
   });
 
+  it("tints a section over the panel and under the page, and hit-tests it", () => {
+    const s = piece(40);
+    const L = lay(1200, s);
+    const sheet = L.sheets[1];
+    const sys = sheet.systems[1];
+    const bar = sys.bars[1];
+    const r = { from: bar.index, to: bar.index };
+    const svg = StaffScore.markup(1200, ALL, 0, s, { ...opts, range: r, marks: [r] });
+    const panel = svg.indexOf('fill="var(--panel)"');
+    const mark = svg.indexOf('fill="var(--mark)"');
+    expect(panel).toBeLessThan(mark);
+    // ...on the sheet that holds them: before that sheet's page
+    expect(mark).toBeLessThan(svg.indexOf('<g class="vrv">', panel));
+    const x = L.x + ((bar.x0 + bar.x1) / 2) * L.k;
+    const mid = sheet.top + (sys.y + sys.h / 2) * L.k;
+    expect(StaffScore.markAt(1200, s, "both", true, [r], x, mid - 20)).toBe(r);
+    expect(StaffScore.markAt(1200, s, "both", true, [r], x, mid + 20)).toBe(r);
+  });
+
   it("draws only the sheets in view", () => {
     const s = piece(80);
     const L = lay(1200, s);

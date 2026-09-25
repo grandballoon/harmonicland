@@ -24,6 +24,10 @@
       before a struck column (decision 2). `timeAt` answers with the score
       time of the nearest such place to the pointer, in the engraver's
       quantized time; loop.ts snaps that onto the step it names.
+
+   4. A SAVED SECTION IS MARKED WITH A TINT over the same stretch the
+      panel would cover, both staves. The tint is translucent, so marks
+      that overlap, and the isolated range's panel, still read through it.
    ==================================================================== */
 import { quartersPerBar, snap, type EngravedBar, type Head } from "./engrave";
 import type { Bar, BarRange } from "../types";
@@ -117,6 +121,31 @@ export function gripsMarkup(bars: readonly MarkBar[], r: BarRange, y: number, h:
   return (s.start ? pill(s.xa) : "") + (s.end ? pill(s.xb) : "");
 }
 
+/** A saved section's tint over its stretch of a line, `y` to `y + h`
+ *  (decision 4). */
+export function sectionMarkup(bars: readonly MarkBar[], r: BarRange, y: number, h: number): string {
+  const s = spanOnLine(bars, r);
+  if (!s) return "";
+  return `<rect x="${s.xa}" y="${y}" width="${Math.max(0, s.xb - s.xa)}" height="${h}" rx="4" fill="var(--mark)"/>`;
+}
+
+/** Which marked section a point is on, the tints drawn `y` to `y + h` as
+ *  `sectionMarkup` draws them — or null off them. Where marks
+ *  overlap, the shortest stretch is the one meant: it is the one a click
+ *  could not otherwise reach. */
+export function markAt(
+  bars: readonly MarkBar[], marks: readonly BarRange[], x: number, py: number, y: number, h: number,
+): BarRange | null {
+  if (py < y || py > y + h) return null;
+  let best: { range: BarRange; w: number } | null = null;
+  for (const r of marks) {
+    const s = spanOnLine(bars, r);
+    if (!s || x < s.xa || x > s.xb) continue;
+    if (!best || s.xb - s.xa < best.w) best = { range: r, w: s.xb - s.xa };
+  }
+  return best && best.range;
+}
+
 /** Which grip a point `x` on the line is on, or null. A range too short to
  *  hold the two apart gives the nearer. */
 export function gripAt(bars: readonly MarkBar[], r: BarRange, x: number, reach = GRIP_REACH): End | null {
@@ -147,4 +176,6 @@ export function timeAt(bars: readonly MarkBar[], x: number): number | null {
   return best === null ? null : (best as { t: number }).t;
 }
 
-export const RangeMarks = { stopsOf, beatX, spanOnLine, panelMarkup, gripsMarkup, gripAt, timeAt, GRIP_REACH };
+export const RangeMarks = {
+  stopsOf, beatX, spanOnLine, panelMarkup, gripsMarkup, sectionMarkup, markAt, gripAt, timeAt, GRIP_REACH,
+};

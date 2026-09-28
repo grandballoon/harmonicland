@@ -502,8 +502,14 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
 // a narrower selection, so it loops, steps and confines a lesson in every
 // view by the path above, and this block keeps nothing but which bars were
 // chained and which link of them is selected. applyBars ends the chain
-// when anything else is selected.
-let chain: { readonly base: BarRange | null; readonly links: readonly BarRange[]; readonly at: number } | null = null;
+// when anything else is selected. `adds` is the step each link adds, for
+// Shift+↑/↓, which skip the links that add only the other hand's notes.
+let chain: {
+  readonly base: BarRange | null;
+  readonly links: readonly BarRange[];
+  readonly adds: readonly Step[];
+  readonly at: number;
+} | null = null;
 
 const chainName = (r: BarRange | null): string => {
   const s = Sections.find(sections, r);
@@ -516,7 +522,7 @@ function startChain(): void {
     $("status").textContent = `No notes in ${describeBars(selection)} to backchain`;
     return;
   }
-  chain = { base: selection, links, at: 0 };
+  chain = { base: selection, links, adds: Backchain.added(score, steps, selection), at: 0 };
   goLink(0);
 }
 
@@ -536,7 +542,20 @@ function goLink(i: number): void {
   }
   const n = chain.links.length;
   $("status").textContent = `Backchain · last ${at + 1} of ${n} note${n > 1 ? "s" : ""} of ${chainName(chain.base)}`
-    + ` · ↑ adds the note before, ↓ drops it`;
+    + ` · ↑ adds the note before, ↓ drops it`
+    + (chainHand() === "both" ? "" : ` · Shift skips to the ${chainHand() === "upper" ? "right" : "left"} hand's`);
+}
+
+/** The hand Shift+↑/↓ skip to: the one being practised, where the hand
+ *  picker is on screen (a lesson, or the isolated keys); elsewhere both. */
+const chainHand = (): HandFilter =>
+  view === Practice || isolated() ? (practiceHand.value as HandFilter) : "both";
+
+/** Shift+↑/↓: the nearest link that way adding a note of that hand. */
+function skipLink(dir: 1 | -1): void {
+  if (!chain) return;
+  const to = Backchain.nextInHand(chain.adds, chain.at, dir, chainHand());
+  if (to !== chain.at) goLink(to);
 }
 
 /** Off: back to the bars that were chained, whole. */
@@ -1157,8 +1176,11 @@ window.addEventListener("keydown", (e) => {
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
   // ↑ / ↓ grow a running chain by the note before, or drop its first, in
   // every view — practice mode included, where nothing else takes them.
+  // With Shift, by as many as it takes to reach one in the hand practised.
   if (chain && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-    goLink(chain.at + (e.key === "ArrowUp" ? 1 : -1));
+    const dir = e.key === "ArrowUp" ? 1 : -1;
+    if (e.shiftKey) skipLink(dir);
+    else goLink(chain.at + dir);
     e.preventDefault();
     return;
   }

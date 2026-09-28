@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Core } from "./core";
 import { makeSteps } from "./steps";
-import { links } from "./backchain";
+import { added, links, nextInHand } from "./backchain";
 import type { RawNote } from "./types";
 
 /* Two bars of 4/4 at a beat a second: bar 1 is four quarter notes, bar 2
@@ -62,5 +62,42 @@ describe("a backchain", () => {
     );
     const chain = links(odd, makeSteps(odd, "both").steps, { from: 0, to: 0 });
     expect(chain.map((r) => Core.barTime(odd, r).start)).toEqual([1.75, 1.05, 0]);
+  });
+});
+
+describe("a backchain skipping to one hand", () => {
+  /* One bar: the right hand on beats 1 and 4, the left alone on 2 and 3,
+     and a hand-less note (every hand's) with the left on 4 too. */
+  const h = (pitch: number, onset: number, hand?: "upper" | "lower"): RawNote => ({ ...n(pitch, onset), hand });
+  const hands = Core.makeScore([h(72, 0, "upper"), h(48, 1, "lower"), h(50, 2, "lower"), h(74, 3, "upper")], [0, 4]);
+  // links add, in order: beat 4 (R), 3 (L), 2 (L), 1 (R)
+  const adds = added(hands, makeSteps(hands, "both").steps, { from: 0, to: 0 });
+
+  it("adds one step per link, last first", () => {
+    expect(adds.map((s) => s.at)).toEqual([3, 2, 1, 0]);
+  });
+
+  it("steps past the links that add only the other hand's notes, both ways", () => {
+    expect(nextInHand(adds, 0, 1, "upper")).toBe(3);
+    expect(nextInHand(adds, 3, -1, "upper")).toBe(0);
+    expect(nextInHand(adds, 0, 1, "lower")).toBe(1);
+  });
+
+  it("is a plain step with both hands", () => {
+    expect(nextInHand(adds, 0, 1, "both")).toBe(1);
+    expect(nextInHand(adds, 2, -1, "both")).toBe(1);
+  });
+
+  it("stays put with no note of that hand left that way", () => {
+    expect(nextInHand(adds, 3, 1, "upper")).toBe(3);
+    expect(nextInHand(adds, 2, 1, "lower")).toBe(2);
+    expect(nextInHand(adds, 1, -1, "lower")).toBe(1);
+  });
+
+  it("counts a note with no hand as every hand's", () => {
+    const bare = Core.makeScore([h(72, 0, "upper"), h(48, 1, "lower"), h(60, 2)], [0, 4]);
+    const a = added(bare, makeSteps(bare, "both").steps, null);
+    expect(nextInHand(a, 0, 1, "upper")).toBe(2);
+    expect(nextInHand(a, 2, -1, "upper")).toBe(0);
   });
 });

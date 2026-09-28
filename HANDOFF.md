@@ -38,6 +38,8 @@ src/
   sections-panel.ts the Sections dropdown (owns its DOM; hands back a range)
   section-chips.ts  the header's section chips + the switch that marks sections
                     on the sheet music (range-marks.ts, decision 4)
+  backchain.ts      a section learned from its end: its last note, last two, … (pure)
+  backchain-bar.ts  the header's backchain switch and link stepper (owns its DOM)
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module

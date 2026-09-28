@@ -131,6 +131,15 @@
   /* the step buttons: a pair, so they sit tighter than the rest */
   .step-pair { display: inline-flex; gap: 4px; }
   .step-pair button { padding-left: 11px; padding-right: 11px; }
+  /* the backchain switch, lit in the loop's colour while a chain runs, and
+     beside it which link is looping, between one shorter and one longer */
+  .chain { display: inline-flex; align-items: center; gap: 4px; }
+  .chain-toggle[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
+  .chain-walk { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-dim); font-size: 12px; white-space: nowrap; }
+  .chain-walk[hidden] { display: none; }
+  .chain-walk button { padding-left: 9px; padding-right: 9px; }
+  .chain-walk input[type=number] { width: 3.6em; }
+  .chain-walk .chain-of { font-variant-numeric: tabular-nums; }
 
   /* dropdowns: a summary styled as a button over a floating panel ------ */
   details.dropdown { position: relative; }
@@ -472,6 +481,20 @@
     <span class="step-pair">
       <button id="step-back" title="Back one step (←)" disabled>◀</button>
       <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>
+    </span>
+    <!-- Backchain the selected bars (backchain.ts): loop their last note,
+         then the last two, and so on back to the first. ↑ and ↓ add a
+         note or drop one, as the arrow keys do; the box jumps to any
+         link. backchain-bar.ts owns this group. -->
+    <span class="chain" id="chain" role="group" aria-label="Backchain">
+      <button class="chain-toggle" aria-pressed="false" disabled title="Backchain the selected bars: loop the last note, then the last two, and so on back to the first">Backchain</button>
+      <span class="chain-walk" hidden>
+        <button class="chain-shorter" title="Drop the first note (↓)" aria-label="One note shorter">↓</button>
+        last
+        <input type="number" class="chain-at" min="1" step="1" aria-label="Notes in the loop, counted from the end">
+        of <span class="chain-of"></span>
+        <button class="chain-longer" title="Add the note before (↑)" aria-label="One note longer">↑</button>
+      </span>
     </span>
   </span>
   <!-- Shown only while the stage is isolated to a section's keys (a

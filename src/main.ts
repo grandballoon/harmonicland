@@ -36,6 +36,8 @@ import { Sections, describeBars, type Section } from "./sections";
 import { localSectionStore } from "./section-store";
 import { mountSectionsPanel } from "./sections-panel";
 import { mountSectionChips } from "./section-chips";
+import { Backchain } from "./backchain";
+import { mountChainBar } from "./backchain-bar";
 import { mountSelectionTip } from "./selection-tip";
 import {
   chordName, degreeNumeral, PITCH_NAMES,
@@ -361,6 +363,9 @@ function applyBars(): void {
   const practising = view === Practice;
   const d = score.duration;
   const span = Core.barTime(score, selection);
+  // a chain runs only while its link is what is selected; any other
+  // choice of bars — a flag, a box, a chip, a new score — ends it
+  if (chain && !Core.sameRange(selection, chain.links[chain.at])) chain = null;
   PracticeState.setRange(selection); // a no-op when no lesson is running
   clock.setLoop(looping && !practising ? span : null);
 
@@ -383,7 +388,9 @@ function applyBars(): void {
   loopBtn.disabled = !enabled;
   loopBtn.setAttribute("aria-pressed", String(enabled && looping && !practising));
   sectionsPanel.setSelection(selection);
-  sectionChips.setSelection(selection);
+  // while a chain runs, its section's chip stays lit under its links
+  sectionChips.setSelection(chain ? chain.base : selection);
+  chainBar.show(chain && { at: chain.at, count: chain.links.length });
   scrubTrack.style.setProperty("--loop-a", String(d > 0 ? span.start / d : 0));
   scrubTrack.style.setProperty("--loop-b", String(d > 0 ? span.end / d : 1));
 }
@@ -488,6 +495,59 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
     selectBars(next);
   });
 }
+
+// --- backchaining ----------------------------------------------------
+// The selected bars learned from their end (backchain.ts): the last note
+// looping, then the last two, and so on back to the first. A link is only
+// a narrower selection, so it loops, steps and confines a lesson in every
+// view by the path above, and this block keeps nothing but which bars were
+// chained and which link of them is selected. applyBars ends the chain
+// when anything else is selected.
+let chain: { readonly base: BarRange | null; readonly links: readonly BarRange[]; readonly at: number } | null = null;
+
+const chainName = (r: BarRange | null): string => {
+  const s = Sections.find(sections, r);
+  return s ? sectionName(s) : describeBars(r);
+};
+
+function startChain(): void {
+  const links = Backchain.links(score, steps, selection);
+  if (links.length === 0) {
+    $("status").textContent = `No notes in ${describeBars(selection)} to backchain`;
+    return;
+  }
+  chain = { base: selection, links, at: 0 };
+  goLink(0);
+}
+
+/** Loop link `i` (clamped into the chain), and start it from its first
+ *  note — the one just added, when the chain has grown. */
+function goLink(i: number): void {
+  if (!chain) return;
+  const at = Math.max(0, Math.min(chain.links.length - 1, i));
+  chain = { ...chain, at };
+  AudioOut.ensure();
+  selectBars(chain.links[at]);
+  const { start } = Core.barTime(score, selection);
+  if (view === Practice) PracticeState.seekToTime(start);
+  else {
+    auditioning = false;
+    clock.seek(start);
+  }
+  const n = chain.links.length;
+  $("status").textContent = `Backchain · last ${at + 1} of ${n} note${n > 1 ? "s" : ""} of ${chainName(chain.base)}`
+    + ` · ↑ adds the note before, ↓ drops it`;
+}
+
+/** Off: back to the bars that were chained, whole. */
+function stopChain(): void {
+  if (!chain) return;
+  const { base } = chain;
+  chain = null;
+  selectBars(base, base !== null);
+}
+
+const chainBar = mountChainBar($("chain"), { onStart: startChain, onStop: stopChain, onGo: goLink });
 
 // --- saved sections -------------------------------------------------
 // A score broken into named runs of bars, kept per score in localStorage.
@@ -708,6 +768,7 @@ function syncTransport(): void {
   playBtn.disabled = practising || !loaded;
   for (const id of ["bar-from", "bar-to", "bar-all", "step-back", "step-fwd"])
     $<HTMLInputElement | HTMLButtonElement>(id).disabled = !loaded;
+  chainBar.setEnabled(loaded);
   // a lesson always goes round its bars, so there is nothing to switch
   loopBtn.style.display = practising ? "none" : "";
 }
@@ -1094,6 +1155,13 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+  // ↑ / ↓ grow a running chain by the note before, or drop its first, in
+  // every view — practice mode included, where nothing else takes them.
+  if (chain && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    goLink(chain.at + (e.key === "ArrowUp" ? 1 : -1));
+    e.preventDefault();
+    return;
+  }
   // In practice mode the arrow keys walk the cursor by hand — back to see a
   // transition again, forward to skip one — [ and ] mark the bar the
   // cursor stands in, { and } the step, and nothing else on the keyboard

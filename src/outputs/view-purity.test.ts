@@ -67,6 +67,20 @@ describe("Nashville renders from a snapshot alone", () => {
   });
 });
 
+describe("Nashville prints the keyboard legend", () => {
+  it("describes the keys on both sides of the wheel when there is room", () => {
+    const m = Nashville.markup(900, 600, perf());
+    expect(m).toContain("KEYBOARD · PLAY");
+    expect(m).toContain(">Q W E<");
+    expect(m).toContain("KEYBOARD · SHAPE");
+    expect(m).toContain("next inversion");
+  });
+
+  it("leaves it out rather than print it over the wheel on a narrow stage", () => {
+    expect(Nashville.markup(480, 600, perf())).not.toContain("KEYBOARD");
+  });
+});
+
 describe("Tonnetz renders from its frame alone", () => {
   const cursor = { col: 0, row: 0, orient: "up" } as const;
 

@@ -246,3 +246,150 @@ describe("Clock frame lifecycle", () => {
     expect(fn).not.toHaveBeenCalled();
   });
 });
+
+/* ahead() is what the scheduler plays from: a wall window in, the score
+   time it will sound out — split where the loop wraps, each piece stamped
+   with the wall time its start sounds at. */
+describe("Clock.ahead", () => {
+  let ms = 0;
+  const setup = (duration = 10) => {
+    ms = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => ms);
+    return makeClock(() => duration);
+  };
+
+  it("plays nothing while paused", () => {
+    const clock = setup();
+    expect(clock.ahead(0, 100)).toEqual([]);
+  });
+
+  it("maps a window straight onto score time with no loop", () => {
+    const clock = setup();
+    clock.seek(2);
+    clock.play();
+    expect(clock.ahead(0, 100)).toEqual([{ start: 2, end: 2.1, at: 0, until: 10, jump: false }]);
+    const [s] = clock.ahead(500, 600);
+    expect(s.start).toBeCloseTo(2.5, 9);
+    expect(s.at).toBe(500);
+  });
+
+  it("stops at the end of the piece", () => {
+    const clock = setup();
+    clock.seek(9.95);
+    clock.play();
+    const [s, more] = clock.ahead(0, 100);
+    expect(s.end).toBe(10);
+    expect(more).toBeUndefined();
+    expect(clock.ahead(100, 200)).toEqual([]);
+  });
+
+  it("splits a window where the loop wraps, and flags the wrap", () => {
+    const clock = setup();
+    clock.setLoop({ start: 2, end: 4 });
+    clock.seek(3.95);
+    clock.play();
+    const [tail, head] = clock.ahead(0, 100);
+    expect(tail).toMatchObject({ start: 3.95, until: 4, jump: false });
+    expect(tail.end).toBeCloseTo(4, 9);
+    expect(head).toMatchObject({ start: 2, until: 4, jump: true });
+    expect(head.end).toBeCloseTo(2.05, 9);
+    expect(head.at).toBeCloseTo(50, 6); // the wrap sounds 50ms in
+  });
+
+  it("claims each wrap exactly once across contiguous windows", () => {
+    const clock = setup();
+    clock.setLoop({ start: 2, end: 4 });
+    clock.seek(2);
+    clock.play();
+    // 25ms windows over 10 laps, edges landing anywhere, wraps included
+    let jumps = 0;
+    let covered = 0;
+    for (let w = 0; w < 20000; w += 25) {
+      for (const s of clock.ahead(w, w + 25)) {
+        if (s.jump) jumps++;
+        covered += s.end - s.start;
+      }
+    }
+    expect(jumps).toBe(9); // the first pass started at 2, not by wrapping
+    expect(covered).toBeCloseTo(20, 6); // and no score time lost or doubled
+  });
+
+  it("claims a wrap once even when a window edge lands on it", () => {
+    const clock = setup();
+    clock.setLoop({ start: 2, end: 4 });
+    clock.seek(3.9);
+    clock.play();
+    const first = clock.ahead(0, 100); // ends exactly on the wrap
+    const second = clock.ahead(100, 200); // begins exactly on it
+    expect([...first, ...second].filter((s) => s.jump)).toHaveLength(1);
+  });
+
+  it("runs on past a loop it escaped", () => {
+    const clock = setup();
+    clock.setLoop({ start: 2, end: 4 });
+    clock.seek(3);
+    clock.play();
+    clock.seek(6);
+    expect(clock.ahead(0, 100)).toEqual([{ start: 6, end: 6.1, at: 0, until: 10, jump: false }]);
+  });
+});
+
+describe("Clock.heard", () => {
+  let ms = 0;
+  const setup = () => {
+    ms = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => ms);
+    return makeClock(() => 10);
+  };
+
+  it("lags the clock by the latency while playing", () => {
+    const clock = setup();
+    clock.seek(2);
+    clock.play();
+    ms = 1000;
+    expect(clock.heard(0.1)).toBeCloseTo(2.9, 9);
+  });
+
+  it("never reaches back before where the span began", () => {
+    const clock = setup();
+    clock.seek(5);
+    clock.play();
+    ms = 50;
+    expect(clock.heard(0.1)).toBe(5);
+  });
+
+  it("folds into the loop like now()", () => {
+    const clock = setup();
+    clock.setLoop({ start: 2, end: 4 });
+    clock.seek(3);
+    clock.play();
+    ms = 1500; // now() is 2.5; 100ms ago is 2.4
+    expect(clock.heard(0.1)).toBeCloseTo(2.4, 9);
+  });
+
+  it("is the clock's own time while paused", () => {
+    const clock = setup();
+    clock.seek(3);
+    expect(clock.heard(0.2)).toBe(3);
+  });
+});
+
+describe("Clock.onChange", () => {
+  it("reports every transport change and nothing else", () => {
+    vi.spyOn(performance, "now").mockImplementation(() => 0);
+    const clock = makeClock(() => 10);
+    const fn = vi.fn();
+    const off = clock.onChange(fn);
+    clock.play();
+    clock.play(); // already playing: no change
+    clock.seek(2);
+    clock.setLoop({ start: 1, end: 3 });
+    clock.setLoop({ start: 1, end: 3 }); // the same loop: no change
+    clock.pause();
+    clock.pause(); // already paused: no change
+    expect(fn).toHaveBeenCalledTimes(4);
+    off();
+    clock.seek(1);
+    expect(fn).toHaveBeenCalledTimes(4);
+  });
+});

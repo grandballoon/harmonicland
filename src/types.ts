@@ -59,6 +59,11 @@ export interface Note {
    *  ask ("right hand or left?"), so it is the question the model answers.
    *  Absent when the source has no such grouping (LilyPond). */
   readonly hand?: Hand;
+  /** How hard the key is struck, 1–127 as MIDI counts it — RESOLVED BY THE
+   *  PARSER from whatever its source says about loudness (a MIDI note-on,
+   *  a MusicXML or LilyPond dynamic). Absent when the source says nothing;
+   *  perform.ts decides what an absent velocity is played at. */
+  readonly velocity?: number;
   /** Raw provenance from the source: MusicXML `<staff>`, MIDI track index,
    *  part ordinal — whichever the parser had. ADVISORY ONLY. Its namespace
    *  varies by source and even the number of streams is source-dependent, so
@@ -140,6 +145,13 @@ export interface Score {
    *  bar information yields ONE bar spanning it, so a consumer never has to
    *  ask "does this score have bars" before asking "which bar is this". */
   readonly bars: readonly Bar[];
+  /** Where the sustain pedal is down: sorted, never overlapping, within
+   *  the piece — and never merged where they touch, because a range that
+   *  ends where the next begins is a pedal CHANGE, the dampers dropping
+   *  for an instant between. RESOLVED BY THE PARSER, like `hand`; empty
+   *  when the source says nothing about the pedal. A performance fact,
+   *  not a notational one: `Note.duration` keeps its notated meaning. */
+  readonly pedal: readonly TimeRange[];
 }
 
 /** What a parser produces and `Core.makeScore` consumes — spelling optional,
@@ -150,11 +162,69 @@ export interface RawNote {
   onset: number;
   duration: number;
   hand?: Hand;
+  velocity?: number;
   stream?: number;
 }
 
-/** A time sink driven each frame (audio now, MIDI-out later). */
-export type Sink = (score: Score, t: number, playing: boolean) => void;
+/** One note handed to an Output, already placed in WALL time — the
+ *  `performance.now()` milliseconds Web MIDI and rAF share. The scheduler
+ *  decides when; the Output only decides how it sounds. */
+export interface Strike {
+  readonly pitch: Pitch;
+  /** 1–127, MIDI's unit, whichever device ends up sounding it. */
+  readonly velocity: number;
+  /** When the key goes down. */
+  readonly at: number;
+  /** When it comes up. Absent is "held until the next flush" — a step the
+   *  playhead is parked on has no end of its own. */
+  readonly off?: number;
+  /** When the dampers fall, if the sustain pedal holds them off past
+   *  `off`. For an Output that sustains notes itself (the built-in piano);
+   *  one that is sent the pedal (MIDI) ignores it. */
+  readonly damp?: number;
+  /** Seconds of the note already gone by at `at`: set when playback drops
+   *  into a note rather than reaching its start (a seek, a loop wrap). */
+  readonly offset?: number;
+}
+
+/** Where sound goes: the built-in piano or one MIDI port. Two paths that
+ *  never touch each other — the SCORE path (strike/flush), which the
+ *  scheduler drives ahead of time, and the LIVE path (liveOn/liveOff),
+ *  which the user's hands drive immediately. See SPEC_playback.md. */
+export interface Output {
+  strike(s: Strike): void;
+  /** Every strike up to wall time `until` has now been handed over. An
+   *  Output that cannot recall what it sends (MIDI) holds anything later —
+   *  a long note's note-off — until the scheduler's window reaches it. */
+  advance(until: number): void;
+  /** The sustain pedal goes down or up at wall time `at`. Every strike
+   *  already carries its damper time, so only an Output that hands the
+   *  pedal to something else (a MIDI synth) needs to act on this. */
+  pedal(down: boolean, at: number): void;
+  /** Silence the score path — sounding notes and anything scheduled but not
+   *  yet heard. Leaves the live path alone. */
+  flush(): void;
+  /** Seconds from a strike's `at` to the moment it is heard. */
+  latency(): number;
+  liveOn(pitch: Pitch, velocity: number): void;
+  liveOff(pitch: Pitch): void;
+  /** No longer the active output: let go of everything, device included. */
+  detach(): void;
+}
+
+/** A stretch of score time the clock is about to play, [start, end), and
+ *  the wall time `start` will sound at. Score time runs linearly from
+ *  `start` until `until` — the loop's end, or the piece's — so a note's
+ *  wall time anywhere in the pass is `at + (t - start) * 1000`. */
+export interface Stretch {
+  readonly start: number;
+  readonly end: number;
+  readonly at: number;
+  readonly until: number;
+  /** Time JUMPED to `start` here (a loop wrap) instead of flowing into it,
+   *  so notes already sounding at `start` must be dropped into. */
+  readonly jump: boolean;
+}
 
 /** A parser: bytes-or-text → score. */
 export type Parser<I> = (input: I) => Score;
@@ -184,4 +254,15 @@ export interface Clock {
   setLoop(range: TimeRange | null): void;
   /** The loop as accepted — after clamping — or null. */
   loop(): TimeRange | null;
+  /** The score time `lag` seconds ago on this play span — what is being
+   *  HEARD now, when sound takes `lag` to arrive. Never earlier than where
+   *  the span began, and folded into the loop like now(). */
+  heard(lag: number): number;
+  /** The score time the wall window [fromMs, toMs) will play, as Stretches:
+   *  more than one only where the loop wraps inside it, none while paused. */
+  ahead(fromMs: number, toMs: number): readonly Stretch[];
+  /** Subscribe to transport changes — play, pause, seek, a new loop —
+   *  anything that invalidates what was scheduled ahead. Returns the
+   *  unsubscribe. */
+  onChange(fn: () => void): () => void;
 }

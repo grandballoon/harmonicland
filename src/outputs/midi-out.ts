@@ -1,126 +1,170 @@
 /* ====================================================================
-   MIDI_OUT — a Sink: score -> t -> Web MIDI note-on/off. Edge-triggered
-   exactly like AudioOut — it tracks which notes sounded last frame and
-   emits note-on / note-off on the transitions — but it drives a hardware
-   synth instead of WebAudio, and draws nothing. Reads the same activeAt()
-   query as every other consumer; knows nothing of rendering or inputs.
+   MIDI_OUT — Outputs (types.ts) on Web MIDI: one per output port, driving
+   an external synth (GarageBand, Logic, a hardware piano) instead of
+   WebAudio. It is handed strikes already placed in wall time and sends
+   them with Web MIDI's own timestamps, which are performance.now()
+   milliseconds too — so the synth hears them to the millisecond, whatever
+   the main thread is doing. Draws nothing, knows no scores.
 
    It opens its OWN MIDIAccess: outputs stay ignorant of inputs, so it
    never reaches into live-midi.ts even though both touch Web MIDI. The
    3-byte channel-voice message it sends is the exact mirror of
    live-midi's decode(): (status | channel), pitch, velocity.
+
+   What cannot be done over MIDI, and what is done instead:
+   - A sent message cannot be recalled (MIDIOutput.clear() is specified but
+     barely implemented). So nothing is sent further ahead than the
+     scheduler's window: a long note's note-off waits here until advance()
+     brings it within reach — sent seconds early, it would outlive a seek
+     and cut short whatever note on that key came after. And flush() sends
+     a note-off for every note it has struck, AT that note's own time when
+     it is still to come: a note-on and note-off on one timestamp, the
+     shortest a synth can make it.
+   - A note cannot start partway through. A strike dropped into a note
+     (Strike.offset) is struck softer, as the note would have decayed.
+   - The pedal is the synth's to apply: it is sent as it changes (CC64),
+     and notes are never lengthened for it here. Strike.damp is ignored.
+   - The synth's latency cannot be measured: latency() is 0, and the user's
+     offset (sound-row.ts) says the rest.
    ==================================================================== */
-import { Core } from "../core";
-import type { Score, Pitch, NoteId } from "../types";
+import type { Output, Pitch, Strike } from "../types";
 
 const NOTE_ON = 0x90;
 const NOTE_OFF = 0x80;
+const CONTROL = 0xb0;
 const CHANNEL = 0; // emit on channel 1
-const VELOCITY = 100; // score notes carry no dynamics yet (cf. AudioOut)
+const ALL_NOTES_OFF = 123;
+const SUSTAIN = 64;
 
 // pure: a note transition -> the 3 bytes to send. The mirror of
 // live-midi's decode(); note-off always carries release velocity 0.
-export function encode(kind: "on" | "off", pitch: number, vel = VELOCITY): number[] {
+export function encode(kind: "on" | "off", pitch: number, vel = 100): number[] {
   const status = (kind === "on" ? NOTE_ON : NOTE_OFF) | CHANNEL;
   return [status, pitch, kind === "on" ? vel : 0];
 }
 
-let port: MIDIOutput | null = null;
+/** pure: a control change -> its 3 bytes. */
+export const control = (controller: number, value: number): number[] => [CONTROL | CHANNEL, controller, value];
 
-/** SCORE path. Invariant: the notes the PORT has note-on for, keyed by
- *  NoteId and carrying the pitch each one needs its note-off sent on.
- *  Deliberately empty when a port opens mid-playback — the port genuinely has
- *  nothing on yet, and at()'s next frame will attack whatever is active. */
-const sounding = new Map<NoteId, Pitch>();
+/** pure: how hard to strike a note dropped into `offset` seconds after it
+ *  began — a piano note's decay, roughly, down to a floor that still
+ *  sounds on any synth. */
+export const resumedVelocity = (velocity: number, offset: number): number =>
+  Math.max(1, Math.round(velocity * Math.max(0.35, Math.exp(-offset / 1.5))));
 
-/** LIVE path. Invariant: the pitches the USER is holding — a mirror of
- *  LiveKeys, not of the wire — maintained whether or not a port is open, and
- *  whenever `port` is open it has a matching note-on for exactly these.
- *  enable() flushes the current hold to make the second half true. */
-const livePitches = new Set<number>();
+// ---- access to the ports ---------------------------------------------
+let access: MIDIAccess | null = null;
+const portSubs = new Set<() => void>();
 
-function send(kind: "on" | "off", pitch: number): void {
-  port?.send(encode(kind, pitch));
-}
-
-// open MIDIAccess and pick the first available output. Behind a user
-// gesture in a secure context, same as live input. Returns the output
-// list so the UI can name the device (or report none found).
-async function enable(): Promise<MIDIOutput[]> {
-  if (!navigator.requestMIDIAccess) {
-    throw new Error("Web MIDI is not supported in this browser.");
-  }
-  const access = await navigator.requestMIDIAccess({ sysex: false });
-  const pick = () => [...access.outputs.values()][0] ?? null;
-  port = pick();
-  // hotplug: re-pick if our port vanished or none was chosen yet
+/** Open MIDIAccess, once. Behind a user gesture in a secure context, the
+ *  first time; afterwards the browser remembers the grant. */
+async function open(): Promise<void> {
+  if (access) return;
+  if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not supported in this browser.");
+  access = await navigator.requestMIDIAccess({ sysex: false });
   access.onstatechange = () => {
-    if (!port || port.state === "disconnected") port = pick();
+    for (const fn of [...portSubs]) fn();
   };
-  // the port catches up to what the user is already holding. Without this,
-  // livePitches' invariant is false for every key pressed before enable(),
-  // and the dedupe guards in liveOn/liveOff turn that into a note the synth
-  // never sounds followed by a note-off for a note that was never on.
-  for (const p of livePitches) send("on", p);
-  return [...access.outputs.values()];
 }
 
-function disable(): void {
-  silence();
-  liveSilence();
-  port = null;
-}
-
-// the Sink — diff the active set against what's sounding, emit the
-// transitions. Same shape as AudioOut.at, one note-on/off per edge.
-function at(score: Score, t: number, playing: boolean): void {
-  if (!port) return;
-  if (!playing) {
-    silence();
-    return;
+/** Has the user already allowed MIDI, so open() will not prompt? */
+async function permitted(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions.query({ name: "midi" as PermissionName });
+    return status.state === "granted";
+  } catch {
+    return false; // no Permissions API, or it does not know "midi"
   }
-  const active = Core.activeAt(score, t);
-  const activeIds = new Set(active.map((n) => n.id));
-  for (const n of active) {
-    if (!sounding.has(n.id)) {
-      send("on", n.pitch);
-      sounding.set(n.id, n.pitch);
+}
+
+/** The output ports connected now; empty until open(). */
+const ports = (): MIDIOutput[] =>
+  access ? [...access.outputs.values()].filter((p) => p.state !== "disconnected") : [];
+
+/** Subscribe to ports coming and going. Returns the unsubscribe. */
+function onPorts(fn: () => void): () => void {
+  portSubs.add(fn);
+  return () => portSubs.delete(fn);
+}
+
+// ---- one Output per port ----------------------------------------------
+interface Sent {
+  pitch: Pitch;
+  at: number;
+  off?: number;
+  /** Is the note-off on its way to the synth? */
+  offSent: boolean;
+}
+
+const outputs = new Map<string, Output>(); // port id -> its Output
+
+/** The Output that sounds through `port`. One per port, so choosing a port
+ *  again hands back the same Output, holding the same state. */
+function output(port: MIDIOutput): Output {
+  const known = outputs.get(port.id);
+  if (known) return known;
+  const sent: Sent[] = []; // score notes struck and not yet known to be over
+  const held = new Set<Pitch>(); // live keys down
+
+  const send = (bytes: number[], at?: number): void => {
+    // a port unplugged mid-send throws; the picker is already moving on
+    try {
+      port.send(bytes, at);
+    } catch {
+      // nothing to do: the device is gone
     }
+  };
+
+  function strike(s: Strike): void {
+    const vel = s.offset ? resumedVelocity(s.velocity, s.offset) : s.velocity;
+    send(encode("on", s.pitch, vel), s.at);
+    sent.push({ pitch: s.pitch, at: s.at, ...(s.off !== undefined && { off: s.off }), offSent: false });
   }
-  for (const [id, pitch] of [...sounding]) {
-    if (!activeIds.has(id)) {
-      send("off", pitch);
-      sounding.delete(id);
+
+  function advance(until: number): void {
+    for (const n of sent) {
+      if (n.offSent || n.off === undefined || n.off > until) continue;
+      send(encode("off", n.pitch), n.off);
+      n.offSent = true;
     }
+    // what is certainly over is forgotten, so the list stays a window's worth
+    const now = performance.now();
+    for (let i = sent.length - 1; i >= 0; i--) if (sent[i].offSent && sent[i].off! <= now) sent.splice(i, 1);
   }
+
+  function flush(): void {
+    const now = performance.now();
+    for (const n of sent) if ((n.off ?? Infinity) > now) send(encode("off", n.pitch), Math.max(now, n.at));
+    sent.length = 0;
+    send(control(SUSTAIN, 0)); // what the pedal holds is part of what was playing
+  }
+
+  const out: Output = {
+    strike,
+    advance,
+    pedal: (down, at) => send(control(SUSTAIN, down ? 127 : 0), at),
+    flush,
+    latency: () => 0,
+    liveOn(pitch, velocity) {
+      if (held.has(pitch)) return;
+      held.add(pitch);
+      send(encode("on", pitch, velocity));
+    },
+    liveOff(pitch) {
+      if (!held.delete(pitch)) return;
+      send(encode("off", pitch));
+    },
+    // the panic, for a synth being let go of: whatever this app believes is
+    // sounding, and whatever the synth does
+    detach() {
+      flush();
+      for (const p of held) send(encode("off", p));
+      held.clear();
+      send(control(ALL_NOTES_OFF, 0));
+    },
+  };
+  outputs.set(port.id, out);
+  return out;
 }
 
-// panic / all-notes-off for the SCORE path. Called every idle frame from
-// at(), so it deliberately leaves the live path alone — a Perfecto chord
-// triggered while the transport is paused must keep sounding.
-function silence(): void {
-  for (const pitch of sounding.values()) send("off", pitch);
-  sounding.clear();
-}
-
-// live path — the exact mirror of AudioOut.liveOn/liveOff, driven by
-// LiveKeys.press/release. One note-on per held pitch, independent of the
-// score, the clock, and whether a port is open; guards against duplicate
-// on/off like the audio side. LiveKeys already refcounts, so these see one
-// call per pitch-that-starts and one per pitch-that-stops.
-function liveOn(pitch: number): void {
-  if (livePitches.has(pitch)) return;
-  livePitches.add(pitch);
-  send("on", pitch);
-}
-function liveOff(pitch: number): void {
-  if (!livePitches.has(pitch)) return;
-  livePitches.delete(pitch);
-  send("off", pitch);
-}
-function liveSilence(): void {
-  for (const p of livePitches) send("off", p);
-  livePitches.clear();
-}
-
-export const MidiOut = { enable, disable, at, silence, liveOn, liveOff };
+export const MidiOut = { open, permitted, ports, onPorts, output };

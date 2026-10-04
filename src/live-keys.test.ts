@@ -1,17 +1,14 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-// The sinks are the only thing LiveKeys reaches out to; record the calls so
+// Sound is the only thing LiveKeys reaches out to; record the calls so
 // the refcount contract ("sound on the first press, silence on the last
 // release") is asserted at the wire and not just via held().
 const sink = vi.hoisted(() => ({ on: [] as number[], off: [] as number[] }));
-vi.mock("./outputs/audio", () => ({
-  AudioOut: {
+vi.mock("./outputs/sound", () => ({
+  Sound: {
     liveOn: (p: number) => { sink.on.push(p); },
     liveOff: (p: number) => { sink.off.push(p); },
   },
-}));
-vi.mock("./outputs/midi-out", () => ({
-  MidiOut: { liveOn: () => {}, liveOff: () => {} },
 }));
 
 import { LiveKeys, type Voice } from "./live-keys";

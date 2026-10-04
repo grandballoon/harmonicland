@@ -8,8 +8,10 @@
    is/es accidentals (incl. doubles + as/es shorthands); durations with
    dots and LilyPond's "inherit previous duration" rule; chords < >;
    rests r and spacers s; ties ~; simultaneous music << >> (brace your
-   voices); and the directives \tempo \time \partial \key \clef \new
-   \score, with \header/\layout/\paper/\midi/\version skipped. Out of
+   voices); dynamics (\p, \ff, \sfz …, marked in time and read back per
+   note by inputs/dynamics.ts); the sustain pedal (\sustainOn,
+   \sustainOff); and the directives \tempo \time
+   \partial \key \clef \new \score, with \header/\layout/\paper/\midi/\version skipped. Out of
    scope (ignored): tuplets \times, \repeat, grace notes, lyrics, and
    named-variable indirection (the inline definition is what gets parsed).
 
@@ -18,6 +20,8 @@
    author may omit, and a score with none still has bars.
    ==================================================================== */
 import { Core } from "../core";
+import { makeDynamics } from "./dynamics";
+import { pedalRanges, type PedalMark } from "./pedal";
 import type { Barline, Score, RawNote, Spelling, Letter } from "../types";
 
 const SEMI: Record<string, number> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }; // semitones above C
@@ -40,7 +44,8 @@ type NoteTok =
 
 function tokenize(src: string): string[] {
   src = src.replace(/%\{[\s\S]*?%\}/g, " ").replace(/%[^\n]*/g, " ");
-  const re = /<<|>>|\\\\|[{}<>~|=]|\\[a-zA-Z]+|"[^"]*"|[^\s{}<>~|="]+/g;
+  // a backslash always starts a new token: c4\p is a note, then its dynamic
+  const re = /<<|>>|\\\\|[{}<>~|=]|\\[a-zA-Z]+|"[^"]*"|[^\s{}<>~|="\\]+/g;
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) out.push(m[0]);
@@ -68,6 +73,12 @@ export function parse(src: string): Score {
   const T = tokenize(src);
   const notes: RawNote[] = [];
   const tieOpen = new Map<number, RawNote>(); // pitch -> note kept open by ~
+  const dynamics = makeDynamics();
+  const pedal: PedalMark[] = [];
+  // A dynamic or a pedal mark is written AFTER its note (c4\p,
+  // c4\sustainOn), by which time the cursor has moved past it: it stands
+  // where the last note or chord was struck.
+  let lastOnset = 0;
   const st = { tempo: 120, lastDurQ: 1, mode: "abs" as "abs" | "rel", refDia: 28, beats: 4, unit: 4, fifths: 0 }; // 28 = c'
   const P = { i: 0 };
   const secPerQ = () => 60 / st.tempo;
@@ -100,6 +111,7 @@ export function parse(src: string): Score {
     }
     const note: RawNote = { pitch: midi, spelling, onset, duration: Math.max(0.02, durSec) };
     notes.push(note);
+    lastOnset = onset;
     if (tieNext) tieOpen.set(midi, note);
   }
 
@@ -313,13 +325,22 @@ export function parse(src: string): Score {
       case "\\bar":
         if (P.i < T.length) P.i++;
         return t0;
+      case "\\sustainOn":
+      case "\\sustainOff":
+        pedal.push({ at: lastOnset, down: cmd === "\\sustainOn" });
+        return t0;
       default:
-        return t0; // ignore unknown directive
+        dynamics.mark(cmd.slice(1), lastOnset); // or an unknown directive, ignored
+        return t0;
     }
   }
 
   parseSeq([], 0);
   if (!notes.length) throw new Error("No notes found — is this a supported LilyPond subset?");
+  for (const n of notes) {
+    const v = dynamics.velocityAt(n.onset);
+    if (v !== undefined) n.velocity = v;
+  }
 
   // walk the meter map into fence posts: the first bar is the pickup when
   // there is one, and every bar after runs at the length in force where it
@@ -336,7 +357,7 @@ export function parse(src: string): Score {
     t += meterAt(t).barSec;
     barlines.push(post(t));
   }
-  return Core.makeScore(notes, barlines);
+  return Core.makeScore(notes, barlines, pedalRanges(pedal));
 }
 
 export const LilyIn = { parse };

@@ -16,6 +16,10 @@
    - the NOW-PLAYING readout: roman numeral, chord name, and the actual
      pitch-class spelling of the sounding (or previewed) voicing.
 
+   Beside the wheel, when the stage is wide enough to spare the room, sits
+   the KEYBOARD LEGEND: what each computer-keyboard key does, printed from
+   perfecto-keys.ts — the same tables the key handler acts on.
+
    Keeps the design language deliberately: one warm accent on the field
    (dark or paper, per the stage's tokens), the glow filter reused from the
    Tonnetz. No new colors invented.
@@ -36,6 +40,7 @@ import {
 import { glowFilter, glowAttr, text } from "./defs";
 import type { View, ViewModule } from "../view";
 import type { PerfSnapshot } from "../perf-state";
+import { KEY_LEGEND, type LegendBlock } from "../perfecto-keys";
 
 const DEGREES: Degree[] = [1, 2, 3, 4, 5, 6, 7];
 const MODES = ["default", "extended", "chromatic"] as const;
@@ -60,6 +65,27 @@ const cell = (
   `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="8" ` +
   `fill="${fill}" stroke="${stroke}" stroke-width="${lit ? 2 : 1}"` +
   `${glowAttr(GLOW_ID, lit)}/>`;
+
+// the legend's box: a key-cap column, then the hand-broken description
+const LEGEND_W = 190;
+const LEGEND_KEYS_W = 52;
+const LEGEND_LINE = 16;
+const LEGEND_GAP = 16; // clear air between the wheel's cells and the legend
+
+// one legend block, its top-left at (x, cy - half its height) so it centres
+// on the wheel's hub
+const legend = (x: number, cy: number, block: LegendBlock): string => {
+  const top = cy - (block.lines.length * LEGEND_LINE) / 2;
+  let out = text(x, top, block.title,
+    { size: 10, weight: 700, anchor: "start", fill: "var(--ink-dim)" });
+  block.lines.forEach(({ keys, says }, i) => {
+    const y = top + (i + 1) * LEGEND_LINE + 4;
+    if (keys) out += text(x, y, keys, { size: 11, weight: 700, anchor: "start" });
+    out += text(x + LEGEND_KEYS_W, y, says,
+      { size: 11, weight: 500, anchor: "start", fill: "var(--ink-dim)" });
+  });
+  return out;
+};
 
 export const render: View = (svg, { live }) => {
   const W = svg.clientWidth;
@@ -130,6 +156,15 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
     out += text(zx, zy + 4, colorationDescriptor(s.joystickMode, dir),
       { size: 10, weight: 700, fill: ink });
     out += text(zx, zy + 17, zoneTable[dir], { size: 9, weight: 500, fill: inkDim });
+  }
+
+  // --- keyboard legend ---------------------------------------------
+  // one block in the free field on each side of the wheel; a stage too
+  // narrow to hold them clear of the wheel's cells goes without.
+  const wheelEdge = R + 45 + LEGEND_GAP; // hub -> past the left/right cells
+  if (cx - wheelEdge - pad >= LEGEND_W) {
+    out += legend(pad, cy, KEY_LEGEND[0]);
+    out += legend(cx + wheelEdge, cy, KEY_LEGEND[1]);
   }
 
   // --- now-playing readout -----------------------------------------

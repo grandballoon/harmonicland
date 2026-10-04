@@ -2,15 +2,18 @@
    MIDI_IN — bytes -> score. A minimal Standard MIDI File reader:
    header + track chunks, variable-length deltas, note-on/off pairing,
    tempo (set-tempo meta) -> seconds, time signature (meta 0x58) ->
-   barlines. Fills pitch + timing, lets Core pick the default spelling.
+   barlines, sustain pedal (CC64, any channel) -> Score.pedal. Fills
+   pitch, timing and the note-on velocity, and lets Core pick the default
+   spelling.
    No dependency on any output.
    ==================================================================== */
 import { Core } from "../core";
+import { pedalRanges, type PedalMark } from "./pedal";
 import type { Barline, Score, RawNote } from "../types";
 
 interface MidiEvent {
   tick: number;
-  kind: "tempo" | "meter" | "key" | "bar" | "on" | "off";
+  kind: "tempo" | "meter" | "key" | "bar" | "on" | "off" | "pedal";
   pitch?: number;
   vel?: number;
   usPerQ?: number;
@@ -20,7 +23,11 @@ interface MidiEvent {
   /** key and bar: sharps (+) or flats (−) on the circle of fifths. */
   fifths?: number;
   track?: number; // 1-based; piano exports put the hands on separate tracks
+  /** pedal: pressed (value >= 64) or released. */
+  down?: boolean;
 }
+
+const SUSTAIN = 64;
 
 export function parse(bytes: ArrayBuffer): Score {
   const dv = new DataView(bytes);
@@ -113,7 +120,12 @@ export function parse(bytes: ArrayBuffer): Score {
         const pitch = u8();
         u8();
         events.push({ tick, kind: "off", pitch, track: t + 1 });
-      } else if (hi === 0xa0 || hi === 0xb0 || hi === 0xe0) {
+      } else if (hi === 0xb0) {
+        // control change: only the sustain pedal means anything here
+        const controller = u8();
+        const value = u8();
+        if (controller === SUSTAIN) events.push({ tick, kind: "pedal", down: value >= 64 });
+      } else if (hi === 0xa0 || hi === 0xe0) {
         p += 2; // 2-byte channel msgs we ignore
       } else if (hi === 0xc0 || hi === 0xd0) {
         p += 1; // 1-byte channel msgs we ignore
@@ -165,31 +177,34 @@ export function parse(bytes: ArrayBuffer): Score {
   // updating seconds at each tempo change, recording note times.
   // pair on/off within a track (tracks are independent streams; the same
   // pitch may sound in both hands at once), keyed track<<7|pitch.
-  const open = new Map<number, number[]>(); // track/pitch key -> onsets
+  const open = new Map<number, { onset: number; velocity: number }[]>(); // track/pitch key -> note-ons
   const notes: RawNote[] = [];
+  const pedal: PedalMark[] = [];
   for (const ev of events) {
     seconds += ((ev.tick - lastTick) * usPerQ) / division / 1e6;
     lastTick = ev.tick;
     if (ev.kind === "tempo") {
       usPerQ = ev.usPerQ!;
+    } else if (ev.kind === "pedal") {
+      pedal.push({ at: seconds, down: ev.down! });
     } else if (ev.kind === "bar") {
       barlines.push({ at: seconds, beats: ev.beats, unit: ev.unit, fifths: ev.fifths });
     } else if (ev.kind === "on") {
       // stack note-ons of same key; pair LIFO on next off
       const key = (ev.track! << 7) | ev.pitch!;
       if (!open.has(key)) open.set(key, []);
-      open.get(key)!.push(seconds);
+      open.get(key)!.push({ onset: seconds, velocity: ev.vel! });
     } else if (ev.kind === "off") {
       const stack = open.get((ev.track! << 7) | ev.pitch!);
       if (stack && stack.length) {
-        const onset = stack.shift()!;
-        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset), stream: ev.track });
+        const { onset, velocity } = stack.shift()!;
+        notes.push({ pitch: ev.pitch!, onset, duration: Math.max(0.02, seconds - onset), velocity, stream: ev.track });
       }
     }
   }
   // close any hung notes at end
   for (const [key, stack] of open)
-    for (const onset of stack) notes.push({ pitch: key & 0x7f, onset, duration: 0.25, stream: key >> 7 });
+    for (const { onset, velocity } of stack) notes.push({ pitch: key & 0x7f, onset, duration: 0.25, velocity, stream: key >> 7 });
 
   if (!notes.length) throw new Error("No notes found in file.");
 
@@ -202,7 +217,7 @@ export function parse(bytes: ArrayBuffer): Score {
   const lowest = Math.min(...notes.map((n) => n.stream!));
   for (const n of notes) n.hand = n.stream === lowest ? "upper" : "lower";
 
-  return Core.makeScore(notes, barlines);
+  return Core.makeScore(notes, barlines, pedalRanges(pedal));
 }
 
 export const MidiIn = { parse };

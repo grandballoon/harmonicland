@@ -62,6 +62,23 @@ describe("MidiIn", () => {
     expect(score.notes[0].spelling).toEqual({ letter: "C", acc: "" });
   });
 
+  it("keeps each note-on's velocity", () => {
+    const score = MidiIn.parse(tinyMidi());
+    expect(score.notes[0].velocity).toBe(100);
+  });
+
+  it("reads the sustain pedal (CC64) on any channel", () => {
+    // pedal down at 0 (channel 2), a quarter note, pedal up at the half
+    const score = MidiIn.parse(midiOf([
+      0x00, 0xb1, 0x40, 0x7f,
+      0x00, 0x90, 0x3c, 0x50,
+      0x83, 0x60, 0x80, 0x3c, 0x00,
+      0x83, 0x60, 0xb1, 0x40, 0x00,
+      0x00, 0xb0, 0x07, 0x64, // a volume change: not the pedal
+    ]));
+    expect(score.pedal).toEqual([{ start: 0, end: 1 }]);
+  });
+
   it("rejects non-MIDI bytes", () => {
     const junk = new Uint8Array([1, 2, 3, 4]).buffer;
     expect(() => MidiIn.parse(junk)).toThrow(/MThd/);
@@ -148,6 +165,42 @@ describe("MusicxmlIn", () => {
   it("carries the stated spelling — Db is spelled D-flat, NOT C-sharp", () => {
     const score = MusicxmlIn.parse(XML);
     expect(score.notes[1].spelling).toEqual({ letter: "D", acc: "b" });
+  });
+
+  it("leaves velocity out when the score marks no dynamics", () => {
+    expect(MusicxmlIn.parse(XML).notes.every((n) => n.velocity === undefined)).toBe(true);
+  });
+
+  it("reads dynamics marks, <sound dynamics>, and a note's own dynamics, in time for both staves", () => {
+    const n = (step: string, staff: number, extra = "") =>
+      `<note${extra}><pitch><step>${step}</step><octave>4</octave></pitch><duration>1</duration><staff>${staff}</staff></note>`;
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1">
+      <measure number="1"><attributes><divisions>1</divisions><staves>2</staves></attributes>
+        <direction><direction-type><dynamics><p/></dynamics></direction-type><staff>1</staff></direction>
+        ${n("C", 1)}
+        <direction><direction-type><dynamics><ff/></dynamics></direction-type><staff>1</staff></direction>
+        ${n("D", 1)}
+        ${n("E", 1, ' dynamics="50"')}
+        <direction><sound dynamics="100"/></direction>
+        ${n("F", 1)}
+        <backup><duration>4</duration></backup>
+        ${n("G", 2)}${n("A", 2)}
+      </measure></part></score-partwise>`);
+    const v = (pitch: number) => score.notes.find((x) => x.pitch === pitch)!.velocity;
+    expect([60, 62, 64, 65].map(v)).toEqual([49, 112, 45, 90]);
+    // the left hand, walked after the right, takes the markings where it plays
+    expect([67, 69].map(v)).toEqual([49, 112]);
+  });
+
+  it("reads the pedal from <pedal> marks and <sound damper-pedal>, a change as two ranges", () => {
+    const pedal = (type: string) => `<direction><direction-type><pedal type="${type}"/></direction-type></direction>`;
+    const note = `<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note>`;
+    const score = MusicxmlIn.parse(`<score-partwise><part id="P1">
+      <measure number="1"><attributes><divisions>1</divisions></attributes>
+        ${pedal("start")}${note}${note}${pedal("change")}${note}${pedal("stop")}${note}
+        <direction><sound damper-pedal="yes"/></direction>${note}${note}<sound damper-pedal="no"/>${note}
+      </measure></part></score-partwise>`);
+    expect(score.pedal).toEqual([{ start: 0, end: 1 }, { start: 1, end: 1.5 }, { start: 2, end: 3 }]);
   });
 
   it("rejects timewise scores", () => {
@@ -362,6 +415,23 @@ describe("LilyIn", () => {
     const score = LilyIn.parse(`\\relative c' { c4 ~ c4 }`);
     expect(score.notes).toHaveLength(1);
     expect(score.notes[0].duration).toBeCloseTo(1.0, 6); // two quarters tied = 1s
+  });
+
+  it("reads dynamics written after their notes, in time across voices", () => {
+    const score = LilyIn.parse(`<< \\relative c'' { c4\\p d e\\ff f } \\\\ \\relative c { c2 g'2 } >>`);
+    const v = (pitch: number) => score.notes.find((x) => x.pitch === pitch)!.velocity;
+    expect([72, 74, 76, 77].map(v)).toEqual([49, 49, 112, 112]);
+    expect([48, 55].map(v)).toEqual([49, 112]); // the lower voice, parsed second
+  });
+
+  it("strikes an accented note harder without changing the level", () => {
+    const score = LilyIn.parse(`\\relative c' { c4\\p d\\sfz e }`);
+    expect(score.notes.map((n) => n.velocity)).toEqual([49, 96, 49]);
+  });
+
+  it("reads \\sustainOn and \\sustainOff where their notes are struck", () => {
+    const score = LilyIn.parse(`\\relative c' { c4\\sustainOn d e\\sustainOff\\sustainOn f g\\sustainOff }`);
+    expect(score.pedal).toEqual([{ start: 0, end: 1 }, { start: 1, end: 2 }]);
   });
 
   it("assumes common time when no \\time is given", () => {

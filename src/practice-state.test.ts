@@ -1,13 +1,10 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // PracticeState reaches the world only through LiveKeys, and LiveKeys
-// reaches it only through the two sinks. Stub those and the whole feature
-// runs headless — no AudioContext, no rAF, no DOM.
-vi.mock("./outputs/audio", () => ({
-  AudioOut: { liveOn: () => {}, liveOff: () => {} },
-}));
-vi.mock("./outputs/midi-out", () => ({
-  MidiOut: { liveOn: () => {}, liveOff: () => {} },
+// reaches it only through Sound. Stub that and the whole feature runs
+// headless — no AudioContext, no rAF, no DOM.
+vi.mock("./outputs/sound", () => ({
+  Sound: { liveOn: () => {}, liveOff: () => {} },
 }));
 
 import { Core } from "./core";

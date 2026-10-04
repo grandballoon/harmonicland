@@ -1,10 +1,9 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-// Real LiveKeys semantics with the audio/MIDI sinks stubbed out — the point
+// Real LiveKeys semantics with the output stubbed out — the point
 // of these tests is precisely the LiveKeys<->PerfState handshake, so mocking
 // LiveKeys itself would mock away the thing under test.
-vi.mock("./outputs/audio", () => ({ AudioOut: { liveOn: () => {}, liveOff: () => {} } }));
-vi.mock("./outputs/midi-out", () => ({ MidiOut: { liveOn: () => {}, liveOff: () => {} } }));
+vi.mock("./outputs/sound", () => ({ Sound: { liveOn: () => {}, liveOff: () => {} } }));
 
 import { LiveKeys } from "./live-keys";
 import { PerfState } from "./perf-state";

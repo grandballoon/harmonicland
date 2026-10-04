@@ -3,8 +3,8 @@
    its counterpart to LiveKeys. LiveKeys owns "which raw pitches are held";
    this owns "which Key / Degree / coloration is selected" and turns a
    trigger into a chord by running computeVoicing and pressing the result
-   THROUGH LiveKeys. So audio (AudioOut.liveOn), MIDI-out (the live path),
-   and the Tonnetz glow all come for free — nothing here reaches across to
+   THROUGH LiveKeys. So sound (on whichever output is active) and the
+   Tonnetz glow both come for free — nothing here reaches across to
    them, exactly as live-midi.ts / live-gamepad.ts only touch LiveKeys.
 
    Two pieces of state, kept apart on purpose:

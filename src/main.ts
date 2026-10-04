@@ -1,6 +1,6 @@
 /* ====================================================================
    LOOP — the glue. ~a dozen lines of intent. Pick a score, pick a
-   view function, drive both staff and audio off the one clock's now().
+   view function, drive staff and sound off the one clock's time.
    Swapping the view = swapping `view`. New input = swap how `score`
    is made. New clock = swap makeClock. Nothing reaches across.
    ==================================================================== */
@@ -16,10 +16,16 @@ import { StaffPiano } from "./outputs/staff-piano";
 import { Tonnetz } from "./outputs/tonnetz";
 import { Combo } from "./outputs/combo";
 import { Nashville } from "./outputs/nashville";
+import { DIR_KEYS, SHAPE_KEYS } from "./perfecto-keys";
 import { Practice } from "./outputs/practice";
 import { IsolatedKeys } from "./outputs/isolated-keys";
 import { AudioOut } from "./outputs/audio";
 import { MidiOut } from "./outputs/midi-out";
+import { Sound } from "./outputs/sound";
+import { perform } from "./perform";
+import { makeScheduler, TICK_MS } from "./scheduler";
+import { workerTicker } from "./ticker";
+import { mountSoundRow } from "./sound-row";
 import { Verovio } from "./outputs/verovio";
 import { LiveKeys, type Voice } from "./live-keys";
 import { TonnetzState } from "./tonnetz-state";
@@ -41,7 +47,7 @@ import { mountChainBar } from "./backchain-bar";
 import { mountSelectionTip } from "./selection-tip";
 import {
   chordName, degreeNumeral, PITCH_NAMES,
-  type Degree, type JoystickDirection, type PitchClass,
+  type Degree, type PitchClass,
 } from "./harmony/perfecto";
 import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
@@ -78,11 +84,6 @@ let scrubbing = false;
 // because watching a score is not practising one hand of it. Rebuilt per
 // score, not per keypress.
 let steps: readonly Step[] = [];
-// True while the playhead is parked on a step the user walked to. The
-// sinks sound the score only while `playing`; a step is a paused clock
-// that should still be heard, so the loop hands them this instead. Any
-// other transport action ends it.
-let auditioning = false;
 // Where the page has been panned by its tape, or null at rest — see
 // view.ts's PagePan. Set by the scroller, dropped by the view once the
 // playhead leaves it behind, and forgotten with the view or the score.
@@ -92,6 +93,19 @@ let pagePan: PagePan | null = null;
 let sheetScroll = 0;
 
 const clock = makeClock(() => score.duration);
+// Sound is scheduled ahead of the clock, not driven by frames: see
+// scheduler.ts. It follows every clock change by itself.
+const scheduler = makeScheduler(clock, Sound, workerTicker(TICK_MS));
+// How the practice cursor moves the clock. Playback and the lesson are two
+// independent things on one timeline: the cursor parks an IDLE transport on
+// the step it stands on, so the scrub bar and every other view agree with
+// it, but never steers a running one — a correct note must not yank the
+// music being played back, nor Play wait on the learner.
+const parkClock = (t: number): void => {
+  if (!clock.isPlaying()) clock.seek(t);
+};
+// Shape plain scores (perform.ts)? The sound row remembers and sets it.
+let shape = true;
 
 const fmt = (s: number) => s.toFixed(2);
 
@@ -110,14 +124,14 @@ const liveSnapshot = (): LiveSnapshot => ({
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
-// is handed, with no ambient state reached for behind the signature.
-clock.onFrame((t) => {
+// is handed, with no ambient state reached for behind the signature. It
+// shows the HEARD time, not the clock's: sound arrives the output's
+// latency after it is scheduled, and the eye should agree with the ear.
+clock.onFrame(() => {
+  const t = clock.heard(Sound.latency());
   const live = liveSnapshot();
   syncScoreScroll(live, t);
   view.render(svg, { score, t, live });
-  const sounding = clock.isPlaying() || auditioning;
-  AudioOut.at(score, t, sounding);
-  MidiOut.at(score, t, sounding);
   // the clock pauses itself at the end of the piece, so the button reads
   // the clock rather than remembering what it was last clicked into.
   const playing = String(clock.isPlaying());
@@ -139,7 +153,6 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   score = s;
   chart = analysis;
   steps = StepModel.makeSteps(score, "both").steps;
-  auditioning = false;
   pagePan = null;
   sheetScroll = 0;
   // a bar selection is a stretch of ONE score
@@ -148,12 +161,11 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   sectionsPanel.setScore(key, score.bars.length);
   clock.seek(0);
   clock.pause();
-  AudioOut.silence();
-  MidiOut.silence();
+  scheduler.setPerformance(perform(score, { shape }));
   for (const id of ["play", "scrub"]) ($<HTMLButtonElement>(id)).disabled = false;
   $("status").textContent = label ? `${label} · ${score.notes.length} notes · ${fmt(score.duration)}s` : "";
   // a lesson is about a score, so a new score is a new lesson.
-  if (view === Practice) PracticeState.begin(score, clock.seek, chart);
+  if (view === Practice) PracticeState.begin(score, parkClock, chart);
   syncTransport();
   applyBars();
 }
@@ -267,55 +279,79 @@ mountMicPanel($<HTMLButtonElement>("mic"), $("mic-readout"), $<HTMLDetailsElemen
   status: (text) => { $("status").textContent = text; },
 });
 
-// --- MIDI output (score sink -> hardware synth) --------------------
-// A Sink, not an input: the frame loop already calls MidiOut.at every
-// frame; enabling just opens an output port for it to send to. Behind a
-// user gesture in a secure context, same as MIDI input.
-let midiOutOn = false;
-const midiOutBtn = $<HTMLButtonElement>("midiout");
-midiOutBtn.addEventListener("click", async () => {
-  if (midiOutOn) {
-    MidiOut.disable();
-    AudioOut.setMuted(false); // hand sound back to the built-in synth
-    midiOutOn = false;
-    midiOutBtn.textContent = "Enable MIDI out";
-    $("status").textContent = "MIDI output off.";
-    return;
-  }
-  try {
-    const outputs = await MidiOut.enable();
-    AudioOut.setMuted(true); // external synth drives sound now — mute our own
-    midiOutOn = true;
-    midiOutBtn.textContent = "Disable MIDI out";
-    $("status").textContent = outputs.length
-      ? `MIDI out · ${outputs.length} output${outputs.length > 1 ? "s" : ""} (${outputs.map((o) => o.name ?? "device").join(", ")})`
-      : "MIDI out on · no devices found — connect a synth.";
-  } catch (err) {
-    $("status").textContent = "MIDI out unavailable: " + (err as Error).message;
-  }
+// --- where the music sounds -----------------------------------------
+// The built-in piano or one MIDI port (a synth such as GarageBand), never
+// both, and how late each is heard. The picker owns the tray's sound row;
+// choosing an output switches Sound and drops the scheduler into the
+// music afresh, so the new output picks up mid-note.
+mountSoundRow({
+  select: $<HTMLSelectElement>("output"),
+  slider: $<HTMLInputElement>("latency"),
+  readout: $("latency-ms"),
+  hint: $("output-hint"),
+  shape: $<HTMLInputElement>("shape"),
+}, {
+  piano: AudioOut,
+  midi: MidiOut,
+  use(o) {
+    Sound.use(o);
+    scheduler.reset();
+  },
+  setOffset: Sound.setOffset,
+  setShape(on) {
+    if (on === shape) return;
+    shape = on;
+    scheduler.setPerformance(perform(score, { shape }));
+  },
+  status: (text) => { $("status").textContent = text; },
 });
 
 // --- transport controls -------------------------------------------
 // One play/pause button. Its glyph follows the clock in the frame loop
 // above. Pausing leaves the playhead where it is; the scrubber, the bar
 // range and ◀ ▶ are how to move it.
+//
+// Pressed before the built-in piano has its samples, Play WAITS for them
+// — a ring fills round the button — rather than starting on stand-in
+// tones; pressed again while waiting, it stops waiting. A MIDI synth
+// needs no samples, so it never waits.
 const playBtn = $<HTMLButtonElement>("play");
+let waitingToPlay = false;
+function showWaiting(on: boolean): void {
+  waitingToPlay = on;
+  playBtn.toggleAttribute("data-loading", on);
+}
+AudioOut.onProgress((done, total) => {
+  playBtn.style.setProperty("--load", String(done / total));
+  if (waitingToPlay) $("status").textContent = `Loading piano… ${done}/${total}`;
+});
 playBtn.addEventListener("click", () => {
   AudioOut.ensure();
-  auditioning = false;
-  if (clock.isPlaying()) clock.pause();
-  else clock.play(); // enters the loop, if there is one; restarts from the end
+  if (clock.isPlaying()) return clock.pause();
+  if (waitingToPlay) return showWaiting(false);
+  // enters the loop, if there is one; restarts from the end
+  if (Sound.current() !== AudioOut || AudioOut.isReady()) return clock.play();
+  showWaiting(true);
+  void AudioOut.ready().then(() => {
+    if (!waitingToPlay) return;
+    showWaiting(false);
+    $("status").textContent = "";
+    clock.play();
+  });
 });
+
+/** Move the playhead to `t` — and, in practice mode, the lesson's cursor to
+ *  the step at or after it, which parks an idle clock on that step. */
+function seekTo(t: number): void {
+  clock.seek(t);
+  if (view === Practice) PracticeState.seekToTime(t);
+}
 
 const scrub = $<HTMLInputElement>("scrub");
 const doScrub = () => {
   if (score.duration <= 0) return;
   const t = (+scrub.value / 1000) * score.duration;
-  auditioning = false;
-  // in practice mode the cursor owns the clock, so scrubbing moves the
-  // CURSOR and lets it seek — otherwise the two would fight for `t`.
-  if (view === Practice) PracticeState.seekToTime(t);
-  else clock.seek(t);
+  seekTo(t);
 };
 scrub.addEventListener("input", () => {
   scrubbing = true;
@@ -327,9 +363,10 @@ scrub.addEventListener("change", () => {
 });
 
 // --- bars and the playback loop ------------------------------------
-// ONE selection of bars, shared by every view. In practice mode it confines
-// the lesson; everywhere else it is the playback loop, drawn as two flags on
-// the scrub bar. Every control that edits it agrees with every other: the
+// ONE selection of bars, shared by every view. It is the playback loop,
+// drawn as two flags on
+// the scrub bar, and in practice mode it also confines the lesson. Every
+// control that edits it agrees with every other: the
 // bar-number boxes, the flags (dragged), [ and ] on the bar under the
 // playhead, and a click on a bar of the practice page. ← → and ◀ ▶ walk
 // one step at a time, round the selection when it is looping.
@@ -354,20 +391,20 @@ const barTo = $<HTMLInputElement>("bar-to");
 const beatFrom = $("beat-from");
 const beatTo = $("beat-to");
 let selection: BarRange | null = null; // null is the whole piece
-// Outside practice mode, does playback go round the selection? Kept apart
-// from the selection so switching looping off never forgets the bars.
+// Does playback go round the selection? Kept apart from the selection so
+// switching looping off never forgets the bars. A lesson goes round its
+// bars regardless: looping is playback's switch, not the cursor's.
 let looping = false;
 
 /** Selection -> clock, lesson, boxes, flags. The only writer of any of them. */
 function applyBars(): void {
-  const practising = view === Practice;
   const d = score.duration;
   const span = Core.barTime(score, selection);
   // a chain runs only while its link is what is selected; any other
   // choice of bars — a flag, a box, a chip, a new score — ends it
   if (chain && !Core.sameRange(selection, chain.links[chain.at])) chain = null;
   PracticeState.setRange(selection); // a no-op when no lesson is running
-  clock.setLoop(looping && !practising ? span : null);
+  clock.setLoop(looping ? span : null);
 
   barFrom.value = selection ? String(selection.from + 1) : "";
   barTo.value = selection ? String(selection.to + 1) : "";
@@ -379,14 +416,11 @@ function applyBars(): void {
 
   // Positions travel as fractions in CSS variables; the stylesheet turns
   // them into pixels, since only it knows the thumb size.
-  // A lesson always goes round its bars, so in practice mode the band is
-  // lit whenever there are bars to go round, and the Loop switch is hidden.
   const enabled = d > 0;
-  const going = practising ? selection !== null : looping;
   scrubTrack.classList.toggle("loop-enabled", enabled);
-  scrubTrack.classList.toggle("looping", enabled && going);
+  scrubTrack.classList.toggle("looping", enabled && looping);
   loopBtn.disabled = !enabled;
-  loopBtn.setAttribute("aria-pressed", String(enabled && looping && !practising));
+  loopBtn.setAttribute("aria-pressed", String(enabled && looping));
   sectionsPanel.setSelection(selection);
   // while a chain runs, its section's chip stays lit under its links
   sectionChips.setSelection(chain ? chain.base : selection);
@@ -443,19 +477,25 @@ function stepPlayhead(dir: 1 | -1): void {
   AudioOut.ensure();
   clock.pause();
   clock.seek(at);
-  auditioning = true;
+  scheduler.audition(at);
 }
 /** ◀ ▶ and ← →: the lesson's cursor in practice mode, the playhead elsewhere. */
 const stepBy = (dir: 1 | -1): void => (view === Practice ? PracticeState.step(dir) : stepPlayhead(dir));
 
-/** [ / ]: pull one edge of the selection to the bar under the playhead. */
-const markBar = (edge: Edge): void =>
-  selectBars(Loop.withBar(score, selection, edge, Core.barAt(score, clock.now()).index));
+/** Where [ ] { } mark from: the lesson's cursor in practice mode — asked
+ *  directly, since playback may have the clock elsewhere — the playhead
+ *  elsewhere. A finished lesson stands at the end of the piece. */
+const markAt = (): number =>
+  view === Practice ? PracticeState.snapshot().current?.at ?? score.duration : clock.now();
 
-/** { / }: pull one edge to the step under the playhead — trimmed into its
+/** [ / ]: pull one edge of the selection to the bar under `markAt`. */
+const markBar = (edge: Edge): void =>
+  selectBars(Loop.withBar(score, selection, edge, Core.barAt(score, markAt()).index));
+
+/** { / }: pull one edge to the step under `markAt` — trimmed into its
  *  bar, unless that step sits on the barline. */
 const markStep = (edge: Edge): void =>
-  selectBars(Loop.withEdge(score, selection, edge, Loop.stepEdge(score, steps, clock.now(), edge)));
+  selectBars(Loop.withEdge(score, selection, edge, Loop.stepEdge(score, steps, markAt(), edge)));
 
 barFrom.addEventListener("change", readBarInputs);
 barTo.addEventListener("change", readBarInputs);
@@ -491,7 +531,7 @@ for (const [edge, el] of [["start", $("loop-start")], ["end", $("loop-end")]] as
       : Loop.withBar(score, selection, edge, Loop.snapBar(score.bars, t, edge, selection));
     const cur = selection ?? { from: 0, to: score.bars.length - 1 };
     // a wobble, not a move — unless it is the drag that switches looping on
-    if ((looping || view === Practice) && Core.sameRange(Core.normalizeRange(score, next), cur)) return;
+    if (looping && Core.sameRange(Core.normalizeRange(score, next), cur)) return;
     selectBars(next);
   });
 }
@@ -534,12 +574,7 @@ function goLink(i: number): void {
   chain = { ...chain, at };
   AudioOut.ensure();
   selectBars(chain.links[at]);
-  const { start } = Core.barTime(score, selection);
-  if (view === Practice) PracticeState.seekToTime(start);
-  else {
-    auditioning = false;
-    clock.seek(start);
-  }
+  seekTo(Core.barTime(score, selection).start);
   const n = chain.links.length;
   $("status").textContent = `Backchain · last ${at + 1} of ${n} note${n > 1 ? "s" : ""} of ${chainName(chain.base)}`
     + ` · ↑ adds the note before, ↓ drops it`
@@ -591,9 +626,8 @@ const syncMarks = (): void => {
 
 /** Put the playhead at the top of the selection, unless it is already in
  *  it — so what follows the playhead (the sheets' scroller) goes there
- *  too. A lesson's cursor needs no help: confining it does the same. */
+ *  too. A lesson's cursor needs no help: confining it already moved it. */
 function enterSelection(): void {
-  if (view === Practice) return;
   const { start, end } = Core.barTime(score, selection);
   const t = clock.now();
   if (t < start || t >= end) clock.seek(start);
@@ -631,13 +665,24 @@ const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), loca
 // out of the view picker because it is entered from a section and left for
 // the view the picker still names — by the header's button, or Escape.
 // The page hides the tray while it is showing (index.html, data-isolated).
+// Behind the keys, faded, is the stage as it stood when they popped up: a
+// copy of its drawing, not a second live view, so it is exactly what was
+// on screen — a lesson included, which does not run under the keys.
 const leaveKeys = $<HTMLButtonElement>("leave-keys");
+const backdrop = document.getElementById("backdrop") as unknown as SVGSVGElement;
 const isolated = (): boolean => view === IsolatedKeys;
 
 /** Loop the section's bars on the keyboard they are played on. */
 function isolate(s: Section): void {
   AudioOut.ensure();
   tray.open = false;
+  // taken on the way in only: a chip moving the keys to another section
+  // keeps the view they were popped up from
+  if (!isolated()) {
+    backdrop.setAttribute("viewBox", svg.getAttribute("viewBox") ?? "");
+    backdrop.innerHTML = svg.innerHTML;
+    backdrop.removeAttribute("hidden");
+  }
   applyView("keys"); // first, so the bars below loop rather than confine a lesson
   selectBars(s.range);
   enterSelection();
@@ -695,10 +740,9 @@ paperBox.addEventListener("change", applyTheme);
 applyTheme();
 
 // --- practice mode controls ----------------------------------------
-// In practice mode the LEARNER is the transport: the cursor advances when
-// the right keys go down and seeks the clock to match, so Play/Stop would
-// be a second, disagreeing source of time. Disable them, and let the scrub
-// bar land on the nearest step instead of an arbitrary instant.
+// In practice mode the LEARNER drives the lesson's cursor: it advances when
+// the right keys go down. Playback is a separate thing — Play works here as
+// in every other view — and the two meet only in `parkClock` and `seekTo`.
 const practiceWrap = $<HTMLDivElement>("practice-wrap");
 const practiceHand = $<HTMLSelectElement>("practice-hand");
 
@@ -780,16 +824,13 @@ playOther.addEventListener("change", () => {
   PracticeState.setPlayOther(playOther.checked);
 });
 
-// Play/Stop mean nothing while the learner drives; the scrub still does.
+/** The transport's controls mean something once there is a score. */
 function syncTransport(): void {
-  const practising = view === Practice;
   const loaded = score.notes.length > 0;
-  playBtn.disabled = practising || !loaded;
+  playBtn.disabled = !loaded;
   for (const id of ["bar-from", "bar-to", "bar-all", "step-back", "step-fwd"])
     $<HTMLInputElement | HTMLButtonElement>(id).disabled = !loaded;
   chainBar.setEnabled(loaded);
-  // a lesson always goes round its bars, so there is nothing to switch
-  loopBtn.style.display = practising ? "none" : "";
 }
 
 const viewSelect = $<HTMLSelectElement>("view");
@@ -810,10 +851,15 @@ function applyView(val: string): void {
   practiceWrap.style.display = val === "practice" ? "" : "none";
   wholeScoreWrap.style.display = val === "practice" || val === "std-keys" ? "" : "none";
   document.body.toggleAttribute("data-isolated", isolated());
+  if (!isolated()) {
+    backdrop.setAttribute("hidden", "");
+    backdrop.replaceChildren();
+  }
   leaveKeys.hidden = !isolated();
   keysHand.hidden = !isolated();
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
-  auditioning = false; // a parked step belongs to the view it was walked in
+  // a parked step's sound belongs to the view it was walked in
+  if (!clock.isPlaying()) scheduler.reset();
   pagePan = null; // ...and a panned page to the view it was panned in
   // ...and forget which degree keys the Perfecto harness thinks are down.
   // Practice mode ignores its keyup, so without this a degree held across
@@ -824,8 +870,7 @@ function applyView(val: string): void {
   // a lesson exists only while its view does — begin/end here rather than
   // leaving a cursor listening to LiveKeys behind a view nobody is looking at.
   if (val === "practice") {
-    clock.pause();
-    PracticeState.begin(score, clock.seek, chart);
+    PracticeState.begin(score, parkClock, chart);
     $("status").textContent = score.notes.length
       ? "Practice · play the lit keys; click a bar on the page to drill it (shift-click extends) · ← → step"
       : "Practice · load a score to begin.";
@@ -886,7 +931,6 @@ function pickBar(e: MouseEvent): void {
     selectBars(PracticeState.snapshot().range);
     return;
   }
-  auditioning = false;
   clock.seek(score.bars[bar].start);
 }
 
@@ -934,7 +978,6 @@ function readTape(): void {
   const to = tape.seek(pos);
   tapeAt = pos;
   pagePan = to.pagePan;
-  auditioning = false;
   clock.seek(to.t);
 }
 scoreScroll.addEventListener("scroll", () => {
@@ -1118,22 +1161,15 @@ const endPointer = (e: PointerEvent) => {
 svg.addEventListener("pointerup", endPointer);
 svg.addEventListener("pointercancel", endPointer);
 
-// --- TEMPORARY: Perfecto keyboard harness ---------------------------
-// Proves the generative chain (computeVoicing -> PerfState -> LiveKeys ->
-// audio/MIDI-out + Tonnetz glow) before the gamepad mapping and the
-// Nashville view exist. Switch the view to Tonnetz or Piano roll to SEE
-// the chords light up while you play them here.
+// --- Perfecto keyboard ----------------------------------------------
+// The computer keyboard as the chord instrument (computeVoicing ->
+// PerfState -> LiveKeys -> audio/MIDI-out + Tonnetz glow). Which key means
+// what lives in perfecto-keys.ts, beside the legend the Nashville view
+// prints, so the two cannot disagree:
 //   1–7            select degree (hold to sustain the chord)
-//   Q W E / A S D / Z X C   joystick direction (S = center)
-//   m              cycle coloration mode (default→extended→chromatic)
-//   i              cycle inversion      v  toggle voice-leading
-//   - / =          octave down / up
+//   DIR_KEYS       joystick direction, a 3×3 block laid out like the wheel
+//   SHAPE_KEYS     coloration mode, inversion, voice-leading, octave
 // Directions/mode/inversion/octave re-sound only while a chord is held.
-const DIR_KEYS: Record<string, JoystickDirection> = {
-  q: "upLeft", w: "up", e: "upRight",
-  a: "left", s: "center", d: "right",
-  z: "downLeft", x: "down", c: "downRight",
-};
 const heldDegrees: Degree[] = []; // stack of held number keys, latest last
 
 function perfStatus(): void {
@@ -1195,7 +1231,7 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") { PracticeState.step(-1); e.preventDefault(); }
     else if (e.key === "ArrowRight") { PracticeState.step(1); e.preventDefault(); }
     else if ((e.key === "[" || e.key === "]") && !e.repeat && score.notes.length > 0)
-      markBar(e.key === "[" ? "start" : "end"); // the clock stands on the cursor's step
+      markBar(e.key === "[" ? "start" : "end");
     else if ((e.key === "{" || e.key === "}") && !e.repeat && score.notes.length > 0)
       markStep(e.key === "{" ? "start" : "end");
     return;
@@ -1228,11 +1264,11 @@ window.addEventListener("keydown", (e) => {
   }
   if (k in DIR_KEYS) { PerfState.setDirection(DIR_KEYS[k]); resoundIfHeld(); perfStatus(); return; }
   if (e.repeat) return; // the rest are single-shot toggles, ignore auto-repeat
-  if (k === "m") { PerfState.cycleMode(); resoundIfHeld(); perfStatus(); return; }
-  if (k === "i") { PerfState.cycleInversion(); resoundIfHeld(); perfStatus(); return; }
-  if (k === "v") { PerfState.setVoiceLeading(!PerfState.snapshot().voiceLeading); resoundIfHeld(); perfStatus(); return; }
-  if (k === "-") { PerfState.setOctave(PerfState.snapshot().octave - 1); resoundIfHeld(); perfStatus(); return; }
-  if (k === "=") { PerfState.setOctave(PerfState.snapshot().octave + 1); resoundIfHeld(); perfStatus(); return; }
+  if (k === SHAPE_KEYS.mode) { PerfState.cycleMode(); resoundIfHeld(); perfStatus(); return; }
+  if (k === SHAPE_KEYS.inversion) { PerfState.cycleInversion(); resoundIfHeld(); perfStatus(); return; }
+  if (k === SHAPE_KEYS.voiceLeading) { PerfState.setVoiceLeading(!PerfState.snapshot().voiceLeading); resoundIfHeld(); perfStatus(); return; }
+  if (k === SHAPE_KEYS.octaveDown) { PerfState.setOctave(PerfState.snapshot().octave - 1); resoundIfHeld(); perfStatus(); return; }
+  if (k === SHAPE_KEYS.octaveUp) { PerfState.setOctave(PerfState.snapshot().octave + 1); resoundIfHeld(); perfStatus(); return; }
 });
 
 window.addEventListener("keyup", (e) => {

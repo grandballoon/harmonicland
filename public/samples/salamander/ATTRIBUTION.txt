@@ -2,6 +2,8 @@ Salamander Grand Piano V3 — recorded by Alexander Holm.
 Licensed under Creative Commons Attribution 3.0 (CC BY 3.0):
 https://creativecommons.org/licenses/by/3.0/
 
-This is the single-velocity mp3 subset (one sample per minor third,
-A0–C8) as distributed with Tone.js: https://tonejs.github.io/audio/salamander/
-Original project: https://sfzinstruments.github.io/pianos/salamander/
+Four of the sixteen velocity layers (v4, v8, v12, v16), one sample per
+minor third A0–C8, encoded to MP3 from the FLAC remap by sfzinstruments:
+https://github.com/sfzinstruments/SalamanderGrandPiano (commit 3382bf9)
+by tools/samples/salamander.ts. The recordings are otherwise unaltered.
+Original project: https://archive.org/details/SalamanderGrandPianoV3

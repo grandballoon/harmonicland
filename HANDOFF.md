@@ -43,6 +43,8 @@ src/
                     on the sheet music (range-marks.ts, decision 4)
   backchain.ts      a section learned from its end: its last note, last two, … (pure)
   backchain-bar.ts  the header's backchain switch and link stepper (owns its DOM)
+  key-window.ts     which stretch of a keyboard is in sight when zoomed: pinch, pan (pure)
+  zoom-gestures.ts  pinch and trackpad zoom -> key windows (owns its listeners)
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module

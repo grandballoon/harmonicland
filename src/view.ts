@@ -66,7 +66,10 @@
    6. A keyboard need not be all 88 keys. The region a view hands back
       for its keyboard says which stretch of keys it holds (`span`), so a
       pointer on an enlarged octave is heard as the key drawn under it and
-      not as the key that would be there on the whole keyboard.
+      not as the key that would be there on the whole keyboard. Nor need
+      all of its keys be in sight: a keyboard zoomed in on runs off the
+      sides of its region, and the region says which stretch of it is
+      under the glass (`window`) for the same reason.
 
    7. A view may name a DIAL: a wheel of coloration zones a pointer turns
       the way the stick does. The view answers which zone a point is
@@ -77,6 +80,7 @@
    ==================================================================== */
 import type { BarRange, Score, Pitch } from "./types";
 import type { KeySpan } from "./pitch";
+import type { KeyWindow } from "./key-window";
 import type { PerfSnapshot } from "./perf-state";
 import type { JoystickDirection } from "./harmony/perfecto";
 import type { TonnetzSnapshot } from "./tonnetz-state";
@@ -111,6 +115,9 @@ export interface LiveSnapshot {
   /** The saved sections a page of sheet music tints, or none
    *  when they are not being shown (outputs/range-marks.ts, decision 4). */
   marks: readonly BarRange[];
+  /** Which stretch of the piano roll's 88 keys is in sight, or null for
+   *  all of them — a pinch zooms it (key-window.ts, note 6). */
+  rollWindow: KeyWindow | null;
 }
 
 /** A page panned by its tape. At rest the page is fitted to the bar the
@@ -144,6 +151,9 @@ export interface Region {
 export interface KeyboardRegion extends Region {
   /** The keys drawn edge to edge across the region; absent for all 88. */
   span?: KeySpan;
+  /** The stretch of `span` in sight, when it is zoomed in on; absent for
+   *  the whole of it. */
+  window?: KeyWindow;
 }
 
 /** A native scroller over part of a view, standing for the playhead. See

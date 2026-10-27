@@ -47,6 +47,9 @@ import { mountSectionChips } from "./section-chips";
 import { Backchain } from "./backchain";
 import { mountChainBar } from "./backchain-bar";
 import { mountSelectionTip } from "./selection-tip";
+import { clamp as clampWindow, isWhole, whole, type KeyWindow } from "./key-window";
+import { mountZoomGestures } from "./zoom-gestures";
+import { FULL_SPAN, whitesIn } from "./pitch";
 import {
   chordName, degreeNumeral, PITCH_NAMES,
   type Degree, type PitchClass,
@@ -93,6 +96,9 @@ let pagePan: PagePan | null = null;
 // How far down the whole score's sheets the reader has scrolled — see
 // view.ts, note 5. Set by the scroller, forgotten with the score.
 let sheetScroll = 0;
+// Which stretch of the piano roll's keys is in sight, or null for all 88 —
+// see view.ts, note 6. Set by a pinch; kept across scores and views.
+let rollWindow: KeyWindow | null = null;
 
 const clock = makeClock(() => score.duration);
 // Sound is scheduled ahead of the clock, not driven by frames: see
@@ -135,6 +141,7 @@ const liveSnapshot = (): LiveSnapshot => ({
   sheetScroll,
   selection,
   marks,
+  rollWindow,
 });
 
 // the per-frame projection — now genuinely a pure function of the frame it
@@ -154,6 +161,9 @@ clock.onFrame(() => {
     const label = clock.isPlaying() ? "Pause" : "Play";
     playBtn.title = label;
     playBtn.setAttribute("aria-label", label);
+    rollPlay.dataset.playing = playing;
+    rollPlay.title = label;
+    rollPlay.setAttribute("aria-label", label);
   }
   if (!scrubbing && score.duration > 0) {
     $<HTMLInputElement>("scrub").value = String((t / score.duration) * 1000);
@@ -330,6 +340,9 @@ mountSoundRow({
 // tones; pressed again while waiting, it stops waiting. A MIDI synth
 // needs no samples, so it never waits.
 const playBtn = $<HTMLButtonElement>("play");
+// the expanded piano roll's own Play (its header is hidden): the same button
+const rollPlay = $<HTMLButtonElement>("roll-play");
+rollPlay.addEventListener("click", () => playBtn.click());
 let waitingToPlay = false;
 function showWaiting(on: boolean): void {
   waitingToPlay = on;
@@ -871,6 +884,8 @@ function applyView(val: string): void {
   }
   leaveKeys.hidden = !isolated();
   keysHand.hidden = !isolated();
+  rollTools.hidden = !isRoll();
+  if (!isRoll()) setExpanded(false);
   LiveKeys.releaseAll(); // drop held notes when leaving the keyboard
   // a parked step's sound belongs to the view it was walked in
   if (!clock.isPlaying()) scheduler.reset();
@@ -1178,6 +1193,71 @@ const endPointer = (e: PointerEvent) => {
 svg.addEventListener("pointerup", endPointer);
 svg.addEventListener("pointercancel", endPointer);
 
+// --- the piano roll: zoomed, and expanded ----------------------------
+// Pinched, the roll's keyboard zooms toward a part of the instrument, or
+// back out to all 88 (zoom-gestures.ts, key-window.ts); the window in
+// sight is live state, so the view draws it and the hit-test plays it.
+// Expanded, the roll is the whole page — full screen where the browser
+// allows it — and the keyboard runs the length of the screen in
+// landscape and its width in portrait, the long way across either way.
+const rollTools = $<HTMLDivElement>("roll-tools");
+const keysAll = $<HTMLButtonElement>("keys-all");
+const expandBtn = $<HTMLButtonElement>("expand");
+const ROLL_WHITES = whitesIn(FULL_SPAN).length;
+const isRoll = (): boolean => view === PianoRoll;
+
+function setRollWindow(w: KeyWindow | null): void {
+  const fit = w && clampWindow(w, ROLL_WHITES);
+  rollWindow = fit && !isWhole(fit, ROLL_WHITES) ? fit : null;
+  keysAll.hidden = rollWindow === null;
+}
+keysAll.addEventListener("click", () => setRollWindow(null));
+mountZoomGestures($("stage"), {
+  active: isRoll,
+  whites: ROLL_WHITES,
+  get: () => rollWindow ?? whole(ROLL_WHITES),
+  set: setRollWindow,
+  bounds: () => {
+    const r = svg.getBoundingClientRect();
+    return { left: r.left, width: r.width };
+  },
+  onKeys: (x, y) => {
+    const region = rollRegion();
+    return region !== null && PianoRoll.pitchAt(svg, x, y, region) !== null;
+  },
+});
+
+/** Did expanding take the browser full screen? Then leaving full screen —
+ *  its own Esc, a swipe — leaves the expanded roll too. */
+let wentFullscreen = false;
+const expanded = (): boolean => document.body.hasAttribute("data-expanded");
+function setExpanded(on: boolean): void {
+  if (on === expanded()) return;
+  document.body.toggleAttribute("data-expanded", on);
+  expandBtn.setAttribute("aria-pressed", String(on));
+  expandBtn.setAttribute("aria-label", on ? "Leave full screen" : "Expand");
+  expandBtn.title = on ? "Back to the controls (Esc)" : "Give the piano roll the whole screen · pinch to zoom the keys";
+  rollPlay.hidden = !on;
+  if (on) {
+    tray.open = false;
+    // not every browser will (an iPhone's will not): the page fills the
+    // window without it, which is most of the screen anyway
+    const root = document.documentElement;
+    if (root.requestFullscreen && !document.fullscreenElement)
+      root.requestFullscreen().then(() => (wentFullscreen = true), () => {});
+  } else if (wentFullscreen) {
+    wentFullscreen = false;
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  }
+}
+expandBtn.addEventListener("click", () => setExpanded(!expanded()));
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && wentFullscreen) {
+    wentFullscreen = false;
+    setExpanded(false);
+  }
+});
+
 // --- coloration dial -------------------------------------------------
 // A wheel of colorations is turned by pointing at it: while the pointer is
 // on the wheel the selector goes to the zone nearest it (view.ts, note 7),
@@ -1263,6 +1343,11 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && tray.open) {
     tray.open = false;
     tray.querySelector("summary")!.focus();
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "Escape" && expanded()) {
+    setExpanded(false);
     e.preventDefault();
     return;
   }

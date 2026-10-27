@@ -158,6 +158,7 @@ describe("the whole score, over the keys", () => {
       sheetScroll,
       selection: null,
       marks: [],
+      rollWindow: null,
       echoes: [],
     },
   });

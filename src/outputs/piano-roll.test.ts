@@ -246,3 +246,45 @@ describe("PianoRoll drawing a span of the keyboard", () => {
     }
   });
 });
+
+/* Zoomed in, the keyboard is wider than the region: a window (key-window.ts)
+   says which of its white keys are in sight, and the drawing and the
+   hit-test must agree about where every one of them is. */
+describe("PianoRoll zoomed in on a window of the keyboard", () => {
+  const H = 600;
+  const win = { from: 23, count: 7 }; // C4 at the left edge, an octave across
+  const svg = stubSvg(W, H);
+  const region = { x: 0, y: 0, w: W, h: H, window: win };
+  const g = PianoRoll.geometry(W, H, undefined, win);
+  const bottom = H - 2; // a white key's lower half
+
+  it("widens the keys to fit only the window across the region", () => {
+    expect(g.ww).toBeCloseTo(W / 7);
+    expect(g.lane(60).x).toBeCloseTo(0); // C4
+    expect(g.lane(71).x + g.lane(71).w).toBeCloseTo(W); // B4
+  });
+
+  it("hits the keys drawn, not the ones that would be there unzoomed", () => {
+    expect(PianoRoll.pitchAt(svg, 2, bottom, region)).toBe(60);
+    expect(PianoRoll.pitchAt(svg, W - 2, bottom, region)).toBe(71);
+    const black = PianoRoll.pitchAt(svg, g.lane(61).x + g.lane(61).w / 2, g.strikeY + 4, region);
+    expect(black).toBe(61);
+  });
+
+  it("grows the keys with the zoom, but leaves the falling notes most of the band", () => {
+    expect(g.keyH).toBeGreaterThan(KEYB);
+    expect(g.keyH).toBeLessThanOrEqual(H * 0.3);
+  });
+
+  it("draws nothing for the keys out of sight", () => {
+    const m = PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE, window: win });
+    expect(m.match(/<text /g)).toHaveLength(1); // C4's label only
+    expect(m.match(/stroke-width="1"\/>/g)!.length).toBe(7); // seven white keys
+  });
+
+  it("is the whole keyboard when the window is", () => {
+    const whole = { from: 0, count: 52 };
+    expect(PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE, window: whole }))
+      .toBe(PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE }));
+  });
+});

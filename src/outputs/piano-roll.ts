@@ -13,6 +13,7 @@ import { FULL_SPAN, isWhite, isC, octaveOf, whitesIn, type KeySpan } from "../pi
 import { SCROLL } from "./scroll";
 import { glowFilter, glowAttr } from "./defs";
 import type { Note, Score, Pitch } from "../types";
+import { ARROW, type Relative } from "../intervals";
 import type { View, ViewModule, Region, KeyboardRegion, Tape } from "../view";
 
 const { PPS } = SCROLL; // fall speed — the staves scroll at the same rate
@@ -62,6 +63,10 @@ export interface MarkupOpts {
   keyStyles?: ReadonlyMap<Pitch, KeyStyle>;
   /** Which keys to draw, edge to edge of the region. Default all 88. */
   span?: KeySpan;
+  /** Interval echoes sounding (echoes.ts): each key tinted and labelled
+   *  with the interval it is. Outranks `held` — an echo IS held, and the
+   *  point is to tell it from a finger — but not `keyStyles`. */
+  echoes?: readonly Relative[];
 }
 
 /** How one key should look. Fill and glow travel together because they are
@@ -87,7 +92,7 @@ export const render: View = (svg, { score, t, live }) => {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.innerHTML =
     `<defs>${glowFilter(OWN_GLOW)}</defs>` +
-    markup(W, H, score, t, { glowId: OWN_GLOW, held: live.held });
+    markup(W, H, score, t, { glowId: OWN_GLOW, held: live.held, echoes: live.echoes });
 };
 
 // the roll as a markup string for a W×H region (origin at 0,0); no <defs> —
@@ -98,7 +103,7 @@ export const render: View = (svg, { score, t, live }) => {
 // --hand-r, lower = --hand-l); sounding is then carried by glow + opacity.
 export const markup = (W: number, H: number, score: Score, t: number, o: MarkupOpts): string => {
   if (!W || !H) return "";
-  const { glowId, held, fall = true, hands = false, keyStyles, span = FULL_SPAN } = o;
+  const { glowId, held, fall = true, hands = false, keyStyles, span = FULL_SPAN, echoes = [] } = o;
 
   // keyboard layout + its inverse hit-test both come from one place — keyH
   // included, so the keys drawn below are exactly the ones hit-tested.
@@ -113,12 +118,16 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
   const activeHue = new Map<number, string>(); // pitch -> lit-key color
   for (const n of sounding) activeHue.set(n.pitch, handHue(n) ?? "var(--note-lit)");
   // a key glows for a sounding score note OR a live key-press; a live press
-  // wins the color so you can tell what YOU played from what's playing back.
-  // A caller-supplied style outranks both: it is a deliberate override, and
-  // one that loses to the default would not be one.
+  // wins the color so you can tell what YOU played from what's playing back,
+  // and an echo wins over a press so you can tell what it raised from it.
+  // A caller-supplied style outranks all three: it is a deliberate
+  // override, and one that loses to the default would not be one.
+  const echoOn = new Map<Pitch, Relative>(); // two echoes on one key: the first names it
+  for (const e of echoes) if (!echoOn.has(e.pitch)) echoOn.set(e.pitch, e);
   const keyFill = (p: number, base: string) => {
     const s = keyStyles?.get(p);
     if (s) return s.fill;
+    if (echoOn.has(p)) return "var(--echo)";
     return held.has(p) ? "var(--key-press)" : activeHue.get(p) ?? base;
   };
   const keyGlow = (p: number) => {
@@ -167,12 +176,27 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
   for (const p of whites) {
     const i = whiteIdx.get(p)!;
     out += `<rect x="${i * ww}" y="${strikeY}" width="${ww}" height="${keyH}" fill="${keyFill(p, "var(--key-white)")}" stroke="#0b0e13" stroke-width="1"${keyGlow(p)}/>`;
-    if (isC(p)) out += `<text x="${i * ww + ww / 2}" y="${H - Math.round(labelSize * 0.67)}" fill="var(--ink-dim)" font-size="${labelSize}" text-anchor="middle">C${octaveOf(p)}</text>`;
+    // an echo's label stands where the C's would, and says more just now
+    if (isC(p) && !echoOn.has(p)) out += `<text x="${i * ww + ww / 2}" y="${H - Math.round(labelSize * 0.67)}" fill="var(--ink-dim)" font-size="${labelSize}" text-anchor="middle">C${octaveOf(p)}</text>`;
   }
   for (let p = span.lo; p <= span.hi; p++) {
     if (isWhite(p)) continue;
     const { x, w } = lane(p);
     out += `<rect x="${x}" y="${strikeY}" width="${w}" height="${blackH}" rx="2" fill="${keyFill(p, "var(--key-black)")}" stroke="#0b0e13" stroke-width="0.8"${keyGlow(p)}/>`;
+  }
+
+  // --- echo labels, over every key so a black key's cannot be covered:
+  // on a white key in the stretch below the black keys, on a black key
+  // near its tip. The interval's name over its arrow, two short lines, so
+  // the label fits a key's width even with all 88 in sight. ---
+  for (const [p, { name, dir }] of echoOn) {
+    if (p < span.lo || p > span.hi || keyStyles?.has(p)) continue;
+    const { x, w } = lane(p);
+    const size = Math.max(7, Math.min(14, Math.round(w * (isWhite(p) ? 0.42 : 0.6))));
+    const bottom = isWhite(p) ? H - size * 0.6 : strikeY + blackH - size * 0.5;
+    const cx = x + w / 2;
+    out += `<text x="${cx}" y="${bottom}" fill="var(--echo-ink)" font-size="${size}" font-weight="700" text-anchor="middle" pointer-events="none">` +
+      `<tspan x="${cx}" dy="${-size * 1.05}">${name}</tspan><tspan x="${cx}" dy="${size * 1.05}">${ARROW[dir]}</tspan></text>`;
   }
 
   return out;

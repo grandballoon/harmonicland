@@ -30,6 +30,8 @@
     --key-white: #cdd7e2;   /* piano-roll white keys (cool off-white)  */
     --key-black: #11161d;   /* piano-roll black keys                   */
     --key-press: #46d39a;   /* a key you're HOLDING (cool green)       */
+    --echo:      #e879f9;   /* a key an interval echo sounds (orchid)  */
+    --echo-ink:  #1f0824;   /* ...and the interval written on it       */
     --key-mute-white:#5d6773; /* keys beside a passage, greyed: context  */
     --key-mute-black:#2a313b;
     --hand-r:    #4ac1ff;   /* hand coloring: upper staff / right hand */
@@ -92,6 +94,8 @@
     --key-white: #fffefa;
     --key-black: #1c1b19;
     --key-press: #1e9563;
+    --echo:      #b62fc0;
+    --echo-ink:  #ffffff;
     --key-mute-white:#d8d2c4;
     --key-mute-black:#8a857b;
     --hand-r:    #1f6fd1;
@@ -510,6 +514,18 @@
   .latency-ms { min-width: 4.5em; font-variant-numeric: tabular-nums; }
   .output-hint { flex-basis: 100%; margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
   .output-hint[hidden] { display: none; }
+  /* the intervals row: a line of switches per direction, lit in the
+     colour the keys they echo are tinted ------------------------------- */
+  .interval-pick { flex: 1 1 0; min-width: 0; display: grid; gap: 8px; }
+  .interval-chips { display: grid; grid-template-columns: 1.1em repeat(12, minmax(0, 1fr)); gap: 4px; align-items: center; }
+  .interval-chips .interval-dir { color: var(--ink-dim); font-size: 13px; text-align: center; }
+  .interval-chips button {
+    min-height: 26px; padding: 2px 0; min-width: 0;
+    font: 600 11px/1 var(--font-mono); color: var(--ink-dim);
+  }
+  .interval-chips button[aria-pressed="true"] { color: var(--echo); border-color: var(--echo); }
+  .interval-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .interval-hint { color: var(--ink-dim); font-size: 12px; }
   .tray-credits { color: var(--ink-dim); font-size: 12px; }
   .tray-credits a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tray-credits a:hover { color: var(--ink); }
@@ -740,6 +756,25 @@
         <input type="checkbox" id="shape" checked> shape plain scores
       </label>
       <p class="output-hint" id="output-hint" hidden>GarageBand on a Mac: turn on the IAC Driver in Audio MIDI Setup, open a software instrument track, then choose the IAC bus here.</p>
+    </div>
+    <!-- Ear training: the intervals each pressed key echoes, sounded and
+         named on the keys. interval-row.ts builds a switch per interval
+         per direction into the chips; this is only the frame. -->
+    <div class="tray-row">
+      <span class="tray-label">intervals</span>
+      <div class="interval-pick">
+        <div class="interval-chips" id="interval-chips"></div>
+        <div class="interval-tools">
+          <label class="toggle" title="Hear the intervals as one chord with the key, or one by one after it">
+            <select id="echo-timing">
+              <option value="together">With the key</option>
+              <option value="after">After the key</option>
+            </select>
+          </label>
+          <button id="echo-clear" title="Stop echoing intervals">None</button>
+          <span class="interval-hint">Press a key to hear and see the intervals chosen from it. Off in practice.</span>
+        </div>
+      </div>
     </div>
     <!-- A real instrument through a microphone. Rows and options that
          depend on the device are filled in by mic-panel.ts. -->

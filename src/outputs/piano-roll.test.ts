@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PianoRoll, KEYB } from "./piano-roll";
 import { keysBandH } from "./staff-piano";
 import { Core } from "../core";
+import type { Relative } from "../intervals";
 
 const W = 800;
 const score = Core.makeScore([]);
@@ -114,6 +115,42 @@ describe("PianoRoll.keyStyles", () => {
   it("leaves keys it says nothing about alone", () => {
     const out = roll({ glowId: G, held: new Set([64]), keyStyles: new Map([[60, { fill: "var(--wrong)" }]]) });
     expect(out).toContain("var(--key-press)"); // 64 is still the learner's
+  });
+});
+
+/* Interval echoes (echoes.ts) are held keys like any other; the keyboard
+   tells them from a finger by tinting them and naming the interval. */
+describe("PianoRoll echoes", () => {
+  const roll = (o: Parameters<typeof PianoRoll.markup>[4]) =>
+    PianoRoll.markup(W, KEYB, score, 0, { fall: false, ...o });
+  const M3: Relative = { pitch: 64, name: "M3", dir: "up" };
+  const m6: Relative = { pitch: 49, name: "m6", dir: "down" }; // a black key
+
+  it("changes nothing when there are none", () => {
+    expect(roll({ glowId: G, held: new Set([60]) })).toBe(roll({ glowId: G, held: new Set([60]), echoes: [] }));
+  });
+
+  it("tints an echoed key apart from the key pressed", () => {
+    const out = roll({ glowId: G, held: new Set([60, 64]), echoes: [M3] });
+    expect(out).toContain("var(--echo)");
+    expect(out).toContain("var(--key-press)"); // 60, the finger
+  });
+
+  it("names the interval on the key, white or black", () => {
+    const out = roll({ glowId: G, held: new Set([57, 64, 49]), echoes: [M3, m6] });
+    expect(out).toMatch(/<tspan[^>]*>M3<\/tspan><tspan[^>]*>↑<\/tspan>/);
+    expect(out).toMatch(/<tspan[^>]*>m6<\/tspan><tspan[^>]*>↓<\/tspan>/);
+  });
+
+  it("gives way to a caller's key style, label and all", () => {
+    const out = roll({ glowId: G, held: new Set([64]), echoes: [M3], keyStyles: new Map([[64, { fill: "var(--wrong)" }]]) });
+    expect(out).not.toContain("var(--echo)");
+    expect(out).not.toContain(">M3<");
+  });
+
+  it("labels nothing off the span drawn", () => {
+    const out = roll({ glowId: G, held: new Set([64]), echoes: [M3], span: { lo: 69, hi: 84 } });
+    expect(out).not.toContain(">M3<");
   });
 });
 

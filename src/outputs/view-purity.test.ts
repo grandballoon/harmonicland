@@ -134,6 +134,7 @@ describe("every view answers where its keyboard is", () => {
     sheetScroll: 0,
     selection: null,
     marks: [],
+    echoes: [],
   };
   const at = { score, t: 0.5, live: idle };
   const VIEWS: Record<string, ViewModule> = {

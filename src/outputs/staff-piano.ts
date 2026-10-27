@@ -217,7 +217,7 @@ const stacked =
     const staff = `<g clip-path="url(#spTop)">${top}</g>`;
     const piano =
       `<g transform="translate(0,${topH})"><g clip-path="url(#spBand)">` +
-      `${PianoRoll.markup(W, band, score, t, { glowId: GLOW_ID, held: live.held, fall, hands })}</g></g>`;
+      `${PianoRoll.markup(W, band, score, t, { glowId: GLOW_ID, held: live.held, echoes: live.echoes, fall, hands })}</g></g>`;
     svg.innerHTML = defs + staff + piano;
   };
 

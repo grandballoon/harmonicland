@@ -36,10 +36,14 @@
    the mic that heard it. The output follows the AUDIBLE voices only, so a
    pointer press on a key the mic is already holding still sounds.
 
-   There is deliberately no onRelease. Nothing needs one: a release only
-   ever makes a set smaller, so every question about it is already
-   answered by reading held() at the moment you care. An unused symmetric
-   half would be surface to keep working for no caller.
+   RELEASES ARE OBSERVABLE TOO, per voice. held() answers every question
+   about a release that is about the KEYS; onRelease is for a subscriber
+   whose own voices hang off someone else's — the interval echoes
+   (echoes.ts), which sound while the key that raised them is down and
+   must know when THAT voice lifts, not when its pitch goes quiet: a
+   second finger on the same key would otherwise keep them sounding after
+   the first one let go. releaseAll() reports each voice it lifts, so a
+   dependent is never left behind by it.
    ==================================================================== */
 import { Sound } from "./outputs/sound";
 import { DEFAULT_VELOCITY } from "./perform";
@@ -78,6 +82,14 @@ export function onPress(fn: PressListener): () => void {
   return () => pressSubs.delete(fn);
 }
 
+export type ReleaseListener = (v: Voice) => void;
+const releaseSubs = new Set<ReleaseListener>();
+
+export function onRelease(fn: ReleaseListener): () => void {
+  releaseSubs.add(fn);
+  return () => releaseSubs.delete(fn);
+}
+
 function press(pitch: Pitch, { silent: quiet = false }: PressOptions = {}): Voice {
   const v: Voice = { pitch };
   if (quiet) silent.add(v);
@@ -99,10 +111,15 @@ function release(v: Voice): void {
   if (!set?.delete(v)) return;
   if (set.size === 0) voices.delete(v.pitch);
   if (!silent.has(v) && !audibleOn(v.pitch, v)) Sound.liveOff(v.pitch);
+  // after the map and the output agree, as onPress is
+  for (const fn of [...releaseSubs]) fn(v);
 }
 
 /** Is this handle still sounding? The query that replaces a private mirror. */
 const isLive = (v: Voice): boolean => voices.get(v.pitch)?.has(v) ?? false;
+
+/** Does this voice hold its key without sounding it (SILENT VOICES)? */
+const isSilent = (v: Voice): boolean => silent.has(v);
 
 function releaseAll(): void {
   for (const set of [...voices.values()]) for (const v of [...set]) release(v);
@@ -110,4 +127,4 @@ function releaseAll(): void {
 
 const held = (): ReadonlySet<Pitch> => new Set(voices.keys());
 
-export const LiveKeys = { press, release, releaseAll, isLive, held, onPress };
+export const LiveKeys = { press, release, releaseAll, isLive, isSilent, held, onPress, onRelease };

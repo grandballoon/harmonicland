@@ -29,6 +29,9 @@ src/
   live-keys.ts      held-pitch set; press/release; the live-input seam
   live-midi.ts      hardware MIDI keyboard -> LiveKeys
   live-mic.ts       a real instrument through a microphone -> LiveKeys (silent voices)
+  intervals.ts      ear training's vocabulary: an interval up or down, and the key it lands on (pure)
+  echoes.ts         a pressed key sounds the chosen intervals from it, through LiveKeys
+  interval-row.ts   the tray's intervals row: which intervals echo, with the key or after it
   mic-panel.ts      the tray's mic row: device, channel, response, sensitivity, meter
   mic/              the listening pipeline: window, gate, note tracker, transcriber
                     (pure, tested), Basic Pitch adapter, capture worklet, worker

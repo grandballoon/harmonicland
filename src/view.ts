@@ -73,12 +73,17 @@ import type { KeySpan } from "./pitch";
 import type { PerfSnapshot } from "./perf-state";
 import type { TonnetzSnapshot } from "./tonnetz-state";
 import type { PracticeSnapshot } from "./practice-state";
+import type { Relative } from "./intervals";
 
 /** Everything live about this instant that is not the score or the clock,
  *  read once per frame so every view sees the same instant. */
 export interface LiveSnapshot {
   /** Pitches sounding from any live surface — keyboard, MIDI, gamepad, chord. */
   held: ReadonlySet<Pitch>;
+  /** The interval echoes sounding (echoes.ts): keys in `held` that a press
+   *  raised rather than a finger, each with the interval it is of the key
+   *  pressed. A keyboard tints and labels them; empty when echoes are off. */
+  echoes: readonly Relative[];
   perf: PerfSnapshot;
   tonnetz: TonnetzSnapshot;
   /** Where the learner is in a step-by-step lesson. Inert (`active:

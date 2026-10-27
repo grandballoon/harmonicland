@@ -26,6 +26,8 @@ import { perform } from "./perform";
 import { makeScheduler, TICK_MS } from "./scheduler";
 import { workerTicker } from "./ticker";
 import { mountSoundRow } from "./sound-row";
+import { makeEchoes } from "./echoes";
+import { mountIntervalRow } from "./interval-row";
 import { Verovio } from "./outputs/verovio";
 import { LiveKeys, type Voice } from "./live-keys";
 import { TonnetzState } from "./tonnetz-state";
@@ -109,11 +111,23 @@ let shape = true;
 
 const fmt = (s: number) => s.toFixed(2);
 
+// --- interval echoes (ear training) ---------------------------------
+// A pressed key sounds the intervals chosen in the tray from it, and the
+// keyboards name them (echoes.ts). Not in practice mode: the lesson
+// grades every press it hears, and would mark each echo a wrong note.
+const echoes = makeEchoes({ keys: LiveKeys, accept: () => view !== Practice });
+mountIntervalRow({
+  chips: $("interval-chips"),
+  timing: $<HTMLSelectElement>("echo-timing"),
+  clear: $<HTMLButtonElement>("echo-clear"),
+}, { set: (s) => echoes.set(s) });
+
 // The live performance state, read ONCE per frame and handed to every
 // consumer as a value. Reading it per-view would let two views in one frame
 // observe different LiveKeys states; reading it here cannot.
 const liveSnapshot = (): LiveSnapshot => ({
   held: LiveKeys.held(),
+  echoes: echoes.marks(),
   perf: PerfState.snapshot(),
   tonnetz: TonnetzState.snapshot(),
   practice: PracticeState.snapshot(),
@@ -867,6 +881,7 @@ function applyView(val: string): void {
   // degree would re-sound a chord into a lesson that is grading presses.
   PerfState.release();
   heldDegrees.length = 0;
+  echoes.clear(); // ...and any echo still to come of a key the switch lifted
   // a lesson exists only while its view does — begin/end here rather than
   // leaving a cursor listening to LiveKeys behind a view nobody is looking at.
   if (val === "practice") {

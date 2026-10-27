@@ -302,4 +302,4 @@ export const PianoRoll: ViewModule & {
   geometry: typeof geometry;
   tapeFor: typeof tapeFor;
   KEYB: number;
-} = { render, keyboardRegion, tape, scroller: () => null, markup, pitchAt, geometry, tapeFor, KEYB };
+} = { render, keyboardRegion, tape, scroller: () => null, dial: () => null, markup, pitchAt, geometry, tapeFor, KEYB };

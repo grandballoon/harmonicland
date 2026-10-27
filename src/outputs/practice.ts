@@ -952,6 +952,6 @@ export const Practice: ViewModule & {
   barAt: typeof barAt;
   scroller: typeof scroller;
 } = {
-  render, keyboardRegion, tape: () => null, markup, keyStyles, struck, hits, pulseEnv, chartBandW,
+  render, keyboardRegion, tape: () => null, dial: () => null, markup, keyStyles, struck, hits, pulseEnv, chartBandW,
   sheetBandH, sheetsH, whereLabel, barAt, scroller,
 };

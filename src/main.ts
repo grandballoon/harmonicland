@@ -54,7 +54,7 @@ import {
 import { realize, transposeTo, type Chart } from "./harmony/progression";
 import { REPERTOIRE, FAMILIES, progressionById } from "./harmony/repertoire";
 import type { BarRange, Score } from "./types";
-import type { KeyboardRegion, LiveSnapshot, PagePan, Region, Scroller, Tape, ViewModule } from "./view";
+import type { Dial, KeyboardRegion, LiveSnapshot, PagePan, Region, Scroller, Tape, ViewModule } from "./view";
 // the piece the app opens on — bundled, so it loads the same way from the
 // dev server and from the deployed site
 import openingScoreUrl from "../scores/chopin_prelude_4.midi?url";
@@ -882,6 +882,8 @@ function applyView(val: string): void {
   PerfState.release();
   heldDegrees.length = 0;
   echoes.clear(); // ...and any echo still to come of a key the switch lifted
+  dialDrag = null; // ...nor does a hold on one view's dial outlive it
+  svg.removeAttribute("data-dial");
   // a lesson exists only while its view does — begin/end here rather than
   // leaving a cursor listening to LiveKeys behind a view nobody is looking at.
   if (val === "practice") {
@@ -1175,6 +1177,51 @@ const endPointer = (e: PointerEvent) => {
 };
 svg.addEventListener("pointerup", endPointer);
 svg.addEventListener("pointercancel", endPointer);
+
+// --- coloration dial -------------------------------------------------
+// A wheel of colorations is turned by pointing at it: while the pointer is
+// on the wheel the selector goes to the zone nearest it (view.ts, note 7),
+// nothing held, and stays where the pointer left it. A press on the wheel
+// is captured, so a drag keeps hold of the selector off the wheel too.
+// The stage's `data-dial` swaps the cursor for a dot while it is on the
+// wheel (index.html) — the sign that pointing there is choosing.
+let dialDrag: number | null = null; // the pointer dragging the selector
+/** The dial, a pointer's place on it, and whether that is on the wheel —
+ *  or null where there is no dial. */
+const dialPoint = (e: MouseEvent): { dial: Dial; x: number; y: number; on: boolean } | null => {
+  const dial = view.dial(svg, { score, t: clock.now(), live: liveSnapshot() });
+  if (!dial) return null;
+  const r = svg.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  return { dial, x, y, on: dial.holds(x, y) };
+};
+function turnDial({ dial, x, y }: { dial: Dial; x: number; y: number }): void {
+  const dir = dial.directionAt(x, y);
+  if (dir === PerfState.snapshot().joystickDirection) return;
+  PerfState.setDirection(dir);
+  resoundIfHeld();
+  perfStatus();
+}
+svg.addEventListener("pointerdown", (e) => {
+  const at = dialPoint(e);
+  if (!at?.on) return;
+  AudioOut.ensure(); // first gesture unlocks the AudioContext
+  svg.setPointerCapture(e.pointerId);
+  dialDrag = e.pointerId;
+  turnDial(at);
+  e.preventDefault(); // a drag across the labels must not select them
+});
+svg.addEventListener("pointermove", (e) => {
+  const at = dialPoint(e);
+  svg.toggleAttribute("data-dial", at !== null && (at.on || e.pointerId === dialDrag));
+  if (at && (at.on || e.pointerId === dialDrag)) turnDial(at);
+});
+const endDialDrag = (e: PointerEvent) => {
+  if (e.pointerId === dialDrag) dialDrag = null;
+};
+svg.addEventListener("pointerup", endDialDrag);
+svg.addEventListener("pointercancel", endDialDrag);
 
 // --- Perfecto keyboard ----------------------------------------------
 // The computer keyboard as the chord instrument (computeVoicing ->

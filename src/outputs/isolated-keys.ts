@@ -156,4 +156,4 @@ export const IsolatedKeys: ViewModule & {
   keyStyles: typeof keyStyles;
   focusOf: typeof focusOf;
   placement: typeof placement;
-} = { render, keyboardRegion, tape: () => null, scroller: () => null, markup, keyStyles, focusOf, placement };
+} = { render, keyboardRegion, tape: () => null, scroller: () => null, dial: () => null, markup, keyStyles, focusOf, placement };

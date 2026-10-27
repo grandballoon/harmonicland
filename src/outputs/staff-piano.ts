@@ -254,12 +254,14 @@ export const keysView: ViewModule = {
   keyboardRegion: (svg) => region(svg, keysBandH),
   tape: tape(keysBandH, true),
   scroller: scroller(keysBandH, true),
+  dial: () => null,
 };
 export const rollView: ViewModule = {
   render: stacked(rollBandH, true, false),
   keyboardRegion: (svg) => region(svg, rollBandH),
   tape: tape(rollBandH, false),
   scroller: scroller(rollBandH, false),
+  dial: () => null,
 };
 
 export const StaffPiano = {

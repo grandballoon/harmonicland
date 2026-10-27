@@ -67,10 +67,18 @@
       for its keyboard says which stretch of keys it holds (`span`), so a
       pointer on an enlarged octave is heard as the key drawn under it and
       not as the key that would be there on the whole keyboard.
+
+   7. A view may name a DIAL: a wheel of coloration zones a pointer turns
+      the way the stick does. The view answers which zone a point is
+      nearest and whether the point is on the wheel at all; what pointing
+      there or dragging from there MEANS is main.ts's, as it is for the
+      keyboard. Required, like the rest, and `() => null` where there is
+      none.
    ==================================================================== */
 import type { BarRange, Score, Pitch } from "./types";
 import type { KeySpan } from "./pitch";
 import type { PerfSnapshot } from "./perf-state";
+import type { JoystickDirection } from "./harmony/perfecto";
 import type { TonnetzSnapshot } from "./tonnetz-state";
 import type { PracticeSnapshot } from "./practice-state";
 import type { Relative } from "./intervals";
@@ -199,6 +207,17 @@ export interface Scroller {
   rangeBox(): Region | null;
 }
 
+/** A wheel of coloration zones a pointer can turn. See note 7. Points are
+ *  in the svg's local pixel space. */
+export interface Dial {
+  /** Is a point on the wheel — within the circle its zones fill? */
+  holds(x: number, y: number): boolean;
+  /** The zone a point is nearest. Answers for every point, on the wheel
+   *  or off it: a pointer dragging the selector keeps it wherever it
+   *  goes. */
+  directionAt(x: number, y: number): JoystickDirection;
+}
+
 /** An output projection. Genuinely a function of its arguments now. */
 export type View = (svg: SVGSVGElement, f: Frame) => void;
 
@@ -222,4 +241,7 @@ export interface ViewModule {
   /** The part of this view a scroll moves only the reader's eye across,
    *  or null if it has none — see note 5. Null whenever `tape` is not. */
   scroller(svg: SVGSVGElement, f: Frame): Scroller | null;
+  /** The coloration wheel a pointer turns in this view, or null if it has
+   *  none — see note 7. */
+  dial(svg: SVGSVGElement, f: Frame): Dial | null;
 }

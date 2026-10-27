@@ -216,6 +216,25 @@ export function activeAt(score: Score, t: number): Note[] {
   return score.notes.filter((n) => t >= n.onset && t < n.onset + n.duration);
 }
 
+/** The same score at other seconds: every instant in it — onsets, key-ups,
+ *  barlines, pedal changes, the end — moved through `f`. The notes keep
+ *  their ids and their order and the bars their meters, so everything that
+ *  speaks in notes or bars means what it did. `f` must take 0 to 0 and
+ *  never run backwards; where it is linear across each bar, a beat is
+ *  still an even share of its bar (timeOfBeat), as the engraver assumes.
+ *  How a score is put to the timing of a recording: see alignment.ts. */
+export function warp(score: Score, f: (t: number) => number): Score {
+  return {
+    notes: score.notes.map((n) => {
+      const onset = f(n.onset);
+      return { ...n, onset, duration: f(n.onset + n.duration) - onset };
+    }),
+    duration: f(score.duration),
+    bars: score.bars.map((b) => ({ ...b, start: f(b.start), end: f(b.end) })),
+    pedal: score.pedal.map((r) => ({ start: f(r.start), end: f(r.end) })),
+  };
+}
+
 export const Core = {
-  makeScore, activeAt, defaultSpelling, barAt, clampRange, normalizeRange, sameRange, timeOfBeat, beatOfTime, barTime,
+  makeScore, activeAt, defaultSpelling, barAt, clampRange, normalizeRange, sameRange, timeOfBeat, beatOfTime, barTime, warp,
 };

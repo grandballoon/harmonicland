@@ -45,6 +45,10 @@ src/
   backchain-bar.ts  the header's backchain switch and link stepper (owns its DOM)
   key-window.ts     which stretch of a keyboard is in sight when zoomed: pinch, pan (pure)
   zoom-gestures.ts  pinch and trackpad zoom -> key windows (owns its listeners)
+  alignment.ts      a score put to a recording's timing: barline anchors -> retimed score (pure)
+  alignment-store.ts anchors in localStorage, keyed by score and recording
+  recording-row.ts  the tray's recording row: the attached file, and tapping its barlines in
+  outputs/recording.ts  the Recording seam (a file today) and the Output that plays one
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module

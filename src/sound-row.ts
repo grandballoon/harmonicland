@@ -13,6 +13,12 @@
    plugged in again. The choice is kept even while its port is missing —
    the piano stands in, and the port is taken back when it reappears.
 
+   A RECORDING of the piece (outputs/recording.ts) is a third choice, on
+   offer while one is attached to the score. Attaching one chooses it —
+   that is what it was attached for — and it is not remembered: the file
+   is gone on reload, and the port or piano chosen before it is still the
+   choice underneath, back the moment the recording goes.
+
    MIDI permission is asked for only when the user picks "MIDI device…".
    On a later visit, if the browser already holds the grant, the ports are
    opened at once so a remembered synth is back without a click.
@@ -44,6 +50,17 @@ export interface SoundRowDeps {
   storage?: () => Storage | null;
 }
 
+/** A recording on offer: what to call it, and what sounds it. */
+export interface RecordingChoice {
+  readonly name: string;
+  readonly output: Output;
+}
+
+export interface SoundRow {
+  /** Offer a recording and choose it, or with null withdraw the one there. */
+  setRecording(r: RecordingChoice | null): void;
+}
+
 /** The row's controls, as index.html lays them out. */
 export interface SoundRowElements {
   select: HTMLSelectElement;
@@ -65,6 +82,7 @@ interface Prefs {
 /** Versioned, so a future change of shape can read the old one. */
 const KEY = "harmonicland.output.v1";
 const PIANO = "piano";
+const RECORDING = "recording";
 const CONNECT = "connect";
 const PORT = "port:";
 
@@ -94,13 +112,18 @@ function save(storage: () => Storage | null, prefs: Prefs): void {
 export function mountSoundRow(
   { select, slider, readout, hint, shape }: SoundRowElements,
   deps: SoundRowDeps,
-): void {
+): SoundRow {
   const storage = deps.storage ?? (() => globalThis.localStorage ?? null);
   const prefs = load(storage);
   let opened = false;
   /** The port sounding now, or null for the piano. Differs from
    *  prefs.output only while the chosen port is missing. */
   let current: MIDIOutput | null = null;
+  /** What is sounding: the piano, `current`'s output, or the recording. */
+  let sounding: Output = deps.piano;
+  let recording: RecordingChoice | null = null;
+  /** Is the recording on offer the one chosen? */
+  let onRecording = false;
 
   /** The ports on offer: none until the user has let MIDI in. */
   const ports = (): readonly MIDIOutput[] => (opened ? deps.midi.ports() : []);
@@ -109,14 +132,20 @@ export function mountSoundRow(
 
   function render(): void {
     const opts: [string, string][] = [[PIANO, "Built-in piano"]];
+    if (recording) opts.push([RECORDING, `Recording · ${recording.name}`]);
     for (const p of ports()) opts.push([PORT + p.id, portName(p)]);
     if (!opened) opts.push([CONNECT, "MIDI device…"]);
     select.replaceChildren(...opts.map(([value, text]) => new Option(text, value)));
-    select.value = current ? PORT + current.id : PIANO;
+    select.value = onRecording ? RECORDING : current ? PORT + current.id : PIANO;
   }
 
+  /** What the delay in force is remembered under. */
+  const delayKey = (): string => (onRecording ? RECORDING : keyOf(current && portName(current)));
+  const soundName = (): string =>
+    onRecording && recording ? recording.name : current ? portName(current) : "built-in piano";
+
   function showDelay(): void {
-    const ms = prefs.delays[keyOf(current && portName(current))] ?? 0;
+    const ms = prefs.delays[delayKey()] ?? 0;
     slider.value = String(ms);
     readout.textContent = `${ms} ms`;
     deps.setOffset(ms / 1000);
@@ -124,14 +153,15 @@ export function mountSoundRow(
 
   /** Sound through the chosen output, or the piano while it is missing. */
   function apply(): void {
-    const next = chosenPort();
-    if (next !== current) {
-      current = next;
-      deps.use(next ? deps.midi.output(next) : deps.piano);
+    current = onRecording ? null : chosenPort();
+    const next = onRecording && recording ? recording.output : current ? deps.midi.output(current) : deps.piano;
+    if (next !== sounding) {
+      sounding = next;
+      deps.use(next);
     }
     render();
     showDelay();
-    hint.hidden = !(current || (opened && ports().length === 0));
+    hint.hidden = onRecording || !(current || (opened && ports().length === 0));
   }
 
   async function connect(): Promise<boolean> {
@@ -155,7 +185,10 @@ export function mountSoundRow(
 
   select.addEventListener("change", async () => {
     const v = select.value;
-    if (v === CONNECT) {
+    onRecording = v === RECORDING;
+    if (onRecording) {
+      // the port or piano underneath stays chosen for when it is left
+    } else if (v === CONNECT) {
       if (await connect()) {
         const first = ports()[0];
         if (first) prefs.output = portName(first);
@@ -167,13 +200,13 @@ export function mountSoundRow(
     } else prefs.output = null;
     save(storage, prefs);
     apply();
-    if (v !== CONNECT || current) deps.status(`Sound · ${current ? portName(current) : "built-in piano"}`);
+    if (v !== CONNECT || current) deps.status(`Sound · ${soundName()}`);
     // a closed <select> keeps focus and would swallow the arrow keys
     select.blur();
   });
 
   slider.addEventListener("input", () => {
-    prefs.delays[keyOf(current && portName(current))] = Number(slider.value);
+    prefs.delays[delayKey()] = Number(slider.value);
     save(storage, prefs);
     showDelay();
   });
@@ -193,4 +226,12 @@ export function mountSoundRow(
     void deps.midi.permitted().then(async (ok) => {
       if (ok && (await connect())) apply();
     });
+
+  return {
+    setRecording(r) {
+      recording = r;
+      onRecording = r !== null;
+      apply();
+    },
+  };
 }

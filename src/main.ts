@@ -28,6 +28,9 @@ import { workerTicker } from "./ticker";
 import { mountSoundRow } from "./sound-row";
 import { makeEchoes } from "./echoes";
 import { mountIntervalRow } from "./interval-row";
+import { mountRecordingRow } from "./recording-row";
+import { localAlignmentStore } from "./alignment-store";
+import { fileRecording } from "./outputs/recording";
 import { Verovio } from "./outputs/verovio";
 import { LiveKeys, type Voice } from "./live-keys";
 import { TonnetzState } from "./tonnetz-state";
@@ -174,6 +177,8 @@ clock.onFrame(() => {
 
 /** `key` is the score's identity for its saved sections (see sections.ts). */
 function loadScore(s: Score, key: string, label?: string, analysis: Chart | null = null): void {
+  // first, while the last score is still the one its recording plays
+  recordingRow.setScore(key, s);
   score = s;
   chart = analysis;
   steps = StepModel.makeSteps(score, "both").steps;
@@ -191,6 +196,24 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   // a lesson is about a score, so a new score is a new lesson.
   if (view === Practice) PracticeState.begin(score, parkClock, chart);
   syncTransport();
+  applyBars();
+}
+
+/** The loaded score at other seconds: put to its recording's timing, or
+ *  back as written (recording-row.ts). The notes and bars are the same, so
+ *  the selection, the sections and a lesson's range mean what they did,
+ *  and the playhead stays on its beat of its bar. */
+function retimeScore(s: Score): void {
+  const bar = Core.barAt(score, clock.now());
+  const beat = Core.beatOfTime(bar, clock.now());
+  clock.pause();
+  score = s;
+  steps = StepModel.makeSteps(score, "both").steps;
+  scheduler.setPerformance(perform(score, { shape }));
+  if (view === Practice) PracticeState.begin(score, parkClock, chart);
+  seekTo(Core.timeOfBeat(score.bars[bar.index], beat));
+  // a chain's links were cut from the steps as they stood
+  chain = null;
   applyBars();
 }
 
@@ -308,7 +331,7 @@ mountMicPanel($<HTMLButtonElement>("mic"), $("mic-readout"), $<HTMLDetailsElemen
 // both, and how late each is heard. The picker owns the tray's sound row;
 // choosing an output switches Sound and drops the scheduler into the
 // music afresh, so the new output picks up mid-note.
-mountSoundRow({
+const soundRow = mountSoundRow({
   select: $<HTMLSelectElement>("output"),
   slider: $<HTMLInputElement>("latency"),
   readout: $("latency-ms"),
@@ -326,6 +349,32 @@ mountSoundRow({
     if (on === shape) return;
     shape = on;
     scheduler.setPerformance(perform(score, { shape }));
+  },
+  status: (text) => { $("status").textContent = text; },
+});
+
+// --- a recording of the piece ---------------------------------------
+// A sound file to listen to instead of the notes being struck. The row
+// owns it and the barlines tapped into it; from here it gets somewhere to
+// offer the recording (the sound row's picker) and somewhere to show the
+// score once it is put to the recording's timing.
+const recordingRow = mountRecordingRow({
+  file: $<HTMLInputElement>("recording-file"),
+  name: $("recording-name"),
+  tap: $<HTMLButtonElement>("recording-tap"),
+  clear: $<HTMLButtonElement>("recording-clear"),
+  remove: $<HTMLButtonElement>("recording-remove"),
+  readout: $("recording-readout"),
+}, {
+  store: localAlignmentStore(),
+  open: fileRecording,
+  clock,
+  live: AudioOut,
+  offer: (choice) => soundRow.setRecording(choice),
+  show: retimeScore,
+  park(t) {
+    clock.pause();
+    seekTo(t);
   },
   status: (text) => { $("status").textContent = text; },
 });
@@ -1340,6 +1389,15 @@ const isTyping = (el: EventTarget | null): boolean => {
 const tray = $<HTMLDetailsElement>("tray");
 
 window.addEventListener("keydown", (e) => {
+  // While barlines are being tapped the keyboard does that and nothing
+  // else: a stray chord key would sound over the recording being heard.
+  if (recordingRow.tapping()) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape" || e.key === "Enter") recordingRow.finish();
+    else if ((e.key === " " || e.key.toLowerCase() === "t") && !e.repeat) recordingRow.tap();
+    e.preventDefault();
+    return;
+  }
   if (e.key === "Escape" && tray.open) {
     tray.open = false;
     tray.querySelector("summary")!.focus();

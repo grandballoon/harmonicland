@@ -541,6 +541,11 @@
   .latency-ms { min-width: 4.5em; font-variant-numeric: tabular-nums; }
   .output-hint { flex-basis: 100%; margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
   .output-hint[hidden] { display: none; }
+  /* the recording row: the file's name, and how far it is aligned ------- */
+  .recording-name { max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .recording-readout { color: var(--ink-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .recording-name:empty, .recording-readout:empty { display: none; }
+  #recording-tap[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
   /* the intervals row: a line of switches per direction, lit in the
      colour the keys they echo are tinted ------------------------------- */
   .interval-pick { flex: 1 1 0; min-width: 0; display: grid; gap: 8px; }
@@ -815,6 +820,20 @@
           <span class="interval-hint">Press a key to hear and see the intervals chosen from it. Off in practice.</span>
         </div>
       </div>
+    </div>
+    <!-- A recording of the loaded score, to listen to instead of the
+         built-in piano, and the barlines tapped into it so the score
+         follows its timing. recording-row.ts fills and runs the row. -->
+    <div class="tray-row">
+      <span class="tray-label">recording</span>
+      <label class="file" tabindex="0" title="A sound file of this piece being played">
+        Load recording<input id="recording-file" type="file" accept="audio/*">
+      </label>
+      <span class="recording-name" id="recording-name"></span>
+      <button id="recording-tap" disabled title="Play the recording and tap T or Space on each barline, starting from the bar under the playhead (Esc when done)">Tap bars</button>
+      <button id="recording-clear" disabled title="Forget where this recording's barlines are">Clear bars</button>
+      <button id="recording-remove" hidden title="Go back to the score as written, without the recording">Remove</button>
+      <span class="recording-readout" id="recording-readout"></span>
     </div>
     <!-- A real instrument through a microphone. Rows and options that
          depend on the device are filled in by mic-panel.ts. -->

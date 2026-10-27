@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { mountSoundRow, type MidiPorts } from "./sound-row";
+import { mountSoundRow, type MidiPorts, type SoundRow } from "./sound-row";
 import type { Output } from "./types";
 
 /* The picker against fake ports and an in-memory Storage: which output it
@@ -39,6 +39,7 @@ let status: string;
 let shaped: boolean | null;
 let el: { select: HTMLSelectElement; slider: HTMLInputElement; readout: HTMLElement; hint: HTMLElement; shape: HTMLInputElement };
 
+let row: SoundRow;
 const mount = () => {
   el = {
     select: document.createElement("select"),
@@ -47,7 +48,7 @@ const mount = () => {
     hint: document.createElement("p"),
     shape: Object.assign(document.createElement("input"), { type: "checkbox" }),
   };
-  mountSoundRow(el, {
+  row = mountSoundRow(el, {
     piano, midi, use: (o) => void used.push(o), setOffset: (s) => void (offset = s),
     setShape: (on) => void (shaped = on),
     status: (t) => void (status = t), storage: () => storage as unknown as Storage,
@@ -164,5 +165,58 @@ describe("sound row", () => {
     mount(); // a new visit
     expect(shaped).toBe(false);
     expect(el.shape.checked).toBe(false);
+  });
+
+  it("offers a recording when there is one, and plays through it", () => {
+    mount();
+    const take = out("take");
+    row.setRecording({ name: "prelude.mp3", output: take });
+    expect(options()).toEqual(["Built-in piano", "Recording · prelude.mp3", "MIDI device…"]);
+    expect(el.select.value).toBe("recording");
+    expect(used).toEqual([take]);
+  });
+
+  it("goes back to what was chosen before when the recording is withdrawn", async () => {
+    ports = [port("a", "IAC Bus 1")];
+    mount();
+    await choose("connect");
+    row.setRecording({ name: "prelude.mp3", output: out("take") });
+    row.setRecording(null);
+    expect(options()).toEqual(["Built-in piano", "IAC Bus 1"]);
+    expect(used[used.length - 1]).toBe(outputs.get("a"));
+  });
+
+  it("can be left for the piano and come back to while it is on offer", async () => {
+    mount();
+    const take = out("take");
+    row.setRecording({ name: "prelude.mp3", output: take });
+    await choose("piano");
+    await choose("recording");
+    expect(used).toEqual([take, piano, take]);
+    expect(status).toBe("Sound · prelude.mp3");
+  });
+
+  it("keeps a delay of the recording's own, and does not remember choosing it", async () => {
+    mount();
+    row.setRecording({ name: "prelude.mp3", output: out("take") });
+    el.slider.value = "120";
+    el.slider.dispatchEvent(new Event("input"));
+    expect(offset).toBeCloseTo(0.12);
+    await choose("piano");
+    expect(offset).toBe(0);
+    mount(); // the next visit: the file is gone
+    expect(el.select.value).toBe("piano");
+    row.setRecording({ name: "prelude.mp3", output: out("take") });
+    expect(offset).toBeCloseTo(0.12);
+  });
+
+  it("plays through a second recording that replaces the first", () => {
+    mount();
+    const one = out("one");
+    const two = out("two");
+    row.setRecording({ name: "one.mp3", output: one });
+    row.setRecording({ name: "two.mp3", output: two });
+    expect(used).toEqual([one, two]);
+    expect(options()).toContain("Recording · two.mp3");
   });
 });

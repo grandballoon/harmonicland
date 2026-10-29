@@ -372,7 +372,7 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
 
 ## Known limitations (all intentional, all isolated)
 
-- Imported MIDI shows only sharps in the grand staff (parser default speller).
+- Imported MIDI is spelled with sharps only (`Core.defaultSpelling`), even though its key signatures are read into the bars.
   Load the same piece as MusicXML to get correct flats/naturals.
 - MusicXML: timewise scores are rejected (`.mxl` is now unwrapped by `MxlIn`);
   double accidentals collapse to a single glyph (staff position is by letter
@@ -384,22 +384,20 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
   music definition is what gets parsed; `melody = …` then `\melody` is not
   resolved). Relative octaves across `<< >>` use the block's entry reference per
   voice; brace each voice. Double accidentals collapse to one glyph (as MusicXML).
-- Audio plays one flat dynamic: `Note` carries no velocity, so every note
-  sounds at the same level (single-velocity-layer samples, gain 0.5). The
-  first notes after page load may sound as triangle-wave fallback for a
-  moment while samples decode.
-- Scrubbing fast re-triggers voices as the active set churns; can sound busy.
-  Lives entirely in `AudioOut`; smooth there if it matters.
-- `StaffStd` has no key-signature rendering and no beaming — noteheads only.
-- `PianoRoll` keyboard band is a fixed 96px; on very short viewports it eats
-  the fall area. Ignores `spelling` by design (it's the physical-key view), so
-  enharmonics share a key — that's correct, not a gap.
-- Web MIDI *live input* is not wired yet — but the seam is built and proven: a
-  pointer-driven playable keyboard already routes through `LiveKeys` (sound +
-  key glow). Web MIDI just needs to feed the same `press/release` calls; see
-  *Live MIDI input* under "How to extend." Recording into the `score`
-  (`Live_in.stream : midi_event → score → score`, append-only) remains a
-  separate, deferred step.
+- The built-in piano has four of Salamander's sixteen velocity layers (v4, v8, v12, v16), so dynamics between layers are gain-corrected rather than recorded.
+  Playback waits for the middle layer (v8); the other layers stream in behind it, and until one is ready its notes borrow the nearest loaded layer.
+  A pitch whose every fetch failed falls back to a triangle oscillator.
+- A seek while playing restarts the scheduler, which drops into the notes under the playhead (scheduler.ts).
+  Scrubbing fast while playing re-strikes them on every step and can sound busy.
+- `StaffStd`, the scrolling grand staff, has no key signature and no beaming — noteheads only.
+  The engraved bar views (engrave.ts) print key signatures.
+- `PianoRoll`'s keyboard is 96px tall across all 88 keys; on very short viewports it eats the fall area.
+  A span or a pinch zoom (key-window.ts) grows it, the zoom up to 30% of the band.
+  It ignores `spelling` by design (it's the physical-key view), so enharmonics share a key — that's correct, not a gap.
+- Live input reaches `LiveKeys` from the pointer, a hardware MIDI keyboard (live-midi.ts) and a microphone (live-mic.ts).
+  None of them writes into the `score`: recording a performance as notes (`Live_in.stream : midi_event → score → score`, append-only) is still deferred.
+- An attached recording (outputs/recording.ts) lasts only until reload: the file is not kept, though its tapped barlines are (alignment-store.ts).
+  Alignment follows hand-tapped barlines only: time runs evenly within a bar, so rubato inside one is not followed (alignment.ts).
 - Browser support: built/tested for Chrome. Web MIDI and the audio path are
   weakest on Safari/Firefox.
 

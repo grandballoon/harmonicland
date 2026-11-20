@@ -1,0 +1,23 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "harmonicland-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-01",
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "harmonicland",
+			// From `npx wrangler d1 create harmonicland` (see README.md).
+			"database_id": "713b6c14-b31b-4c05-9ef6-ea97ec9fb865",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vars": {
+		// The app's origins, comma-separated: the dev server and the
+		// GitHub Pages site.
+		"ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,https://grandballoon.github.io"
+	}
+}

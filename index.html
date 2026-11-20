@@ -197,14 +197,14 @@
   /* A disclosure's chevron trails its label and turns when it opens. Drawn
      as a mask over currentColor, so it takes whatever colour the summary is.
      --chevron-turn says which way it points shut; open adds a half turn. */
-  details.dropdown > summary::after, details.tray > summary::after {
+  details.dropdown > summary::after {
     content: ""; flex: none; width: 12px; height: 12px; margin-right: -3px;
     background: var(--ink-dim);
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
     transform: rotate(var(--chevron-turn, 0deg)); transition: transform .15s;
   }
-  details.dropdown[open] > summary::after, details.tray[open] > summary::after {
+  details.dropdown[open] > summary::after {
     transform: rotate(calc(var(--chevron-turn, 0deg) + 180deg));
   }
 
@@ -413,7 +413,9 @@
   }
 
   /* stage ------------------------------------------------------------- */
-  #stage { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+  /* below the header: the stage, and the tray beside it on the right */
+  .main { flex: 1; min-height: 0; display: flex; }
+  #stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: var(--bg); }
   #staff { position: relative; width: 100%; height: 100%; display: block; touch-action: none; }
   /* on a coloration wheel the pointer is the selector (main.ts, the dial):
      a dot, its rim darker than its middle, so it shows on either field */
@@ -483,42 +485,51 @@
     flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* the tray: an indicator in the window's bottom-right corner, over a
-     panel that opens upward. Everything in it keeps its own styling. ------ */
-  details.tray { position: fixed; right: 14px; bottom: 14px; z-index: 30; }
-  details.tray > summary {
-    --chevron-turn: 180deg; /* shut, it points up: the panel opens upward */
-    list-style: none; user-select: none; cursor: pointer;
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 500; color: var(--ink);
-    background: var(--panel); border: 1px solid var(--line-acc); border-radius: 999px;
-    padding: 6px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
-    opacity: .82; transition: opacity .12s, border-color .12s;
+  /* the tray: a slim column down the right of the stage, under the
+     header, always open. Its rows stack, each label over its controls, so
+     the column stays narrow. Everything in it keeps its own styling. ------ */
+  .tray {
+    flex: 0 0 var(--tray-w); width: var(--tray-w); --tray-w: 264px;
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent;
+    background: var(--panel); border-left: 1px solid var(--line-acc);
   }
-  details.tray > summary::-webkit-details-marker { display: none; }
-  details.tray > summary:hover, details.tray[open] > summary { opacity: 1; border-color: var(--border-strong); }
-  .tray-panel {
-    position: absolute; right: 0; bottom: calc(100% + 8px);
-    width: min(660px, calc(100vw - 28px)); max-height: 72vh; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 10px;
-    background: var(--panel); border: 1px solid var(--line-acc); border-radius: var(--radius-lg);
-    padding: 12px 14px; box-shadow: var(--shadow-pop);
-    overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent;
-  }
-  .tray-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tray-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+  .tray-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tray-row + .tray-row { border-top: 1px solid var(--grid); padding-top: 10px; }
   .tray-label {
-    flex: 0 0 6.5em; color: var(--ink-dim); font-size: 11px; font-weight: 600;
+    flex: 0 0 100%; color: var(--ink-dim); font-size: 11px; font-weight: 600;
     letter-spacing: .07em; text-transform: uppercase;
   }
   /* a dropdown in the tray opens inline, on a row of its own, instead of
-     floating: floating from the bottom of the window it would open offscreen */
+     floating over the stage beside it */
   .tray-row details.dropdown[open] { flex-basis: 100%; }
   .tray-panel .dropdown-panel {
     position: static; margin-top: 8px; min-width: 0; box-shadow: none;
     background: transparent;
   }
+  .tray-panel .dropdown-panel { padding: 0; border: 0; }
   .tray-panel .sections-panel { min-width: 0; }
+  /* a section's row is two lines in the slim tray: its bars and name, then
+     its buttons */
+  .tray-panel .section-row { flex-wrap: wrap; }
+  .tray-panel .section-name { flex-basis: 0; }
+  .tray-panel .section-keys { margin-left: auto; }
+  .tray-panel select { max-width: 100%; }
+  .tray-panel .toggle { max-width: 100%; }
+  .tray-panel .mic-field { grid-template-columns: 5.5em 1fr; }
+
+  /* the sync row: where saved sections live, and the key that carries them */
+  .sync-status { flex: 1 1 100%; color: var(--ink-dim); font-size: 12px; }
+  .sync-panel { display: grid; gap: 8px; }
+  .sync-hint { margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
+  .sync-field { display: flex; gap: 6px; }
+  .sync-field input {
+    flex: 1; min-width: 0; font: 12px/18px var(--font-mono); color: var(--ink);
+    min-height: var(--control-h); background: var(--control); border: 1px solid var(--line-acc);
+    border-radius: var(--radius); padding: 6px 8px;
+  }
+  .sync-field input:focus { outline: none; border-color: var(--note); }
 
   /* the microphone: a readout beside the toggle, settings behind it ------ */
   .mic-readout { color: var(--ink-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -574,8 +585,8 @@
 <!-- The top row holds only what is used while reading: play/pause, where
      you are (the scrubber), which bars (the range, and whether to loop
      them), and the step buttons. Every
-     other control lives in the tray at the window's bottom right, so the
-     stage keeps the height for the music. -->
+     other control lives in the tray down the right of the stage, so the
+     header stays one row and the stage keeps the height for the music. -->
 <div class="controls">
   <!-- One button that says what it will do: play when paused, pause when
        playing. main.ts sets data-playing from the clock every frame, and
@@ -667,6 +678,7 @@
   </div>
 </div>
 
+<div class="main">
 <div id="stage">
   <svg id="backdrop" preserveAspectRatio="xMidYMin slice" aria-hidden="true" hidden></svg>
   <svg id="staff" preserveAspectRatio="none"></svg>
@@ -694,15 +706,14 @@
   </div>
 </div>
 
-<!-- The tray: every control not needed while reading, folded behind one
-     indicator in the window's bottom-right corner. It opens upward over
-     the stage and stays open until toggled or Escape, so a setting can
-     be changed while watching its effect. Its dropdowns open inline,
-     inside it, rather than floating off the edge of the window. It sits
-     OUTSIDE #stage on purpose: the stage restates every colour token for
-     paper, and the tray is page chrome, which keeps the chrome's colours. -->
-<details id="tray" class="tray">
-  <summary title="Score, sections, devices and view settings (Esc closes)">Controls</summary>
+<!-- The tray: every control not needed while reading, in a slim column
+     down the right of the stage, always open, so a setting can be changed
+     while watching its effect. Its dropdowns open inline, inside it. It
+     sits OUTSIDE #stage on purpose: the stage restates every colour token
+     for paper, and the tray is page chrome, which keeps the chrome's
+     colours. -->
+<aside id="tray" class="tray" aria-label="Controls">
+
   <div class="tray-panel">
     <div class="tray-row">
       <span class="tray-label">score</span>
@@ -727,6 +738,27 @@
           </div>
           <ul class="sections-list"></ul>
           <p class="sections-empty"></p>
+        </div>
+      </details>
+    </div>
+    <!-- Where saved sections live: the sections server, under this
+         browser's key, which carries them to another browser. sync-row.ts
+         fills and runs the row. -->
+    <div class="tray-row" id="sync-row">
+      <span class="tray-label">sync</span>
+      <span class="sync-status"></span>
+      <details class="dropdown sync-key">
+        <summary title="Use your sections in another browser">Sync key</summary>
+        <div class="dropdown-panel sync-panel">
+          <p class="sync-hint">Your sections are saved under this key. Paste it into another browser to see them there.</p>
+          <div class="sync-field">
+            <input class="sync-key-own" type="text" readonly spellcheck="false" aria-label="This browser's sync key">
+            <button class="sync-copy">Copy</button>
+          </div>
+          <div class="sync-field">
+            <input class="sync-key-other" type="text" spellcheck="false" placeholder="Paste a key…" aria-label="A sync key from another browser">
+            <button class="sync-use" disabled title="Show that key's sections here instead">Use</button>
+          </div>
         </div>
       </details>
     </div>
@@ -930,7 +962,8 @@
         by Spotify (Apache&nbsp;2.0)</span>
     </div>
   </div>
-</details>
+</aside>
+</div>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

@@ -44,7 +44,10 @@ import { PracticeState } from "./practice-state";
 import { StepModel, type HandFilter, type Step } from "./steps";
 import { Loop, type Edge } from "./loop";
 import { Sections, describeBars, type Section } from "./sections";
-import { localSectionStore } from "./section-store";
+import { cloudSectionStore, localSectionStore, storedPendingSet, type SectionStore } from "./section-store";
+import { sectionsApi } from "./sections-api";
+import { storedIdentity } from "./identity";
+import { mountSyncRow } from "./sync-row";
 import { mountSectionsPanel } from "./sections-panel";
 import { mountSectionChips } from "./section-chips";
 import { Backchain } from "./backchain";
@@ -187,6 +190,7 @@ function loadScore(s: Score, key: string, label?: string, analysis: Chart | null
   // a bar selection is a stretch of ONE score
   selection = null;
   looping = false;
+  sectionKey = key;
   sectionsPanel.setScore(key, score.bars.length);
   clock.seek(0);
   clock.pause();
@@ -573,6 +577,16 @@ const markBar = (edge: Edge): void =>
 const markStep = (edge: Edge): void =>
   selectBars(Loop.withEdge(score, selection, edge, Loop.stepEdge(score, steps, markAt(), edge)));
 
+/** Escape: no bars selected, no loop, a running chain stopped, and the
+ *  playhead (or the lesson's cursor) at the top of the piece. */
+function deselect(): void {
+  chain = null;
+  looping = false;
+  selectBars(null, false);
+  seekTo(0);
+  if (view !== Practice) $("status").textContent = "Whole piece · playhead at the start";
+}
+
 barFrom.addEventListener("change", readBarInputs);
 barTo.addEventListener("change", readBarInputs);
 $("bar-all").addEventListener("click", () => selectBars(null, false));
@@ -680,7 +694,7 @@ function stopChain(): void {
 const chainBar = mountChainBar($("chain"), { onStart: startChain, onStop: stopChain, onGo: goLink });
 
 // --- saved sections -------------------------------------------------
-// A score broken into named runs of bars, kept per score in localStorage.
+// A score broken into named runs of bars, kept per score (below: where).
 // Loading one IS selecting its bars, so it loops here and confines a lesson
 // in practice mode by the same path as every other bar control — and the
 // hand being practised is left exactly as it was.
@@ -725,7 +739,36 @@ const sectionChips = mountSectionChips($("section-bar"), {
     syncMarks();
   },
 });
-const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), localSectionStore(), {
+
+// Where sections are kept (section-store.ts): the sections server named at
+// build time (api/; `npm run dev` there serves it on :8787), with this
+// browser as its cache — or this browser alone when no server is named.
+const sectionsServer: string =
+  import.meta.env.VITE_SECTIONS_API ?? (import.meta.env.DEV ? "http://localhost:8787" : "");
+const identity = sectionsServer ? storedIdentity() : null;
+const sectionCache = localSectionStore();
+const cloudStore = identity && cloudSectionStore({
+  cache: sectionCache,
+  remote: sectionsApi(sectionsServer, identity.key),
+  pending: storedPendingSet(),
+  uploadCache: identity.fresh,
+  onStatus: (st) => syncRow.setStatus(st),
+});
+const sectionStore: SectionStore = cloudStore ?? sectionCache;
+/** The loaded score's key for its sections, so a new account can reload them. */
+let sectionKey: string | null = null;
+const syncRow = mountSyncRow($("sync-row"), {
+  cloud: identity !== null,
+  key: () => identity?.key() ?? "",
+  onAdopt(k) {
+    identity!.adopt(k);
+    cloudStore!.reset();
+    sectionsPanel.setScore(sectionKey, score.bars.length);
+  },
+});
+void cloudStore?.flush();
+
+const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), sectionStore, {
   onLoad: loadSection,
   onIsolate: isolate,
   onChange(list) {
@@ -751,7 +794,6 @@ const isolated = (): boolean => view === IsolatedKeys;
 /** Loop the section's bars on the keyboard they are played on. */
 function isolate(s: Section): void {
   AudioOut.ensure();
-  tray.open = false;
   // taken on the way in only: a chip moving the keys to another section
   // keeps the view they were popped up from
   if (!isolated()) {
@@ -1288,7 +1330,6 @@ function setExpanded(on: boolean): void {
   expandBtn.title = on ? "Back to the controls (Esc)" : "Give the piano roll the whole screen · pinch to zoom the keys";
   rollPlay.hidden = !on;
   if (on) {
-    tray.open = false;
     // not every browser will (an iPhone's will not): the page fills the
     // window without it, which is most of the screen anyway
     const root = document.documentElement;
@@ -1383,11 +1424,6 @@ const isTyping = (el: EventTarget | null): boolean => {
   return t.tagName === "SELECT" || t.tagName === "TEXTAREA";
 };
 
-// The tray folds every control not needed while reading behind one corner
-// indicator. Escape closes it from anywhere — including from a control in
-// it, whose focus would otherwise be left inside a closed panel.
-const tray = $<HTMLDetailsElement>("tray");
-
 window.addEventListener("keydown", (e) => {
   // While barlines are being tapped the keyboard does that and nothing
   // else: a stray chord key would sound over the recording being heard.
@@ -1398,12 +1434,6 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     return;
   }
-  if (e.key === "Escape" && tray.open) {
-    tray.open = false;
-    tray.querySelector("summary")!.focus();
-    e.preventDefault();
-    return;
-  }
   if (e.key === "Escape" && expanded()) {
     setExpanded(false);
     e.preventDefault();
@@ -1411,6 +1441,15 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && isolated()) {
     leaveIsolation();
+    e.preventDefault();
+    return;
+  }
+  // Escape lets go of the selected bars — from a bar box too, the one place
+  // they are typed — and the playhead goes back to the top of the piece.
+  if (e.key === "Escape" && (selection !== null || chain !== null)
+    && (!isTyping(e.target) || e.target === barFrom || e.target === barTo)) {
+    (e.target as HTMLElement).blur?.();
+    deselect();
     e.preventDefault();
     return;
   }

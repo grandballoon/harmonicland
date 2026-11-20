@@ -158,4 +158,24 @@ describe("the sections panel", () => {
     panel.setScore(null, 0);
     expect(changes.at(-1)).toEqual([]);
   });
+
+  it("swaps in a newer list from the server when it arrives — for the score still loaded", async () => {
+    let answer!: (list: readonly Section[] | null) => void;
+    store = { ...memorySectionStore(), refresh: () => new Promise((r) => (answer = r)) };
+    document.body.innerHTML = new DOMParser().parseFromString(page, "text/html").getElementById("sections")!.outerHTML;
+    root = document.getElementById("sections") as HTMLDetailsElement;
+    panel = mountSectionsPanel(root, store, { onLoad: () => {}, onIsolate: () => {}, onChange: (l) => changes.push(l) });
+
+    panel.setScore("file:a", 8);
+    const forA = answer;
+    panel.setScore("file:b", 8);
+    forA(add([], { from: 0, to: 0 }, "stale")); // file:a's answer, too late
+    await Promise.resolve();
+    expect(rows()).toHaveLength(0);
+
+    answer(add([], { from: 2, to: 3 }, "Fresh"));
+    await Promise.resolve();
+    expect(rows().map((r) => r.querySelector<HTMLInputElement>(".section-name")!.value)).toEqual(["Fresh"]);
+    expect(changes.at(-1)!.map((s) => s.name)).toEqual(["Fresh"]);
+  });
 });

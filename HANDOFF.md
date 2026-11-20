@@ -37,7 +37,10 @@ src/
                     (pure, tested), Basic Pitch adapter, capture worklet, worker
   loop.ts           where loop edges sit and where a step lands (pure)
   sections.ts       saved sections: named bar ranges per score (pure)
-  section-store.ts  sections in localStorage, keyed by score content
+  section-store.ts  where sections are kept: the sections server, cached in localStorage
+  sections-api.ts   the sections server's client (the server is api/)
+  identity.ts       the account sections belong to: an anonymous key, for now
+  sync-row.ts       the tray's sync row: whether the server has every edit, and the key
   sections-panel.ts the Sections dropdown (owns its DOM; hands back a range)
   section-chips.ts  the header's section chips + the switch that marks sections
                     on the sheet music (range-marks.ts, decision 4)
@@ -52,6 +55,7 @@ src/
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module
+api/                the sections server: a Cloudflare Worker over D1 (its README has setup)
 ```
 
 `types.ts` imports nothing and is imported by everyone — that dependency shape
@@ -174,7 +178,17 @@ While it shows, the tray is hidden (`body[data-isolated]`), so the header is the
 Its keys light by hand, following the practice hand (read from the practice snapshot, which carries it with no lesson running): the chosen hand in gold, the other in its dim hand colour or not at all with "show other" off, and hands together each in its own colour, so one hand's run is not lost among the other's chords.
 The tray is hidden, so the header shows a Both / R / L toggle while isolated; it and the tray's practice-hand select are one setting (`chooseHand` in `main.ts`).
 The keyboard is `PianoRoll`'s own, handed a `KeySpan` (`pitch.ts`): a span of the keyboard is the same keyboard enlarged, its keys standing taller in proportion to how few share the width, and the region `keyboardRegion` returns carries the span so `pitchAt` hears the key drawn under the pointer.
-Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
+Sections are stored per score, keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
+They live on the sections server (`api/`, a Cloudflare Worker over D1; its README has setup), with localStorage as a cache that answers first and holds edits the server has not got yet (`section-store.ts` states the rules).
+The server is named at build time by `VITE_SECTIONS_API` (the dev server defaults to `http://localhost:8787`); a build that names none keeps sections in the browser only.
+Each browser mints an anonymous key on first visit (`identity.ts`), sent as a bearer token; the server stores only its hash as the user id.
+The tray's sync row shows the key, to paste into another browser, which carries the account there.
+This is the seam a real sign-in replaces: only the credential changes.
+
+**Escape** lets go of the selected bars (and stops a backchain): no selection, no loop, and the playhead or lesson cursor back at the start of the piece.
+It does so after the earlier claims on Escape — finishing a barline tap, leaving the expanded roll, leaving the isolated keys — have been met.
+
+**The tray** is a slim column down the right of the stage, under the header, always open; its rows stack each label over its controls.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with
 Tone.js `Transport` (or the WebAudio clock) later without touching anything.

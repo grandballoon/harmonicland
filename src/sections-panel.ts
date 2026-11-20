@@ -22,6 +22,10 @@
    over the selection on the sheet music (selection-tip.ts) — comes through
    save and rename here, by the same rules as the Save button and a row's
    name box.
+
+   The store answers at once from this browser, and may later hand back a
+   newer list from the server (section-store.ts, decision 1); the panel
+   shows the first and swaps in the second.
    ==================================================================== */
 import { Sections, type Section } from "./sections";
 import type { SectionStore } from "./section-store";
@@ -67,6 +71,9 @@ export function mountSectionsPanel(
   let bars = 0;
   let selection: BarRange | null = null;
   let list: readonly Section[] = [];
+  /** Which setScore a refresh answers, so a late one for an earlier score
+   *  is dropped. */
+  let loads = 0;
 
   const commit = (next: readonly Section[]): void => {
     list = next;
@@ -204,6 +211,16 @@ export function mountSectionsPanel(
       list = k === null ? [] : store.load(k);
       render();
       onChange(list);
+      // what this browser knew is on screen; a newer list from the
+      // server, if there is one, replaces it when it arrives
+      const at = ++loads;
+      if (k !== null)
+        void store.refresh(k).then((fresh) => {
+          if (fresh === null || at !== loads) return;
+          list = fresh;
+          render();
+          onChange(list);
+        });
     },
     setSelection(r) {
       selection = r;

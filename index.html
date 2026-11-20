@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#161b22">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1116'/%3E%3Cellipse cx='12.5' cy='22' rx='5' ry='3.6' transform='rotate(-20 12.5 22)' fill='%23ffd24a'/%3E%3Cpath d='M17 21V7' stroke='%23ffd24a' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <title>Notation Animator</title>
 
 <style>
@@ -27,6 +30,8 @@
     --key-white: #cdd7e2;   /* piano-roll white keys (cool off-white)  */
     --key-black: #11161d;   /* piano-roll black keys                   */
     --key-press: #46d39a;   /* a key you're HOLDING (cool green)       */
+    --echo:      #e879f9;   /* a key an interval echo sounds (orchid)  */
+    --echo-ink:  #1f0824;   /* ...and the interval written on it       */
     --key-mute-white:#5d6773; /* keys beside a passage, greyed: context  */
     --key-mute-black:#2a313b;
     --hand-r:    #4ac1ff;   /* hand coloring: upper staff / right hand */
@@ -48,6 +53,21 @@
     --desk:      #080a0e;   /* behind the sheets of the whole score    */
     --grip:      #6b7785;   /* the isolated range's drag handles       */
     --mark:      rgba(127, 216, 176, .09); /* a saved section's bars: a wash of the loop's mint */
+
+    /* the chrome's own furniture: the controls, and what pops over them */
+    --control:        #1d242e; /* a button's or field's face              */
+    --control-hover:  #232c38;
+    --control-active: #192029;
+    --border-strong:  #46566a; /* a hovered control's edge                */
+    --note-hover:     #6f8fff; /* the primary button, hovered             */
+    --on-note:        #0b1020; /* ink on the primary button               */
+    --control-h:      32px;    /* every control in a row stands this tall */
+    --radius:         6px;
+    --radius-lg:      10px;    /* panels and popovers                     */
+    --shadow-pop:     0 10px 30px rgba(0,0,0,.55);
+    --font-ui:   system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+    color-scheme: dark; /* native popups, spinners and scrollbars match */
   }
 
   /* ---- paper: the light scheme ----------------------------------------
@@ -74,6 +94,8 @@
     --key-white: #fffefa;
     --key-black: #1c1b19;
     --key-press: #1e9563;
+    --echo:      #b62fc0;
+    --echo-ink:  #ffffff;
     --key-mute-white:#d8d2c4;
     --key-mute-black:#8a857b;
     --hand-r:    #1f6fd1;
@@ -95,15 +117,26 @@
     --desk:      #e4ddcd;
     --grip:      #a8946a;   /* the panel's own warm, deepened           */
     --mark:      rgba(30, 149, 99, .09);
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
+  /* hidden means hidden, whatever display a control's own rule gives it */
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; }
+  /* The chrome reads in the system's own face; figures stay tabular so
+     times and bar numbers don't jitter as they change. Monospace is kept
+     for data that is read as code: the times and the gamepad's buttons. */
   body {
     background: var(--bg);
     color: var(--ink);
-    font: 14px/1.5 ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+    font: 14px/1.45 var(--font-ui);
+    font-variant-numeric: tabular-nums;
     display: flex; flex-direction: column;
     -webkit-font-smoothing: antialiased;
+    accent-color: var(--note);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
   }
 
   /* controls ---------------------------------------------------------- */
@@ -113,24 +146,40 @@
     border-bottom: 1px solid var(--line-acc);
     background: var(--panel);
   }
+  /* Every control shares one face and one height, so a row of buttons,
+     fields and menus lines up without per-control padding sums. */
   button, label.file, select, input[type=number], details.dropdown > summary {
-    font: inherit; color: var(--ink);
-    background: #1d242e; border: 1px solid var(--line-acc);
-    padding: 7px 13px; border-radius: 6px; cursor: pointer;
-    transition: border-color .12s, background .12s;
+    font: inherit; font-size: 13px; line-height: 18px; color: var(--ink);
+    min-height: var(--control-h);
+    background: var(--control); border: 1px solid var(--line-acc);
+    padding: 6px 12px; border-radius: var(--radius); cursor: pointer;
+    transition: border-color .12s, background-color .12s, color .12s;
   }
-  button:hover, label.file:hover, select:hover, input[type=number]:hover, details.dropdown > summary:hover { border-color: #46566a; }
-  button:focus-visible, label.file:focus-within, select:focus-visible, input[type=number]:focus-visible, details.dropdown > summary:focus-visible {
-    outline: 2px solid var(--note); outline-offset: 1px;
+  button, label.file, details.dropdown > summary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  button:hover:not(:disabled), label.file:hover, select:hover:not(:disabled),
+  input[type=number]:hover:not(:disabled), details.dropdown > summary:hover {
+    border-color: var(--border-strong); background-color: var(--control-hover);
+  }
+  button:active:not(:disabled), label.file:active, details.dropdown > summary:active { background-color: var(--control-active); }
+  /* one focus ring for everything that takes the keyboard */
+  :focus-visible { outline: 2px solid var(--note); outline-offset: 2px; }
+  input[type=checkbox] { width: 14px; height: 14px; margin: 0; cursor: pointer; }
+  /* menus: the native control, with its arrow redrawn to match the chrome */
+  select {
+    -webkit-appearance: none; appearance: none;
+    padding-right: 30px; text-overflow: ellipsis;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5' fill='none' stroke='%236b7785' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; background-size: 16px;
   }
   /* the bar-range inputs: two short numbers that read as one control */
-  input[type=number] { width: 4.6em; padding: 6px 8px; cursor: text; font-variant-numeric: tabular-nums; }
+  input[type=number] { width: 4.6em; padding: 6px 8px; cursor: text; }
   .bar-range .dash { color: var(--ink-dim); }
   /* a trimmed edge's beat, hugging its bar box: "3·2" is bar 3, beat 2 */
   .bar-range .bar-beat { margin-left: -3px; color: var(--loop); font-variant-numeric: tabular-nums; }
   /* the step buttons: a pair, so they sit tighter than the rest */
   .step-pair { display: inline-flex; gap: 4px; }
-  .step-pair button { padding-left: 11px; padding-right: 11px; }
   /* the backchain switch, lit in the loop's colour while a chain runs, and
      beside it which link is looping, between one shorter and one longer */
   .chain { display: inline-flex; align-items: center; gap: 4px; }
@@ -145,34 +194,47 @@
   details.dropdown { position: relative; }
   details.dropdown > summary { list-style: none; user-select: none; white-space: nowrap; }
   details.dropdown > summary::-webkit-details-marker { display: none; }
-  details.dropdown > summary::before { content: "▸ "; color: var(--ink-dim); }
-  details.dropdown[open] > summary::before { content: "▾ "; }
+  /* A disclosure's chevron trails its label and turns when it opens. Drawn
+     as a mask over currentColor, so it takes whatever colour the summary is.
+     --chevron-turn says which way it points shut; open adds a half turn. */
+  details.dropdown > summary::after {
+    content: ""; flex: none; width: 12px; height: 12px; margin-right: -3px;
+    background: var(--ink-dim);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    transform: rotate(var(--chevron-turn, 0deg)); transition: transform .15s;
+  }
+  details.dropdown[open] > summary::after {
+    transform: rotate(calc(var(--chevron-turn, 0deg) + 180deg));
+  }
 
   .dropdown-panel {
     position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
     background: var(--panel); border: 1px solid var(--line-acc);
-    border-radius: 8px; padding: 10px 14px; min-width: 300px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.55);
+    border-radius: var(--radius-lg); padding: 10px 14px; min-width: 300px;
+    box-shadow: var(--shadow-pop);
   }
 
   /* saved sections: one row per named run of bars ------------------------ */
-  .sections-count:not(:empty) { margin-left: 6px; color: var(--loop); font-variant-numeric: tabular-nums; }
+  .sections-count { color: var(--loop); }
+  .sections-count:empty { display: none; }
   .sections-panel { min-width: 360px; display: flex; flex-direction: column; gap: 10px; }
   .sections-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .sections-actions .toggle { gap: 6px; }
   .sections-actions input[type=number] { width: 3.6em; }
-  .sections-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+  .sections-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent; }
   .section-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
   .section-row + .section-row { border-top: 1px solid var(--grid); }
-  .section-load { min-width: 8.5em; padding: 5px 10px; text-align: left; font-variant-numeric: tabular-nums; }
+  .section-load { min-width: 8.5em; padding: 5px 10px; justify-content: flex-start; }
   .section-row.current .section-load { color: var(--loop); border-color: var(--loop); }
   .section-name {
     flex: 1; min-width: 0; font: inherit; color: var(--ink);
-    background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px 8px;
+    height: var(--control-h); background: transparent; border: 1px solid transparent;
+    border-radius: var(--radius); padding: 5px 8px;
   }
   .section-name::placeholder { color: var(--ink-dim); }
   .section-name:hover { border-color: var(--line-acc); }
-  .section-name:focus { outline: none; border-color: var(--note); background: #1d242e; }
+  .section-name:focus { outline: none; border-color: var(--note); background: var(--control); }
   .section-keys, .section-use { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
   .section-keys:hover { color: var(--note-lit); border-color: var(--note-lit); }
   .section-use:not(:disabled):hover { color: var(--loop); border-color: var(--loop); }
@@ -183,7 +245,7 @@
   .gamepad-panel tr + tr > td { border-top: 1px solid var(--grid); }
   .gamepad-panel td { padding: 4px 8px; font-size: 12px; vertical-align: middle; }
   .gamepad-panel .btn {
-    color: var(--note-lit); font-weight: 700; white-space: nowrap;
+    color: var(--note-lit); font: 700 12px/1.4 var(--font-mono); white-space: nowrap;
     min-width: 36px; letter-spacing: .03em;
   }
   .gamepad-panel .desc { color: var(--ink); }
@@ -193,8 +255,9 @@
   }
   .gamepad-panel tr:first-child.section-head td { padding-top: 2px; }
   button:disabled, input[type=number]:disabled { opacity: .4; cursor: default; }
-  button.primary { background: var(--note); border-color: var(--note); color: #0b1020; font-weight: 600; }
-  button.primary:hover { background: #6f8fff; }
+  button.primary { background: var(--note); border-color: var(--note); color: var(--on-note); font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--note-hover); border-color: var(--note-hover); }
+  button.primary:active:not(:disabled) { background: var(--note); }
   label.file input { display: none; }
 
   .scrub-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; }
@@ -222,21 +285,37 @@
   }
   .scrub-track.looping .loop-band { display: block; }
 
+  /* Sliders: a hairline track and a round thumb. The settings' sliders draw
+     their own track; the scrubber's is transparent, since .scrub-track
+     draws it (and the loop band) underneath. */
   input[type=range] {
+    --thumb-fill: var(--note);
     -webkit-appearance: none; appearance: none;
-    position: relative; z-index: 1;
-    flex: 1; margin: 0; height: 4px; background: transparent;
+    margin: 0; height: 4px; border-radius: 4px; background: var(--grid);
     cursor: pointer;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: var(--thumb); height: var(--thumb); border-radius: 50%;
-    background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
+    -webkit-appearance: none; width: var(--thumb, 14px); height: var(--thumb, 14px); border-radius: 50%;
+    background: var(--thumb-fill); border: 2px solid var(--bg); cursor: pointer;
+    transition: box-shadow .12s;
   }
   input[type=range]::-moz-range-thumb {
-    width: var(--thumb); height: var(--thumb); border-radius: 50%; box-sizing: border-box;
-    background: var(--playhead); border: 2px solid #0e1116; cursor: pointer;
+    width: var(--thumb, 14px); height: var(--thumb, 14px); border-radius: 50%; box-sizing: border-box;
+    background: var(--thumb-fill); border: 2px solid var(--bg); cursor: pointer;
+    transition: box-shadow .12s;
   }
   input[type=range]::-moz-range-track { background: transparent; }
+  /* focus rings the thumb, not the whole track */
+  input[type=range]:focus-visible { outline: none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--note); }
+  input[type=range]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--note); }
+  input[type=range]:disabled { cursor: default; }
+  #scrub {
+    --thumb-fill: var(--playhead);
+    position: relative; z-index: 1; flex: 1; background: transparent;
+  }
+  #scrub:disabled::-webkit-slider-thumb { background: var(--ink-dim); }
+  #scrub:disabled::-moz-range-thumb { background: var(--ink-dim); }
 
   /* A loop edge is a small flag above the track with a hairline down
      through it: the flag is the handle, the hairline marks the instant.
@@ -277,6 +356,11 @@
   .hand-pick button[data-hand="lower"][aria-pressed="true"] { color: var(--hand-l); border-color: var(--hand-l); }
   /* ...and while it is, the keys are the only thing below the header */
   body[data-isolated] #tray { display: none; }
+  /* ...but for the view they were popped up from, faded behind them: a
+     copy of the stage as it stood (main.ts, isolate), there to keep the
+     place in the piece in sight, not to be read or touched */
+  #backdrop { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .18; pointer-events: none; }
+  #backdrop[hidden] { display: none; }
 
   /* the saved sections, in the header's top right: the switch that marks
      them on the sheet music, then one chip each, scrolling sideways when
@@ -290,12 +374,12 @@
     display: flex; gap: 4px; min-width: 0; overflow-x: auto;
     scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent;
   }
-  .section-bar button { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  .section-bar button { flex: 0 0 auto; min-height: 26px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
   .section-chip { color: var(--ink-dim); }
   .section-chip[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
   .marks-toggle { color: var(--ink-dim); }
   .marks-toggle::before {
-    content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 0;
+    content: ""; width: 8px; height: 8px;
     border-radius: 2px; background: var(--loop); opacity: .35;
   }
   .marks-toggle[aria-pressed="true"] { color: var(--ink); }
@@ -310,18 +394,34 @@
   .time {
     position: absolute; left: 0; right: 0; top: calc(50% + 8px);
     display: flex; justify-content: space-between; pointer-events: none;
-    color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 10px; line-height: 12px;
+    color: var(--ink-dim); font: 10px/12px var(--font-mono);
   }
 
   /* icon buttons: a 16px glyph inside the text buttons' own line box, so
      they stand exactly as tall as their neighbours */
-  button.icon-btn { padding-left: 10px; padding-right: 10px; }
-  button.icon-btn svg { width: 16px; height: 16px; vertical-align: -3px; }
+  button.icon-btn { padding-left: 9px; padding-right: 9px; }
+  button.icon-btn svg { flex: none; width: 16px; height: 16px; }
   #play[data-playing="true"] .i-play, #play[data-playing="false"] .i-pause { display: none; }
+  /* pressed before the piano's samples are in: a ring fills round the
+     button as they load, and playback starts when it closes (main.ts) */
+  #play { position: relative; }
+  #play[data-loading]::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 10px; padding: 2px;
+    background: conic-gradient(var(--note) calc(var(--load, 0) * 1turn), var(--grid) 0);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+  }
 
   /* stage ------------------------------------------------------------- */
-  #stage { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
-  #staff { width: 100%; height: 100%; display: block; touch-action: none; }
+  /* below the header: the stage, and the tray beside it on the right */
+  .main { flex: 1; min-height: 0; display: flex; }
+  #stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: var(--bg); }
+  #staff { position: relative; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* on a coloration wheel the pointer is the selector (main.ts, the dial):
+     a dot, its rim darker than its middle, so it shows on either field */
+  #staff[data-dial] {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='8' cy='8' r='5.5' fill='%23f4efe4' stroke='%230b1020' stroke-width='2'/%3E%3C/svg%3E") 8 8, crosshair;
+  }
   /* The music's scroller: transparent, laid over the whole score's sheets
      or the practice page's strip by main.ts. It holds nothing but a spacer
      as long as the music, so the browser gives it a real scrollbar, wheel,
@@ -344,7 +444,7 @@
     border: 5px solid transparent; border-top-color: var(--ink); border-bottom-width: 0;
   }
   .selection-tip button, .selection-tip input {
-    display: block; font: inherit; font-size: 12px; line-height: 16px; white-space: nowrap;
+    display: block; min-height: 0; font: inherit; font-size: 12px; line-height: 16px; white-space: nowrap;
     color: var(--bg); background: transparent; border: 0; border-radius: 4px; padding: 3px 8px;
   }
   .selection-tip button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
@@ -357,48 +457,79 @@
   .toggle .hand-r { color: var(--hand-r); font-weight: 600; }
   .toggle .hand-l { color: var(--hand-l); font-weight: 600; }
 
+  /* The piano roll's own tools, in the stage's top-right corner: all 88
+     keys again once a pinch has zoomed in, and the switch that gives the
+     roll the whole screen. Quiet until pointed at, like the tray's
+     indicator, since they sit over the falling notes. */
+  .roll-tools {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    display: flex; gap: 6px;
+  }
+  .roll-tools button {
+    border-radius: 999px; padding-left: 9px; padding-right: 9px;
+    background: var(--panel); box-shadow: 0 4px 14px rgba(0,0,0,.2);
+    opacity: .72; transition: opacity .12s, border-color .12s;
+  }
+  .roll-tools button:hover, .roll-tools button:focus-visible { opacity: 1; }
+  #keys-all { padding-left: 12px; padding-right: 12px; font-size: 12px; }
+  #roll-play { color: var(--on-note); background: var(--note); border-color: var(--note); }
+  #roll-play[data-playing="true"] .i-play, #roll-play[data-playing="false"] .i-pause { display: none; }
+  #expand[aria-pressed="true"] .i-expand, #expand[aria-pressed="false"] .i-collapse { display: none; }
+  /* Expanded, the roll is the page: no header, no tray. The tools above
+     still play, pause and bring them back (Esc does too). */
+  body[data-expanded] .controls, body[data-expanded] #tray { display: none; }
+
   /* the status shares the top row with the scrubber: one line, clipped */
   .status {
     color: var(--ink-dim); font-size: 12px;
     flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* the tray: an indicator in the window's bottom-right corner, over a
-     panel that opens upward. Everything in it keeps its own styling. ------ */
-  details.tray { position: fixed; right: 14px; bottom: 14px; z-index: 30; }
-  details.tray > summary {
-    list-style: none; user-select: none; cursor: pointer;
-    font: inherit; font-size: 12px; color: var(--ink);
-    background: var(--panel); border: 1px solid var(--line-acc); border-radius: 999px;
-    padding: 6px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
-    opacity: .82; transition: opacity .12s, border-color .12s;
+  /* the tray: a slim column down the right of the stage, under the
+     header, always open. Its rows stack, each label over its controls, so
+     the column stays narrow. Everything in it keeps its own styling. ------ */
+  .tray {
+    flex: 0 0 var(--tray-w); width: var(--tray-w); --tray-w: 264px;
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent;
+    background: var(--panel); border-left: 1px solid var(--line-acc);
   }
-  details.tray > summary::-webkit-details-marker { display: none; }
-  details.tray > summary::before { content: "▴ "; color: var(--ink-dim); }
-  details.tray[open] > summary::before { content: "▾ "; }
-  details.tray > summary:hover, details.tray[open] > summary { opacity: 1; border-color: #46566a; }
-  details.tray > summary:focus-visible { outline: 2px solid var(--note); outline-offset: 1px; }
-  .tray-panel {
-    position: absolute; right: 0; bottom: calc(100% + 8px);
-    width: min(660px, calc(100vw - 28px)); max-height: 72vh; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 10px;
-    background: var(--panel); border: 1px solid var(--line-acc); border-radius: 10px;
-    padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.55);
-  }
-  .tray-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tray-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+  .tray-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tray-row + .tray-row { border-top: 1px solid var(--grid); padding-top: 10px; }
   .tray-label {
-    flex: 0 0 5.5em; color: var(--ink-dim); font-size: 11px;
-    letter-spacing: .06em; text-transform: uppercase;
+    flex: 0 0 100%; color: var(--ink-dim); font-size: 11px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase;
   }
   /* a dropdown in the tray opens inline, on a row of its own, instead of
-     floating: floating from the bottom of the window it would open offscreen */
+     floating over the stage beside it */
   .tray-row details.dropdown[open] { flex-basis: 100%; }
   .tray-panel .dropdown-panel {
     position: static; margin-top: 8px; min-width: 0; box-shadow: none;
     background: transparent;
   }
+  .tray-panel .dropdown-panel { padding: 0; border: 0; }
   .tray-panel .sections-panel { min-width: 0; }
+  /* a section's row is two lines in the slim tray: its bars and name, then
+     its buttons */
+  .tray-panel .section-row { flex-wrap: wrap; }
+  .tray-panel .section-name { flex-basis: 0; }
+  .tray-panel .section-keys { margin-left: auto; }
+  .tray-panel select { max-width: 100%; }
+  .tray-panel .toggle { max-width: 100%; }
+  .tray-panel .mic-field { grid-template-columns: 5.5em 1fr; }
+
+  /* the sync row: where saved sections live, and the key that carries them */
+  .sync-status { flex: 1 1 100%; color: var(--ink-dim); font-size: 12px; }
+  .sync-panel { display: grid; gap: 8px; }
+  .sync-hint { margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
+  .sync-field { display: flex; gap: 6px; }
+  .sync-field input {
+    flex: 1; min-width: 0; font: 12px/18px var(--font-mono); color: var(--ink);
+    min-height: var(--control-h); background: var(--control); border: 1px solid var(--line-acc);
+    border-radius: var(--radius); padding: 6px 8px;
+  }
+  .sync-field input:focus { outline: none; border-color: var(--note); }
 
   /* the microphone: a readout beside the toggle, settings behind it ------ */
   .mic-readout { color: var(--ink-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -416,6 +547,28 @@
   .mic-floor { position: absolute; top: 0; bottom: 0; width: 2px; left: 0; background: var(--ink-dim); display: none; }
   .mic-meter.on .mic-floor { display: block; }
   .mic-hint { margin: 2px 0 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
+  /* the sound row: the output, and how late it is heard ---------------- */
+  .toggle .latency { width: 110px; margin: 0; accent-color: var(--note); }
+  .latency-ms { min-width: 4.5em; font-variant-numeric: tabular-nums; }
+  .output-hint { flex-basis: 100%; margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.45; }
+  .output-hint[hidden] { display: none; }
+  /* the recording row: the file's name, and how far it is aligned ------- */
+  .recording-name { max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .recording-readout { color: var(--ink-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .recording-name:empty, .recording-readout:empty { display: none; }
+  #recording-tap[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
+  /* the intervals row: a line of switches per direction, lit in the
+     colour the keys they echo are tinted ------------------------------- */
+  .interval-pick { flex: 1 1 0; min-width: 0; display: grid; gap: 8px; }
+  .interval-chips { display: grid; grid-template-columns: 1.1em repeat(12, minmax(0, 1fr)); gap: 4px; align-items: center; }
+  .interval-chips .interval-dir { color: var(--ink-dim); font-size: 13px; text-align: center; }
+  .interval-chips button {
+    min-height: 26px; padding: 2px 0; min-width: 0;
+    font: 600 11px/1 var(--font-mono); color: var(--ink-dim);
+  }
+  .interval-chips button[aria-pressed="true"] { color: var(--echo); border-color: var(--echo); }
+  .interval-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .interval-hint { color: var(--ink-dim); font-size: 12px; }
   .tray-credits { color: var(--ink-dim); font-size: 12px; }
   .tray-credits a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tray-credits a:hover { color: var(--ink); }
@@ -432,8 +585,8 @@
 <!-- The top row holds only what is used while reading: play/pause, where
      you are (the scrubber), which bars (the range, and whether to loop
      them), and the step buttons. Every
-     other control lives in the tray at the window's bottom right, so the
-     stage keeps the height for the music. -->
+     other control lives in the tray down the right of the stage, so the
+     header stays one row and the stage keeps the height for the music. -->
 <div class="controls">
   <!-- One button that says what it will do: play when paused, pause when
        playing. main.ts sets data-playing from the clock every frame, and
@@ -461,8 +614,8 @@
        from 0 and only main.ts adds the one. Empty means the whole piece.
        The flags on the scrub bar are the same selection, and so is a click
        on a bar of the practice page (shift-click extends). Loop switches
-       playback round the bars on and off; a lesson always goes round them,
-       so practice mode hides it. Sections, in the tray, saves the selected
+       playback round the bars on and off; a lesson goes round them either
+       way. Sections, in the tray, saves the selected
        bars under a name, per score, and loads them back into the same
        selection. -->
   <span class="practice-controls" id="bars-wrap">
@@ -479,8 +632,12 @@
       </button>
     </span>
     <span class="step-pair">
-      <button id="step-back" title="Back one step (←)" disabled>◀</button>
-      <button id="step-fwd" title="Forward one step (→)" disabled>▶</button>
+      <button id="step-back" class="icon-btn" title="Back one step (←)" aria-label="Back one step" disabled>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="step-fwd" class="icon-btn" title="Forward one step (→)" aria-label="Forward one step" disabled>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </span>
     <!-- Backchain the selected bars (backchain.ts): loop their last note,
          then the last two, and so on back to the first. ↑ and ↓ add a
@@ -506,7 +663,10 @@
     <button data-hand="upper" title="Right hand lit; the left dimmed">R</button>
     <button data-hand="lower" title="Left hand lit; the right dimmed">L</button>
   </span>
-  <button id="leave-keys" hidden title="Back to the full view (Esc)">✕ Keys only</button>
+  <button id="leave-keys" hidden title="Back to the full view (Esc)">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    Keys only
+  </button>
   <span class="status" id="status"></span>
   <!-- The loaded score's saved sections, a click away: section-chips.ts
        builds a chip per section from the tray's list, and hides the bar
@@ -518,7 +678,9 @@
   </div>
 </div>
 
+<div class="main">
 <div id="stage">
+  <svg id="backdrop" preserveAspectRatio="xMidYMin slice" aria-hidden="true" hidden></svg>
   <svg id="staff" preserveAspectRatio="none"></svg>
   <div id="score-scroll" hidden><div></div></div>
   <!-- Over the selected bars on the sheet music: save them as a section,
@@ -529,17 +691,29 @@
     <input class="selection-tip-name" type="text" placeholder="Name it… (Enter)" aria-label="Name for the section just saved" hidden>
     <button class="selection-tip-keys" type="button" title="Show only the keys these bars play" hidden>Keys only</button>
   </div>
+  <!-- The piano roll's tools (main.ts, the roll's zoom and expand): shown
+       only in that view. Pinch, or ctrl-scroll, zooms its keyboard. -->
+  <div class="roll-tools" id="roll-tools" hidden>
+    <button id="keys-all" title="Show all 88 keys again" hidden>88 keys</button>
+    <button id="roll-play" class="icon-btn" data-playing="false" aria-label="Play" title="Play" hidden>
+      <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9.5-5.5z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor"/></svg>
+    </button>
+    <button id="expand" class="icon-btn" aria-pressed="false" aria-label="Expand" title="Give the piano roll the whole screen · pinch to zoom the keys">
+      <svg class="i-expand" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="i-collapse" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
 </div>
 
-<!-- The tray: every control not needed while reading, folded behind one
-     indicator in the window's bottom-right corner. It opens upward over
-     the stage and stays open until toggled or Escape, so a setting can
-     be changed while watching its effect. Its dropdowns open inline,
-     inside it, rather than floating off the edge of the window. It sits
-     OUTSIDE #stage on purpose: the stage restates every colour token for
-     paper, and the tray is page chrome, which keeps the chrome's colours. -->
-<details id="tray" class="tray">
-  <summary title="Score, sections, devices and view settings (Esc closes)">Controls</summary>
+<!-- The tray: every control not needed while reading, in a slim column
+     down the right of the stage, always open, so a setting can be changed
+     while watching its effect. Its dropdowns open inline, inside it. It
+     sits OUTSIDE #stage on purpose: the stage restates every colour token
+     for paper, and the tray is page chrome, which keeps the chrome's
+     colours. -->
+<aside id="tray" class="tray" aria-label="Controls">
+
   <div class="tray-panel">
     <div class="tray-row">
       <span class="tray-label">score</span>
@@ -567,11 +741,31 @@
         </div>
       </details>
     </div>
+    <!-- Where saved sections live: the sections server, under this
+         browser's key, which carries them to another browser. sync-row.ts
+         fills and runs the row. -->
+    <div class="tray-row" id="sync-row">
+      <span class="tray-label">sync</span>
+      <span class="sync-status"></span>
+      <details class="dropdown sync-key">
+        <summary title="Use your sections in another browser">Sync key</summary>
+        <div class="dropdown-panel sync-panel">
+          <p class="sync-hint">Your sections are saved under this key. Paste it into another browser to see them there.</p>
+          <div class="sync-field">
+            <input class="sync-key-own" type="text" readonly spellcheck="false" aria-label="This browser's sync key">
+            <button class="sync-copy">Copy</button>
+          </div>
+          <div class="sync-field">
+            <input class="sync-key-other" type="text" spellcheck="false" placeholder="Paste a key…" aria-label="A sync key from another browser">
+            <button class="sync-use" disabled title="Show that key's sections here instead">Use</button>
+          </div>
+        </div>
+      </details>
+    </div>
     <div class="tray-row">
       <span class="tray-label">devices</span>
       <button id="midi">Enable MIDI</button>
       <button id="gamepad">Enable gamepad</button>
-      <button id="midiout">Enable MIDI out</button>
       <details id="gamepad-help-tonnetz" class="dropdown" style="display:none">
         <summary>Gamepad map</summary>
         <div class="dropdown-panel gamepad-panel">
@@ -622,6 +816,56 @@
           </table>
         </div>
       </details>
+    </div>
+    <!-- Where the music sounds: the built-in piano or one MIDI output port,
+         never both. The options are built by sound-row.ts from the
+         ports there are; this is only the frame they go in. -->
+    <div class="tray-row">
+      <span class="tray-label">sound</span>
+      <label class="toggle" title="Where the music sounds: the built-in piano, or a synth over MIDI">
+        <select id="output"></select>
+      </label>
+      <label class="toggle" title="How late this output is heard. Set it so the notes light up as you hear them">
+        delay <input type="range" id="latency" class="latency" min="0" max="300" step="5" value="0">
+        <output id="latency-ms" class="latency-ms">0 ms</output>
+      </label>
+      <label class="toggle" title="Play scores that have no dynamics with a little shape: strong beats lifted, the left hand under the right">
+        <input type="checkbox" id="shape" checked> shape plain scores
+      </label>
+      <p class="output-hint" id="output-hint" hidden>GarageBand on a Mac: turn on the IAC Driver in Audio MIDI Setup, open a software instrument track, then choose the IAC bus here.</p>
+    </div>
+    <!-- Ear training: the intervals each pressed key echoes, sounded and
+         named on the keys. interval-row.ts builds a switch per interval
+         per direction into the chips; this is only the frame. -->
+    <div class="tray-row">
+      <span class="tray-label">intervals</span>
+      <div class="interval-pick">
+        <div class="interval-chips" id="interval-chips"></div>
+        <div class="interval-tools">
+          <label class="toggle" title="Hear the intervals as one chord with the key, or one by one after it">
+            <select id="echo-timing">
+              <option value="together">With the key</option>
+              <option value="after">After the key</option>
+            </select>
+          </label>
+          <button id="echo-clear" title="Stop echoing intervals">None</button>
+          <span class="interval-hint">Press a key to hear and see the intervals chosen from it. Off in practice.</span>
+        </div>
+      </div>
+    </div>
+    <!-- A recording of the loaded score, to listen to instead of the
+         built-in piano, and the barlines tapped into it so the score
+         follows its timing. recording-row.ts fills and runs the row. -->
+    <div class="tray-row">
+      <span class="tray-label">recording</span>
+      <label class="file" tabindex="0" title="A sound file of this piece being played">
+        Load recording<input id="recording-file" type="file" accept="audio/*">
+      </label>
+      <span class="recording-name" id="recording-name"></span>
+      <button id="recording-tap" disabled title="Play the recording and tap T or Space on each barline, starting from the bar under the playhead (Esc when done)">Tap bars</button>
+      <button id="recording-clear" disabled title="Forget where this recording's barlines are">Clear bars</button>
+      <button id="recording-remove" hidden title="Go back to the score as written, without the recording">Remove</button>
+      <span class="recording-readout" id="recording-readout"></span>
     </div>
     <!-- A real instrument through a microphone. Rows and options that
          depend on the device are filled in by mic-panel.ts. -->
@@ -718,7 +962,8 @@
         by Spotify (Apache&nbsp;2.0)</span>
     </div>
   </div>
-</details>
+</aside>
+</div>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

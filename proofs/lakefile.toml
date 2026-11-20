@@ -1,0 +1,5 @@
+name = "harmonicland"
+defaultTargets = ["Harmonicland"]
+
+[[lean_lib]]
+name = "Harmonicland"

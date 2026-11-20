@@ -88,6 +88,8 @@ const live = (practice: PracticeSnapshot, sheetScroll = 0): LiveSnapshot => ({
   sheetScroll,
   selection: null,
   marks: [],
+  rollWindow: null,
+  echoes: [],
 });
 /** ...and the frame around it, for what reads the whole frame. The lesson
  *  carries its own score, so the frame's is inert. */

@@ -22,7 +22,12 @@ export function defaultSpelling(pitch: Pitch): Spelling {
 // seconds, as FENCE POSTS: the start of every bar plus the end of the last
 // one, each optionally carrying the meter and key that take effect there.
 // Empty (a source with no meter) makes one 4/4 bar of the whole piece.
-export function makeScore(rawNotes: readonly RawNote[], barlines: readonly Barline[] = []): Score {
+// `pedal` is where the sustain pedal is down, in any order; see Score.pedal.
+export function makeScore(
+  rawNotes: readonly RawNote[],
+  barlines: readonly Barline[] = [],
+  pedal: readonly TimeRange[] = [],
+): Score {
   // sort first, then number: the id IS the post-sort index, so it is stable,
   // unique, and dense. This is the only place a Note is constructed, which is
   // what lets every consumer diff on `id` instead of on object identity.
@@ -33,12 +38,35 @@ export function makeScore(rawNotes: readonly RawNote[], barlines: readonly Barli
       onset: n.onset,
       duration: n.duration,
       ...(n.hand !== undefined && { hand: n.hand }),
+      ...(n.velocity !== undefined && { velocity: n.velocity }),
       ...(n.stream !== undefined && { stream: n.stream }),
     }))
     .sort((a, b) => a.onset - b.onset)
     .map((n, i) => ({ id: i as NoteId, ...n }));
-  const duration = notes.reduce((m, n) => Math.max(m, n.onset + n.duration), 0);
-  return { notes, duration, bars: makeBars(barlines, duration) };
+  const lastKeyUp = notes.reduce((m, n) => Math.max(m, n.onset + n.duration), 0);
+  // a piece lasts until its sound is let go of: a final chord held by the
+  // pedal rings to where the pedal lifts (one never lifted, to the key-up)
+  const duration = pedal.reduce(
+    (m, r) => (r.start < lastKeyUp && Number.isFinite(r.end) ? Math.max(m, r.end) : m),
+    lastKeyUp,
+  );
+  return { notes, duration, bars: makeBars(barlines, duration), pedal: pedalWithin(pedal, duration) };
+}
+
+/** Pedal ranges clamped to the piece, sorted, the empty dropped and the
+ *  overlapping joined — but not the touching: see Score.pedal. */
+function pedalWithin(pedal: readonly TimeRange[], duration: number): TimeRange[] {
+  const out: TimeRange[] = [];
+  const sorted = pedal
+    .map((r) => ({ start: Math.max(0, r.start), end: Math.min(duration, r.end) }))
+    .filter((r) => r.end > r.start)
+    .sort((a, b) => a.start - b.start);
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    if (last && r.start < last.end) out[out.length - 1] = { start: last.start, end: Math.max(last.end, r.end) };
+    else out.push(r);
+  }
+  return out;
 }
 
 /** Fence posts -> bars. Three repairs, each for a real source:
@@ -188,6 +216,25 @@ export function activeAt(score: Score, t: number): Note[] {
   return score.notes.filter((n) => t >= n.onset && t < n.onset + n.duration);
 }
 
+/** The same score at other seconds: every instant in it — onsets, key-ups,
+ *  barlines, pedal changes, the end — moved through `f`. The notes keep
+ *  their ids and their order and the bars their meters, so everything that
+ *  speaks in notes or bars means what it did. `f` must take 0 to 0 and
+ *  never run backwards; where it is linear across each bar, a beat is
+ *  still an even share of its bar (timeOfBeat), as the engraver assumes.
+ *  How a score is put to the timing of a recording: see alignment.ts. */
+export function warp(score: Score, f: (t: number) => number): Score {
+  return {
+    notes: score.notes.map((n) => {
+      const onset = f(n.onset);
+      return { ...n, onset, duration: f(n.onset + n.duration) - onset };
+    }),
+    duration: f(score.duration),
+    bars: score.bars.map((b) => ({ ...b, start: f(b.start), end: f(b.end) })),
+    pedal: score.pedal.map((r) => ({ start: f(r.start), end: f(r.end) })),
+  };
+}
+
 export const Core = {
-  makeScore, activeAt, defaultSpelling, barAt, clampRange, normalizeRange, sameRange, timeOfBeat, beatOfTime, barTime,
+  makeScore, activeAt, defaultSpelling, barAt, clampRange, normalizeRange, sameRange, timeOfBeat, beatOfTime, barTime, warp,
 };

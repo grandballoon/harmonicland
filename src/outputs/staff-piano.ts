@@ -217,7 +217,7 @@ const stacked =
     const staff = `<g clip-path="url(#spTop)">${top}</g>`;
     const piano =
       `<g transform="translate(0,${topH})"><g clip-path="url(#spBand)">` +
-      `${PianoRoll.markup(W, band, score, t, { glowId: GLOW_ID, held: live.held, fall, hands })}</g></g>`;
+      `${PianoRoll.markup(W, band, score, t, { glowId: GLOW_ID, held: live.held, echoes: live.echoes, fall, hands })}</g></g>`;
     svg.innerHTML = defs + staff + piano;
   };
 
@@ -254,12 +254,14 @@ export const keysView: ViewModule = {
   keyboardRegion: (svg) => region(svg, keysBandH),
   tape: tape(keysBandH, true),
   scroller: scroller(keysBandH, true),
+  dial: () => null,
 };
 export const rollView: ViewModule = {
   render: stacked(rollBandH, true, false),
   keyboardRegion: (svg) => region(svg, rollBandH),
   tape: tape(rollBandH, false),
   scroller: scroller(rollBandH, false),
+  dial: () => null,
 };
 
 export const StaffPiano = {

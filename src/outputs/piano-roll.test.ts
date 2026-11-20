@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PianoRoll, KEYB } from "./piano-roll";
 import { keysBandH } from "./staff-piano";
 import { Core } from "../core";
+import type { Relative } from "../intervals";
 
 const W = 800;
 const score = Core.makeScore([]);
@@ -117,6 +118,42 @@ describe("PianoRoll.keyStyles", () => {
   });
 });
 
+/* Interval echoes (echoes.ts) are held keys like any other; the keyboard
+   tells them from a finger by tinting them and naming the interval. */
+describe("PianoRoll echoes", () => {
+  const roll = (o: Parameters<typeof PianoRoll.markup>[4]) =>
+    PianoRoll.markup(W, KEYB, score, 0, { fall: false, ...o });
+  const M3: Relative = { pitch: 64, name: "M3", dir: "up" };
+  const m6: Relative = { pitch: 49, name: "m6", dir: "down" }; // a black key
+
+  it("changes nothing when there are none", () => {
+    expect(roll({ glowId: G, held: new Set([60]) })).toBe(roll({ glowId: G, held: new Set([60]), echoes: [] }));
+  });
+
+  it("tints an echoed key apart from the key pressed", () => {
+    const out = roll({ glowId: G, held: new Set([60, 64]), echoes: [M3] });
+    expect(out).toContain("var(--echo)");
+    expect(out).toContain("var(--key-press)"); // 60, the finger
+  });
+
+  it("names the interval on the key, white or black", () => {
+    const out = roll({ glowId: G, held: new Set([57, 64, 49]), echoes: [M3, m6] });
+    expect(out).toMatch(/<tspan[^>]*>M3<\/tspan><tspan[^>]*>↑<\/tspan>/);
+    expect(out).toMatch(/<tspan[^>]*>m6<\/tspan><tspan[^>]*>↓<\/tspan>/);
+  });
+
+  it("gives way to a caller's key style, label and all", () => {
+    const out = roll({ glowId: G, held: new Set([64]), echoes: [M3], keyStyles: new Map([[64, { fill: "var(--wrong)" }]]) });
+    expect(out).not.toContain("var(--echo)");
+    expect(out).not.toContain(">M3<");
+  });
+
+  it("labels nothing off the span drawn", () => {
+    const out = roll({ glowId: G, held: new Set([64]), echoes: [M3], span: { lo: 69, hi: 84 } });
+    expect(out).not.toContain(">M3<");
+  });
+});
+
 /* The arrow overlay in the practice view points at keys it does not draw.
    geometry() is how it does that without a second copy of this math. */
 describe("PianoRoll.geometry", () => {
@@ -207,5 +244,47 @@ describe("PianoRoll drawing a span of the keyboard", () => {
       expect(x).toBeGreaterThanOrEqual(0);
       expect(x + w).toBeLessThanOrEqual(W + 1e-6);
     }
+  });
+});
+
+/* Zoomed in, the keyboard is wider than the region: a window (key-window.ts)
+   says which of its white keys are in sight, and the drawing and the
+   hit-test must agree about where every one of them is. */
+describe("PianoRoll zoomed in on a window of the keyboard", () => {
+  const H = 600;
+  const win = { from: 23, count: 7 }; // C4 at the left edge, an octave across
+  const svg = stubSvg(W, H);
+  const region = { x: 0, y: 0, w: W, h: H, window: win };
+  const g = PianoRoll.geometry(W, H, undefined, win);
+  const bottom = H - 2; // a white key's lower half
+
+  it("widens the keys to fit only the window across the region", () => {
+    expect(g.ww).toBeCloseTo(W / 7);
+    expect(g.lane(60).x).toBeCloseTo(0); // C4
+    expect(g.lane(71).x + g.lane(71).w).toBeCloseTo(W); // B4
+  });
+
+  it("hits the keys drawn, not the ones that would be there unzoomed", () => {
+    expect(PianoRoll.pitchAt(svg, 2, bottom, region)).toBe(60);
+    expect(PianoRoll.pitchAt(svg, W - 2, bottom, region)).toBe(71);
+    const black = PianoRoll.pitchAt(svg, g.lane(61).x + g.lane(61).w / 2, g.strikeY + 4, region);
+    expect(black).toBe(61);
+  });
+
+  it("grows the keys with the zoom, but leaves the falling notes most of the band", () => {
+    expect(g.keyH).toBeGreaterThan(KEYB);
+    expect(g.keyH).toBeLessThanOrEqual(H * 0.3);
+  });
+
+  it("draws nothing for the keys out of sight", () => {
+    const m = PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE, window: win });
+    expect(m.match(/<text /g)).toHaveLength(1); // C4's label only
+    expect(m.match(/stroke-width="1"\/>/g)!.length).toBe(7); // seven white keys
+  });
+
+  it("is the whole keyboard when the window is", () => {
+    const whole = { from: 0, count: 52 };
+    expect(PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE, window: whole }))
+      .toBe(PianoRoll.markup(W, H, score, 0, { glowId: G, held: NONE }));
   });
 });

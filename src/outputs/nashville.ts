@@ -12,9 +12,15 @@
      SAME convention as the Tonnetz (major = warm --note-lit, minor = cool
      --minor, dim = --playhead tension); the held degree glows.
    - the COLORATION WHEEL: the current mode's 9 joystick zones laid out
-     radially like the stick itself, the chosen direction lit.
+     radially like the stick itself, the chosen direction lit. A pointer
+     on the wheel turns it too (`dial`): the zone nearest it is the one
+     chosen.
    - the NOW-PLAYING readout: roman numeral, chord name, and the actual
      pitch-class spelling of the sounding (or previewed) voicing.
+
+   Beside the wheel, when the stage is wide enough to spare the room, sits
+   the KEYBOARD LEGEND: what each computer-keyboard key does, printed from
+   perfecto-keys.ts — the same tables the key handler acts on.
 
    Keeps the design language deliberately: one warm accent on the field
    (dark or paper, per the stage's tokens), the glow filter reused from the
@@ -34,8 +40,9 @@ import {
   type JoystickDirection,
 } from "../harmony/perfecto";
 import { glowFilter, glowAttr, text } from "./defs";
-import type { View, ViewModule } from "../view";
+import type { Dial, View, ViewModule } from "../view";
 import type { PerfSnapshot } from "../perf-state";
+import { KEY_LEGEND, type LegendBlock } from "../perfecto-keys";
 
 const DEGREES: Degree[] = [1, 2, 3, 4, 5, 6, 7];
 const MODES = ["default", "extended", "chromatic"] as const;
@@ -53,6 +60,44 @@ const QCOLOR = QUALITY_COLOR;
 
 const GLOW_ID = "nashvilleGlow";
 
+const PAD = 24;
+const ROW_Y = 78; // the degree row's centre line
+// a wheel zone's cell; the hub's is narrower
+const ZONE_W = 90;
+const HUB_W = 70;
+const ZONE_H = 48;
+
+// the outer zones clockwise from `right`, an eighth of a turn apiece
+// (screen y-down) — the order a pointer's angle about the hub counts them in
+const RING: JoystickDirection[] =
+  ["right", "downRight", "down", "downLeft", "left", "upLeft", "up", "upRight"];
+
+/** Where the wheel sits on a W×H stage: its hub, and the radius its outer
+ *  zones are centred at. The one answer `markup` draws and `dial` hit-tests. */
+const wheel = (W: number, H: number): { cx: number; cy: number; R: number } => ({
+  cx: W / 2,
+  cy: ROW_Y + 60 + (H - ROW_Y - 60 - 70) / 2, // between degree row and readout
+  R: Math.max(60, Math.min(W * 0.3, (H - ROW_Y - 60 - 90) * 0.42, 200)),
+});
+
+/** The wheel as a pointer finds it. The zone nearest a point: the hub's
+ *  within half the radius, past that whichever outer zone the point's
+ *  angle falls to. */
+const dialAt = (W: number, H: number): Dial | null => {
+  if (!W || !H) return null;
+  const { cx, cy, R } = wheel(W, H);
+  return {
+    // out to the far edge of the left and right zones' cells
+    holds: (x, y) => Math.hypot(x - cx, y - cy) <= R + ZONE_W / 2,
+    directionAt: (x, y) => {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (Math.hypot(dx, dy) < R / 2) return "center";
+      return RING[(Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) + 8) % 8];
+    },
+  };
+};
+
 const cell = (
   cx: number, cy: number, w: number, h: number,
   fill: string, stroke: string, lit: boolean,
@@ -60,6 +105,27 @@ const cell = (
   `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="8" ` +
   `fill="${fill}" stroke="${stroke}" stroke-width="${lit ? 2 : 1}"` +
   `${glowAttr(GLOW_ID, lit)}/>`;
+
+// the legend's box: a key-cap column, then the hand-broken description
+const LEGEND_W = 190;
+const LEGEND_KEYS_W = 52;
+const LEGEND_LINE = 16;
+const LEGEND_GAP = 16; // clear air between the wheel's cells and the legend
+
+// one legend block, its top-left at (x, cy - half its height) so it centres
+// on the wheel's hub
+const legend = (x: number, cy: number, block: LegendBlock): string => {
+  const top = cy - (block.lines.length * LEGEND_LINE) / 2;
+  let out = text(x, top, block.title,
+    { size: 10, weight: 700, anchor: "start", fill: "var(--ink-dim)" });
+  block.lines.forEach(({ keys, says }, i) => {
+    const y = top + (i + 1) * LEGEND_LINE + 4;
+    if (keys) out += text(x, y, keys, { size: 11, weight: 700, anchor: "start" });
+    out += text(x + LEGEND_KEYS_W, y, says,
+      { size: 11, weight: 500, anchor: "start", fill: "var(--ink-dim)" });
+  });
+  return out;
+};
 
 export const render: View = (svg, { live }) => {
   const W = svg.clientWidth;
@@ -88,8 +154,8 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
     `font-weight="600" fill="var(--note-lit)">${modeStrip}</text>`;
 
   // --- degree row --------------------------------------------------
-  const rowY = 78;
-  const pad = 24;
+  const rowY = ROW_Y;
+  const pad = PAD;
   const slot = (W - pad * 2) / DEGREES.length;
   const dw = Math.min(slot - 10, 96);
   for (let i = 0; i < DEGREES.length; i++) {
@@ -104,9 +170,7 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
   }
 
   // --- coloration wheel --------------------------------------------
-  const cx = W / 2;
-  const cy = rowY + 60 + (H - rowY - 60 - 70) / 2; // between degree row and readout
-  const R = Math.max(60, Math.min(W * 0.3, (H - rowY - 60 - 90) * 0.42, 200));
+  const { cx, cy, R } = wheel(W, H);
   const zoneTable = ZONE_LABEL[s.joystickMode];
 
   // faint spokes from the hub so the wheel reads as a stick
@@ -121,8 +185,8 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
     const zx = cx + vx * R;
     const zy = cy + vy * R;
     const lit = dir === s.joystickDirection;
-    const w = dir === "center" ? 70 : 90;
-    out += cell(zx, zy, w, 48, lit ? "var(--note-lit)" : "var(--panel)",
+    const w = dir === "center" ? HUB_W : ZONE_W;
+    out += cell(zx, zy, w, ZONE_H, lit ? "var(--note-lit)" : "var(--panel)",
       lit ? "var(--note-lit)" : "var(--grid-oct)", lit && sounding);
     const ink = lit ? "#0b1020" : "var(--ink)";
     const inkDim = lit ? "#0b1020" : "var(--ink-dim)";
@@ -130,6 +194,15 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
     out += text(zx, zy + 4, colorationDescriptor(s.joystickMode, dir),
       { size: 10, weight: 700, fill: ink });
     out += text(zx, zy + 17, zoneTable[dir], { size: 9, weight: 500, fill: inkDim });
+  }
+
+  // --- keyboard legend ---------------------------------------------
+  // one block in the free field on each side of the wheel; a stage too
+  // narrow to hold them clear of the wheel's cells goes without.
+  const wheelEdge = R + ZONE_W / 2 + LEGEND_GAP; // hub -> past the left/right cells
+  if (cx - wheelEdge - pad >= LEGEND_W) {
+    out += legend(pad, cy, KEY_LEGEND[0]);
+    out += legend(cx + wheelEdge, cy, KEY_LEGEND[1]);
   }
 
   // --- now-playing readout -----------------------------------------
@@ -159,11 +232,13 @@ export const markup = (W: number, H: number, s: PerfSnapshot): string => {
 };
 
 // the Nashville view is a chord instrument driven by keys and the gamepad,
-// not by pointing at a keyboard.
-export const Nashville: ViewModule & { markup: typeof markup } = {
+// not by pointing at a keyboard — but its wheel a pointer can turn.
+export const Nashville: ViewModule & { markup: typeof markup; dialAt: typeof dialAt } = {
   render,
   keyboardRegion: () => null,
   tape: () => null,
   scroller: () => null,
+  dial: (svg) => dialAt(svg.clientWidth, svg.clientHeight),
   markup,
+  dialAt,
 };

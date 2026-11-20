@@ -21,6 +21,6 @@ export default defineConfig({
     // MusicxmlIn uses DOMParser and the renderers touch SVG geometry, so the
     // test runner needs a DOM. jsdom is enough for parsing + math.
     environment: "jsdom",
-    include: ["src/**/*.test.ts", "tools/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "tools/**/*.test.ts", "api/src/**/*.test.ts"],
   },
 });

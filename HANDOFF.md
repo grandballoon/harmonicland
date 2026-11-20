@@ -29,20 +29,33 @@ src/
   live-keys.ts      held-pitch set; press/release; the live-input seam
   live-midi.ts      hardware MIDI keyboard -> LiveKeys
   live-mic.ts       a real instrument through a microphone -> LiveKeys (silent voices)
+  intervals.ts      ear training's vocabulary: an interval up or down, and the key it lands on (pure)
+  echoes.ts         a pressed key sounds the chosen intervals from it, through LiveKeys
+  interval-row.ts   the tray's intervals row: which intervals echo, with the key or after it
   mic-panel.ts      the tray's mic row: device, channel, response, sensitivity, meter
   mic/              the listening pipeline: window, gate, note tracker, transcriber
                     (pure, tested), Basic Pitch adapter, capture worklet, worker
   loop.ts           where loop edges sit and where a step lands (pure)
   sections.ts       saved sections: named bar ranges per score (pure)
-  section-store.ts  sections in localStorage, keyed by score content
+  section-store.ts  where sections are kept: the sections server, cached in localStorage
+  sections-api.ts   the sections server's client (the server is api/)
+  identity.ts       the account sections belong to: an anonymous key, for now
+  sync-row.ts       the tray's sync row: whether the server has every edit, and the key
   sections-panel.ts the Sections dropdown (owns its DOM; hands back a range)
   section-chips.ts  the header's section chips + the switch that marks sections
                     on the sheet music (range-marks.ts, decision 4)
   backchain.ts      a section learned from its end: its last note, last two, … (pure)
   backchain-bar.ts  the header's backchain switch and link stepper (owns its DOM)
+  key-window.ts     which stretch of a keyboard is in sight when zoomed: pinch, pan (pure)
+  zoom-gestures.ts  pinch and trackpad zoom -> key windows (owns its listeners)
+  alignment.ts      a score put to a recording's timing: barline anchors -> retimed score (pure)
+  alignment-store.ts anchors in localStorage, keyed by score and recording
+  recording-row.ts  the tray's recording row: the attached file, and tapping its barlines in
+  outputs/recording.ts  the Recording seam (a file today) and the Output that plays one
   main.ts           the loop + DOM wiring + VIEWS
   *.test.ts         core, clock, parsers (incl. the real sample files)
 index.html          the shell; loads /src/main.ts as a module
+api/                the sections server: a Cloudflare Worker over D1 (its README has setup)
 ```
 
 `types.ts` imports nothing and is imported by everyone — that dependency shape
@@ -165,7 +178,17 @@ While it shows, the tray is hidden (`body[data-isolated]`), so the header is the
 Its keys light by hand, following the practice hand (read from the practice snapshot, which carries it with no lesson running): the chosen hand in gold, the other in its dim hand colour or not at all with "show other" off, and hands together each in its own colour, so one hand's run is not lost among the other's chords.
 The tray is hidden, so the header shows a Both / R / L toggle while isolated; it and the tray's practice-hand select are one setting (`chooseHand` in `main.ts`).
 The keyboard is `PianoRoll`'s own, handed a `KeySpan` (`pitch.ts`): a span of the keyboard is the same keyboard enlarged, its keys standing taller in proportion to how few share the width, and the region `keyboardRegion` returns carries the span so `pitchAt` hears the key drawn under the pointer.
-Sections are stored in localStorage per score (`section-store.ts`), keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
+Sections are stored per score, keyed by a hash of the file's bytes, so a renamed file keeps its sections and a re-exported one starts afresh; progressions are keyed by structure, the demo by name.
+They live on the sections server (`api/`, a Cloudflare Worker over D1; its README has setup), with localStorage as a cache that answers first and holds edits the server has not got yet (`section-store.ts` states the rules).
+The server is named at build time by `VITE_SECTIONS_API` (the dev server defaults to `http://localhost:8787`); a build that names none keeps sections in the browser only.
+Each browser mints an anonymous key on first visit (`identity.ts`), sent as a bearer token; the server stores only its hash as the user id.
+The tray's sync row shows the key, to paste into another browser, which carries the account there.
+This is the seam a real sign-in replaces: only the credential changes.
+
+**Escape** lets go of the selected bars (and stops a backchain): no selection, no loop, and the playhead or lesson cursor back at the start of the piece.
+It does so after the earlier claims on Escape — finishing a barline tap, leaving the expanded roll, leaving the isolated keys — have been met.
+
+**The tray** is a slim column down the right of the stage, under the header, always open; its rows stack each label over its controls.
 A step parks the paused clock and sets `auditioning`, which the loop passes to the sinks in place of `playing` so the step is heard.
 It's wrapped behind an interface specifically so it can be replaced with
 Tone.js `Transport` (or the WebAudio clock) later without touching anything.
@@ -363,7 +386,7 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
 
 ## Known limitations (all intentional, all isolated)
 
-- Imported MIDI shows only sharps in the grand staff (parser default speller).
+- Imported MIDI is spelled with sharps only (`Core.defaultSpelling`), even though its key signatures are read into the bars.
   Load the same piece as MusicXML to get correct flats/naturals.
 - MusicXML: timewise scores are rejected (`.mxl` is now unwrapped by `MxlIn`);
   double accidentals collapse to a single glyph (staff position is by letter
@@ -375,22 +398,20 @@ other's tail (one MIDI pitch per channel can't sound twice anyway).
   music definition is what gets parsed; `melody = …` then `\melody` is not
   resolved). Relative octaves across `<< >>` use the block's entry reference per
   voice; brace each voice. Double accidentals collapse to one glyph (as MusicXML).
-- Audio plays one flat dynamic: `Note` carries no velocity, so every note
-  sounds at the same level (single-velocity-layer samples, gain 0.5). The
-  first notes after page load may sound as triangle-wave fallback for a
-  moment while samples decode.
-- Scrubbing fast re-triggers voices as the active set churns; can sound busy.
-  Lives entirely in `AudioOut`; smooth there if it matters.
-- `StaffStd` has no key-signature rendering and no beaming — noteheads only.
-- `PianoRoll` keyboard band is a fixed 96px; on very short viewports it eats
-  the fall area. Ignores `spelling` by design (it's the physical-key view), so
-  enharmonics share a key — that's correct, not a gap.
-- Web MIDI *live input* is not wired yet — but the seam is built and proven: a
-  pointer-driven playable keyboard already routes through `LiveKeys` (sound +
-  key glow). Web MIDI just needs to feed the same `press/release` calls; see
-  *Live MIDI input* under "How to extend." Recording into the `score`
-  (`Live_in.stream : midi_event → score → score`, append-only) remains a
-  separate, deferred step.
+- The built-in piano has four of Salamander's sixteen velocity layers (v4, v8, v12, v16), so dynamics between layers are gain-corrected rather than recorded.
+  Playback waits for the middle layer (v8); the other layers stream in behind it, and until one is ready its notes borrow the nearest loaded layer.
+  A pitch whose every fetch failed falls back to a triangle oscillator.
+- A seek while playing restarts the scheduler, which drops into the notes under the playhead (scheduler.ts).
+  Scrubbing fast while playing re-strikes them on every step and can sound busy.
+- `StaffStd`, the scrolling grand staff, has no key signature and no beaming — noteheads only.
+  The engraved bar views (engrave.ts) print key signatures.
+- `PianoRoll`'s keyboard is 96px tall across all 88 keys; on very short viewports it eats the fall area.
+  A span or a pinch zoom (key-window.ts) grows it, the zoom up to 30% of the band.
+  It ignores `spelling` by design (it's the physical-key view), so enharmonics share a key — that's correct, not a gap.
+- Live input reaches `LiveKeys` from the pointer, a hardware MIDI keyboard (live-midi.ts) and a microphone (live-mic.ts).
+  None of them writes into the `score`: recording a performance as notes (`Live_in.stream : midi_event → score → score`, append-only) is still deferred.
+- An attached recording (outputs/recording.ts) lasts only until reload: the file is not kept, though its tapped barlines are (alignment-store.ts).
+  Alignment follows hand-tapped barlines only: time runs evenly within a bar, so rubato inside one is not followed (alignment.ts).
 - Browser support: built/tested for Chrome. Web MIDI and the audio path are
   weakest on Safari/Firefox.
 

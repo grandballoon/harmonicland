@@ -35,6 +35,8 @@ const frame = (
     sheetScroll: 0,
     selection,
     marks: [],
+    rollWindow: null,
+    echoes: [],
   },
 });
 

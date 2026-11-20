@@ -17,10 +17,18 @@
                     the next begins where the measure's furthest voice
                     ended, wherever the last <backup> left the cursor
      <time>/<key> — the meter and key signature, carried on the barline
+     <dynamics>, <sound dynamics>, <note dynamics> — velocities, marked
+                    in time and read back per note (inputs/dynamics.ts),
+                    for the whole part: a piano's dynamics are written
+                    once, between or beside the staves, for both hands
+     <pedal>, <sound damper-pedal> — the sustain pedal (inputs/pedal.ts);
+                    a "change" is up and down again at one instant
    Out of scope (kept isolated, like every limitation): timewise
    scores. Compressed .mxl arrives here already unwrapped by MxlIn.
    ==================================================================== */
 import { Core } from "../core";
+import { fromPercent, makeDynamics } from "./dynamics";
+import { pedalRanges, type PedalMark } from "./pedal";
 import type { Barline, Score, RawNote, Letter, Hand } from "../types";
 
 // letter name -> semitones above C, within an octave
@@ -55,6 +63,8 @@ export function parse(src: string): Score {
   // answer and the first is simply the one that is always there; taking the
   // union would let a part whose voices come up short invent extra bars.
   const barlines: Barline[] = [];
+  // the pedal belongs to the instrument, not a part: every part's marks
+  const pedal: PedalMark[] = [];
 
   let partOrdinal = 0;
   for (const part of root.querySelectorAll(":scope > part")) {
@@ -80,6 +90,7 @@ export function parse(src: string): Score {
     let cursor = 0; // seconds from piece start
     let lastOnset = 0; // onset of the previous note, for <chord>
     const tied: TiedNote[] = []; // this part's notes, before ties are joined
+    const dynamics = makeDynamics(); // this part's markings, in time
 
     const secPerDiv = () => 60 / tempo / divisions;
 
@@ -107,6 +118,20 @@ export function parse(src: string): Score {
             const snd = el.nodeName === "sound" ? el : el.querySelector("sound[tempo]");
             const bpm = snd && parseFloat(snd.getAttribute("tempo")!);
             if (bpm) tempo = bpm;
+            for (const d of el.querySelectorAll(":scope > direction-type > dynamics > *"))
+              dynamics.mark(d.nodeName === "other-dynamics" ? d.textContent ?? "" : d.nodeName, cursor);
+            const sound = el.nodeName === "sound" ? el : el.querySelector(":scope > sound");
+            const level = sound?.getAttribute("dynamics");
+            if (level && Number.isFinite(parseFloat(level))) dynamics.level(fromPercent(parseFloat(level)), cursor);
+            for (const pd of el.querySelectorAll(":scope > direction-type > pedal")) {
+              const type = pd.getAttribute("type");
+              if (type === "start" || type === "resume") pedal.push({ at: cursor, down: true });
+              else if (type === "stop" || type === "discontinue") pedal.push({ at: cursor, down: false });
+              else if (type === "change") pedal.push({ at: cursor, down: false }, { at: cursor, down: true });
+            }
+            // "yes"/"no", or a depth 0–100 that counts as down from half-way
+            const damper = sound?.getAttribute("damper-pedal");
+            if (damper) pedal.push({ at: cursor, down: damper === "yes" || parseFloat(damper) >= 50 });
             break;
           }
           case "backup":
@@ -149,8 +174,14 @@ export function parse(src: string): Score {
             const stream = multiStaff ? numOf(el, ":scope > staff", 1) : partOrdinal;
             const hand: Hand = stream === 1 ? "upper" : "lower";
 
+            // a note may state its own loudness; otherwise the markings do,
+            // once every marking in the part is known
+            const own = parseFloat(el.getAttribute("dynamics") ?? "");
             tied.push({
-              note: { pitch, spelling, onset, duration: Math.max(0.02, durSec), hand, stream },
+              note: {
+                pitch, spelling, onset, duration: Math.max(0.02, durSec), hand, stream,
+                ...(Number.isFinite(own) && { velocity: fromPercent(own) }),
+              },
               end: onset + durSec,
               voice: text(el, ":scope > voice"),
               stream,
@@ -163,13 +194,17 @@ export function parse(src: string): Score {
       }
       cursor = Math.max(reached, cursor);
     }
+    for (const { note } of tied) {
+      const v = note.velocity ?? dynamics.velocityAt(note.onset);
+      if (v !== undefined) note.velocity = v;
+    }
     notes.push(...joinTies(tied));
     // the closing post: where the last measure's content left the cursor.
     if (partOrdinal === 1) barlines.push({ at: cursor });
   }
 
   if (!notes.length) throw new Error("No pitched notes found in score.");
-  return Core.makeScore(notes, barlines);
+  return Core.makeScore(notes, barlines, pedalRanges(pedal));
 }
 
 interface TiedNote {

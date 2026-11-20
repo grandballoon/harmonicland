@@ -1,17 +1,14 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-// The sinks are the only thing LiveKeys reaches out to; record the calls so
+// Sound is the only thing LiveKeys reaches out to; record the calls so
 // the refcount contract ("sound on the first press, silence on the last
 // release") is asserted at the wire and not just via held().
 const sink = vi.hoisted(() => ({ on: [] as number[], off: [] as number[] }));
-vi.mock("./outputs/audio", () => ({
-  AudioOut: {
+vi.mock("./outputs/sound", () => ({
+  Sound: {
     liveOn: (p: number) => { sink.on.push(p); },
     liveOff: (p: number) => { sink.off.push(p); },
   },
-}));
-vi.mock("./outputs/midi-out", () => ({
-  MidiOut: { liveOn: () => {}, liveOff: () => {} },
 }));
 
 import { LiveKeys, type Voice } from "./live-keys";
@@ -157,5 +154,47 @@ describe("LiveKeys.onPress", () => {
     LiveKeys.press(60);
     LiveKeys.press(62);
     expect(seen).toEqual([60]);
+  });
+});
+
+/* The release seam: per voice, so a subscriber whose voices hang off
+   another's (the interval echoes) follows that voice and not its pitch. */
+describe("LiveKeys.onRelease", () => {
+  it("reports each voice as it lifts, its key already gone from held()", () => {
+    const seen: Voice[] = [];
+    let heldThen = true;
+    const off = LiveKeys.onRelease((v) => { seen.push(v); heldThen = LiveKeys.held().has(v.pitch); });
+    const v = LiveKeys.press(60);
+    LiveKeys.release(v);
+    expect(seen).toEqual([v]);
+    expect(heldThen).toBe(false);
+    off();
+  });
+
+  it("reports nothing for a voice already lifted", () => {
+    const seen: number[] = [];
+    const off = LiveKeys.onRelease((v) => seen.push(v.pitch));
+    const v = LiveKeys.press(60);
+    LiveKeys.release(v);
+    LiveKeys.release(v);
+    expect(seen).toEqual([60]);
+    off();
+  });
+
+  it("reports every voice releaseAll lifts", () => {
+    const seen: number[] = [];
+    LiveKeys.press(60);
+    LiveKeys.press(64);
+    const off = LiveKeys.onRelease((v) => seen.push(v.pitch));
+    LiveKeys.releaseAll();
+    expect(seen.sort()).toEqual([60, 64]);
+    off();
+  });
+});
+
+describe("LiveKeys.isSilent", () => {
+  it("tells a silent voice from an audible one", () => {
+    expect(LiveKeys.isSilent(LiveKeys.press(60, { silent: true }))).toBe(true);
+    expect(LiveKeys.isSilent(LiveKeys.press(60))).toBe(false);
   });
 });

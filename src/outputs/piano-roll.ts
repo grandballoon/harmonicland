@@ -11,15 +11,19 @@
 import { Core } from "../core";
 import { FULL_SPAN, isWhite, isC, octaveOf, whitesIn, type KeySpan } from "../pitch";
 import { SCROLL } from "./scroll";
+import { whole, type KeyWindow } from "../key-window";
 import { glowFilter, glowAttr } from "./defs";
 import type { Note, Score, Pitch } from "../types";
-import type { View, ViewModule, Region, KeyboardRegion, Tape } from "../view";
+import { ARROW, type Relative } from "../intervals";
+import type { View, ViewModule, KeyboardRegion, Tape, Frame } from "../view";
 
 const { PPS } = SCROLL; // fall speed — the staves scroll at the same rate
 export const KEYB = 96; // keyboard band height (px)
 /** How many white keys the full keyboard has. A span of fewer stands taller
  *  in proportion (see `layout`), so KEYB is the height of all 88. */
 const FULL_WHITES = whitesIn(FULL_SPAN).length;
+/** The most of its band a zoomed-in keyboard stands — see `layout`. */
+const ZOOMED_KEYS = 0.3;
 
 /** The keyboard's measurements for a W×H region. Public because an overlay
  *  drawn ABOVE the keys — practice mode's arrows — must point at the same
@@ -30,6 +34,8 @@ const FULL_WHITES = whitesIn(FULL_SPAN).length;
 export interface Layout {
   whites: number[];
   ww: number;
+  /** White keys of the span left of the region's edge (the window's `from`). */
+  from: number;
   whiteIdx: Map<number, number>;
   bw: number;
   keyH: number;
@@ -62,6 +68,13 @@ export interface MarkupOpts {
   keyStyles?: ReadonlyMap<Pitch, KeyStyle>;
   /** Which keys to draw, edge to edge of the region. Default all 88. */
   span?: KeySpan;
+  /** Which stretch of the span is in sight, when it is zoomed in on.
+   *  Default the whole span. */
+  window?: KeyWindow;
+  /** Interval echoes sounding (echoes.ts): each key tinted and labelled
+   *  with the interval it is. Outranks `held` — an echo IS held, and the
+   *  point is to tell it from a finger — but not `keyStyles`. */
+  echoes?: readonly Relative[];
 }
 
 /** How one key should look. Fill and glow travel together because they are
@@ -80,6 +93,9 @@ const OWN_GLOW = "rollGlow"; // this view's own filter, when it owns the svg
 // combo view instead asks for markup() at an exact W×H so it can place the roll
 // inside a translated, clipped <g> in its own single svg — no nested <svg>,
 // whose clipping and getBoundingClientRect both misbehave.
+// The full-screen view is also the one that zooms: the frame says which
+// stretch of the 88 is in sight (`rollWindow`), and the keys, the lanes and
+// the hit-test are all laid out for it.
 export const render: View = (svg, { score, t, live }) => {
   const W = svg.clientWidth;
   const H = svg.clientHeight;
@@ -87,7 +103,9 @@ export const render: View = (svg, { score, t, live }) => {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.innerHTML =
     `<defs>${glowFilter(OWN_GLOW)}</defs>` +
-    markup(W, H, score, t, { glowId: OWN_GLOW, held: live.held });
+    markup(W, H, score, t, {
+      glowId: OWN_GLOW, held: live.held, echoes: live.echoes, window: live.rollWindow ?? undefined,
+    });
 };
 
 // the roll as a markup string for a W×H region (origin at 0,0); no <defs> —
@@ -98,11 +116,13 @@ export const render: View = (svg, { score, t, live }) => {
 // --hand-r, lower = --hand-l); sounding is then carried by glow + opacity.
 export const markup = (W: number, H: number, score: Score, t: number, o: MarkupOpts): string => {
   if (!W || !H) return "";
-  const { glowId, held, fall = true, hands = false, keyStyles, span = FULL_SPAN } = o;
+  const { glowId, held, fall = true, hands = false, keyStyles, span = FULL_SPAN, window, echoes = [] } = o;
 
   // keyboard layout + its inverse hit-test both come from one place — keyH
   // included, so the keys drawn below are exactly the ones hit-tested.
-  const { whites, ww, whiteIdx, keyH, strikeY, blackH, lane } = layout(W, H, span);
+  const { whites, ww, keyH, strikeY, blackH, lane } = layout(W, H, span, window);
+  // a zoomed-in keyboard runs off both sides; what does is not drawn
+  const inSight = ({ x, w }: { x: number; w: number }): boolean => x + w > 0 && x < W;
 
   // hand comes resolved off the note — see staff-std's markup for why.
   const handHue = (n: Note): string | null =>
@@ -113,12 +133,16 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
   const activeHue = new Map<number, string>(); // pitch -> lit-key color
   for (const n of sounding) activeHue.set(n.pitch, handHue(n) ?? "var(--note-lit)");
   // a key glows for a sounding score note OR a live key-press; a live press
-  // wins the color so you can tell what YOU played from what's playing back.
-  // A caller-supplied style outranks both: it is a deliberate override, and
-  // one that loses to the default would not be one.
+  // wins the color so you can tell what YOU played from what's playing back,
+  // and an echo wins over a press so you can tell what it raised from it.
+  // A caller-supplied style outranks all three: it is a deliberate
+  // override, and one that loses to the default would not be one.
+  const echoOn = new Map<Pitch, Relative>(); // two echoes on one key: the first names it
+  for (const e of echoes) if (!echoOn.has(e.pitch)) echoOn.set(e.pitch, e);
   const keyFill = (p: number, base: string) => {
     const s = keyStyles?.get(p);
     if (s) return s.fill;
+    if (echoOn.has(p)) return "var(--echo)";
     return held.has(p) ? "var(--key-press)" : activeHue.get(p) ?? base;
   };
   const keyGlow = (p: number) => {
@@ -132,7 +156,8 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
     // --- background: faint vertical guide at each C, for orientation ---
     for (const p of whites)
       if (isC(p)) {
-        const x = whiteIdx.get(p)! * ww;
+        const { x } = lane(p);
+        if (x < 0 || x > W) continue;
         out += `<line x1="${x}" y1="0" x2="${x}" y2="${strikeY}" stroke="var(--grid)" stroke-width="0.6" opacity="0.5"/>`;
       }
 
@@ -141,6 +166,7 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
     // black lanes on top so overlaps read correctly. ---
     const bar = (n: Note): string => {
       const { x, w } = lane(n.pitch);
+      if (!inSight({ x, w })) return "";
       const bottom = strikeY - (n.onset - t) * PPS; // leading edge
       const top = bottom - n.duration * PPS;
       if (bottom < 0 || top > strikeY) return ""; // future-offscreen / passed
@@ -165,14 +191,32 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
   // the keys, so an enlarged span is not labelled in print meant for 88. ---
   const labelSize = Math.max(9, Math.min(16, Math.round(ww * 0.2)));
   for (const p of whites) {
-    const i = whiteIdx.get(p)!;
-    out += `<rect x="${i * ww}" y="${strikeY}" width="${ww}" height="${keyH}" fill="${keyFill(p, "var(--key-white)")}" stroke="#0b0e13" stroke-width="1"${keyGlow(p)}/>`;
-    if (isC(p)) out += `<text x="${i * ww + ww / 2}" y="${H - Math.round(labelSize * 0.67)}" fill="var(--ink-dim)" font-size="${labelSize}" text-anchor="middle">C${octaveOf(p)}</text>`;
+    const { x } = lane(p);
+    if (!inSight({ x, w: ww })) continue;
+    out += `<rect x="${x}" y="${strikeY}" width="${ww}" height="${keyH}" fill="${keyFill(p, "var(--key-white)")}" stroke="#0b0e13" stroke-width="1"${keyGlow(p)}/>`;
+    // an echo's label stands where the C's would, and says more just now
+    if (isC(p) && !echoOn.has(p)) out += `<text x="${x + ww / 2}" y="${H - Math.round(labelSize * 0.67)}" fill="var(--ink-dim)" font-size="${labelSize}" text-anchor="middle">C${octaveOf(p)}</text>`;
   }
   for (let p = span.lo; p <= span.hi; p++) {
     if (isWhite(p)) continue;
     const { x, w } = lane(p);
+    if (!inSight({ x, w })) continue;
     out += `<rect x="${x}" y="${strikeY}" width="${w}" height="${blackH}" rx="2" fill="${keyFill(p, "var(--key-black)")}" stroke="#0b0e13" stroke-width="0.8"${keyGlow(p)}/>`;
+  }
+
+  // --- echo labels, over every key so a black key's cannot be covered:
+  // on a white key in the stretch below the black keys, on a black key
+  // near its tip. The interval's name over its arrow, two short lines, so
+  // the label fits a key's width even with all 88 in sight. ---
+  for (const [p, { name, dir }] of echoOn) {
+    if (p < span.lo || p > span.hi || keyStyles?.has(p)) continue;
+    const { x, w } = lane(p);
+    if (!inSight({ x, w })) continue;
+    const size = Math.max(7, Math.min(14, Math.round(w * (isWhite(p) ? 0.42 : 0.6))));
+    const bottom = isWhite(p) ? H - size * 0.6 : strikeY + blackH - size * 0.5;
+    const cx = x + w / 2;
+    out += `<text x="${cx}" y="${bottom}" fill="var(--echo-ink)" font-size="${size}" font-weight="700" text-anchor="middle" pointer-events="none">` +
+      `<tspan x="${cx}" dy="${-size * 1.05}">${name}</tspan><tspan x="${cx}" dy="${size * 1.05}">${ARROW[dir]}</tspan></text>`;
   }
 
   return out;
@@ -191,13 +235,25 @@ export const markup = (W: number, H: number, score: Score, t: number, o: MarkupO
 // share the whole width, so each is FULL_WHITES / n times as wide as on all
 // 88, and it stands that many times taller too, keeping the keys' shape.
 // For all 88 the factor is 1 and the preferred height is KEYB exactly.
-function layout(W: number, H: number, span: KeySpan = FULL_SPAN): Layout {
+//
+// A WINDOW onto the span (key-window.ts) is the same keyboard under a
+// magnifier: only `count` of its white keys fit the width, the first
+// `from` keys in off the left edge, and the rest run off the right. The
+// keys grow taller with it, keeping their shape, until they stand
+// ZOOMED_KEYS of the band — past that they would crowd out what falls
+// onto them — but never shorter than the whole span would stand them.
+function layout(W: number, H: number, span: KeySpan = FULL_SPAN, win?: KeyWindow): Layout {
   const whites = whitesIn(span);
-  const ww = W / whites.length; // white-key width
+  const { from, count } = win ?? whole(whites.length);
+  const ww = W / count; // white-key width
+  const x0 = -from * ww; // where the span's first white key starts
   const whiteIdx = new Map(whites.map((p, i) => [p, i] as const));
   const bw = ww * 0.62; // black-key width
+  const natural = (KEYB * FULL_WHITES) / whites.length;
+  const grown = (KEYB * FULL_WHITES) / count;
+  const tall = count < whites.length ? Math.max(natural, Math.min(grown, H * ZOOMED_KEYS)) : natural;
   // never taller than the band we were given
-  const keyH = Math.min((KEYB * FULL_WHITES) / whites.length, H);
+  const keyH = Math.min(tall, H);
   const strikeY = H - keyH; // top of keyboard = strike line; therefore >= 0
   const blackH = keyH * 0.62;
   // x-lane for a pitch, aligned to its key (black sits on the lower white
@@ -206,12 +262,12 @@ function layout(W: number, H: number, span: KeySpan = FULL_SPAN): Layout {
   const lane = (p: number): { x: number; w: number } => {
     if (isWhite(p)) {
       const i = whiteIdx.get(p)!;
-      return { x: i * ww, w: ww };
+      return { x: x0 + i * ww, w: ww };
     }
-    const cx = (whiteIdx.get(p - 1)! + 1) * ww;
+    const cx = x0 + (whiteIdx.get(p - 1)! + 1) * ww;
     return { x: cx - bw / 2, w: bw };
   };
-  return { whites, ww, whiteIdx, bw, keyH, strikeY, blackH, lane };
+  return { whites, ww, from, whiteIdx, bw, keyH, strikeY, blackH, lane };
 }
 
 // the inverse of lane(): which key sits under a client-space point? Black
@@ -226,7 +282,7 @@ function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number, region?: 
   const x = clientX - r.left - reg.x; // into the roll's local space
   const y = clientY - r.top - reg.y;
   const span = region?.span ?? FULL_SPAN;
-  const L = layout(reg.w, reg.h, span);
+  const L = layout(reg.w, reg.h, span, region?.window);
   if (y < L.strikeY || y > reg.h) return null; // above keyboard / off-canvas
   if (y <= L.strikeY + L.blackH) {
     // black-key band: blacks win
@@ -236,13 +292,13 @@ function pitchAt(svg: SVGSVGElement, clientX: number, clientY: number, region?: 
       if (x >= bx && x <= bx + w) return p;
     }
   }
-  const i = Math.max(0, Math.min(L.whites.length - 1, Math.floor(x / L.ww)));
+  const i = Math.max(0, Math.min(L.whites.length - 1, Math.floor(x / L.ww + L.from)));
   return L.whites[i];
 }
 
-// this view IS the keyboard — it fills the whole svg.
-const keyboardRegion = (svg: SVGSVGElement): Region => ({
-  x: 0, y: 0, w: svg.clientWidth, h: svg.clientHeight,
+// this view IS the keyboard — it fills the whole svg, zoomed as it is drawn.
+const keyboardRegion = (svg: SVGSVGElement, { live }: Frame): KeyboardRegion => ({
+  x: 0, y: 0, w: svg.clientWidth, h: svg.clientHeight, window: live.rollWindow ?? undefined,
 });
 
 /** The falling notes as a tape: the whole piece stood on end above the
@@ -251,9 +307,9 @@ const keyboardRegion = (svg: SVGSVGElement): Region => ({
  *  swipe down brings them down onto the keys — the piece plays forward —
  *  and a swipe up takes them back. The keyboard itself stays uncovered,
  *  so it is still played by pointing at it. */
-export function tapeFor(W: number, H: number, score: Score, t: number): Tape | null {
+export function tapeFor(W: number, H: number, score: Score, t: number, win?: KeyWindow): Tape | null {
   const d = score.duration;
-  const { strikeY } = layout(W, H);
+  const { strikeY } = layout(W, H, FULL_SPAN, win);
   if (!W || d <= 0 || strikeY <= 0) return null;
   const clamp = (x: number): number => Math.max(0, Math.min(d, x));
   return {
@@ -266,11 +322,12 @@ export function tapeFor(W: number, H: number, score: Score, t: number): Tape | n
   };
 }
 
-const tape = (svg: SVGSVGElement, f: { score: Score; t: number }): Tape | null =>
-  tapeFor(svg.clientWidth, svg.clientHeight, f.score, f.t);
+const tape = (svg: SVGSVGElement, { score, t, live }: Frame): Tape | null =>
+  tapeFor(svg.clientWidth, svg.clientHeight, score, t, live.rollWindow ?? undefined);
 
 /** The keyboard's measurements for a region — see `Layout`. */
-export const geometry = (W: number, H: number, span: KeySpan = FULL_SPAN): Layout => layout(W, H, span);
+export const geometry = (W: number, H: number, span: KeySpan = FULL_SPAN, win?: KeyWindow): Layout =>
+  layout(W, H, span, win);
 
 export const PianoRoll: ViewModule & {
   markup: typeof markup;
@@ -278,4 +335,4 @@ export const PianoRoll: ViewModule & {
   geometry: typeof geometry;
   tapeFor: typeof tapeFor;
   KEYB: number;
-} = { render, keyboardRegion, tape, scroller: () => null, markup, pitchAt, geometry, tapeFor, KEYB };
+} = { render, keyboardRegion, tape, scroller: () => null, dial: () => null, markup, pitchAt, geometry, tapeFor, KEYB };

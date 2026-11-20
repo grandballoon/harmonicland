@@ -66,19 +66,36 @@
    6. A keyboard need not be all 88 keys. The region a view hands back
       for its keyboard says which stretch of keys it holds (`span`), so a
       pointer on an enlarged octave is heard as the key drawn under it and
-      not as the key that would be there on the whole keyboard.
+      not as the key that would be there on the whole keyboard. Nor need
+      all of its keys be in sight: a keyboard zoomed in on runs off the
+      sides of its region, and the region says which stretch of it is
+      under the glass (`window`) for the same reason.
+
+   7. A view may name a DIAL: a wheel of coloration zones a pointer turns
+      the way the stick does. The view answers which zone a point is
+      nearest and whether the point is on the wheel at all; what pointing
+      there or dragging from there MEANS is main.ts's, as it is for the
+      keyboard. Required, like the rest, and `() => null` where there is
+      none.
    ==================================================================== */
 import type { BarRange, Score, Pitch } from "./types";
 import type { KeySpan } from "./pitch";
+import type { KeyWindow } from "./key-window";
 import type { PerfSnapshot } from "./perf-state";
+import type { JoystickDirection } from "./harmony/perfecto";
 import type { TonnetzSnapshot } from "./tonnetz-state";
 import type { PracticeSnapshot } from "./practice-state";
+import type { Relative } from "./intervals";
 
 /** Everything live about this instant that is not the score or the clock,
  *  read once per frame so every view sees the same instant. */
 export interface LiveSnapshot {
   /** Pitches sounding from any live surface — keyboard, MIDI, gamepad, chord. */
   held: ReadonlySet<Pitch>;
+  /** The interval echoes sounding (echoes.ts): keys in `held` that a press
+   *  raised rather than a finger, each with the interval it is of the key
+   *  pressed. A keyboard tints and labels them; empty when echoes are off. */
+  echoes: readonly Relative[];
   perf: PerfSnapshot;
   tonnetz: TonnetzSnapshot;
   /** Where the learner is in a step-by-step lesson. Inert (`active:
@@ -98,6 +115,9 @@ export interface LiveSnapshot {
   /** The saved sections a page of sheet music tints, or none
    *  when they are not being shown (outputs/range-marks.ts, decision 4). */
   marks: readonly BarRange[];
+  /** Which stretch of the piano roll's 88 keys is in sight, or null for
+   *  all of them — a pinch zooms it (key-window.ts, note 6). */
+  rollWindow: KeyWindow | null;
 }
 
 /** A page panned by its tape. At rest the page is fitted to the bar the
@@ -131,6 +151,9 @@ export interface Region {
 export interface KeyboardRegion extends Region {
   /** The keys drawn edge to edge across the region; absent for all 88. */
   span?: KeySpan;
+  /** The stretch of `span` in sight, when it is zoomed in on; absent for
+   *  the whole of it. */
+  window?: KeyWindow;
 }
 
 /** A native scroller over part of a view, standing for the playhead. See
@@ -194,6 +217,17 @@ export interface Scroller {
   rangeBox(): Region | null;
 }
 
+/** A wheel of coloration zones a pointer can turn. See note 7. Points are
+ *  in the svg's local pixel space. */
+export interface Dial {
+  /** Is a point on the wheel — within the circle its zones fill? */
+  holds(x: number, y: number): boolean;
+  /** The zone a point is nearest. Answers for every point, on the wheel
+   *  or off it: a pointer dragging the selector keeps it wherever it
+   *  goes. */
+  directionAt(x: number, y: number): JoystickDirection;
+}
+
 /** An output projection. Genuinely a function of its arguments now. */
 export type View = (svg: SVGSVGElement, f: Frame) => void;
 
@@ -217,4 +251,7 @@ export interface ViewModule {
   /** The part of this view a scroll moves only the reader's eye across,
    *  or null if it has none — see note 5. Null whenever `tape` is not. */
   scroller(svg: SVGSVGElement, f: Frame): Scroller | null;
+  /** The coloration wheel a pointer turns in this view, or null if it has
+   *  none — see note 7. */
+  dial(svg: SVGSVGElement, f: Frame): Dial | null;
 }

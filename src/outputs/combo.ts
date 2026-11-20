@@ -51,7 +51,7 @@ export const render: View = (svg, { score, t, live }) => {
   // clip (no transform of its own) rides the same translated coordinates.
   const roll =
     `<g transform="translate(0,${topH})"><g clip-path="url(#comboRoll)">` +
-    `${PianoRoll.markup(W, rollH, score, t, { glowId: GLOW_ID, held: live.held })}</g></g>`;
+    `${PianoRoll.markup(W, rollH, score, t, { glowId: GLOW_ID, held: live.held, echoes: live.echoes })}</g></g>`;
 
   svg.innerHTML = defs + top + roll;
 };
@@ -62,4 +62,4 @@ const keyboardRegion = (svg: SVGSVGElement): Region => {
   return { x: 0, y: topH, w: W, h: rollH };
 };
 
-export const Combo: ViewModule = { render, keyboardRegion, tape: () => null, scroller: () => null };
+export const Combo: ViewModule = { render, keyboardRegion, tape: () => null, scroller: () => null, dial: () => null };

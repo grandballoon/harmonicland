@@ -67,6 +67,63 @@ describe("Nashville renders from a snapshot alone", () => {
   });
 });
 
+describe("Nashville's wheel is turned by a pointer", () => {
+  // 900×600: hub at (450, 334), outer zones 156.24 out
+  const dial = Nashville.dialAt(900, 600)!;
+  const hub = [450, 334] as const;
+
+  it("picks the zone nearest the pointer", () => {
+    expect(dial.directionAt(...hub)).toBe("center");
+    expect(dial.directionAt(hub[0] + 156, hub[1])).toBe("right");
+    expect(dial.directionAt(hub[0], hub[1] - 156)).toBe("up");
+    expect(dial.directionAt(hub[0] - 110, hub[1] + 110)).toBe("downLeft");
+    expect(dial.directionAt(hub[0] - 110, hub[1] - 110)).toBe("upLeft");
+  });
+
+  it("gives the hub up halfway to the outer zones", () => {
+    expect(dial.directionAt(hub[0] + 70, hub[1])).toBe("center");
+    expect(dial.directionAt(hub[0] + 85, hub[1])).toBe("right");
+  });
+
+  it("keeps following a pointer that has left the wheel", () => {
+    expect(dial.holds(5, 5)).toBe(false);
+    expect(dial.directionAt(5, 5)).toBe("upLeft");
+  });
+
+  it("holds a pointer within the circle its zones fill, and none beside it", () => {
+    expect(dial.holds(...hub)).toBe(true);
+    expect(dial.holds(hub[0] + 156 + 40, hub[1])).toBe(true);
+    expect(dial.holds(hub[0] + 156 + 50, hub[1])).toBe(false);
+    expect(dial.holds(hub[0] - 110 - 30, hub[1] - 110 - 30)).toBe(true); // a corner zone
+    expect(dial.holds(hub[0], 78)).toBe(false); // the degree row
+  });
+
+  it("lights the zone the pointer is nearest where it drew it", () => {
+    const lit = Nashville.markup(900, 600, perf({ joystickDirection: "right" }));
+    const { x, y } = /<rect x="(?<x>[\d.]+)" y="(?<y>[\d.]+)" width="90" height="48" rx="8" fill="var\(--note-lit\)"/
+      .exec(lit)!.groups!;
+    expect(dial.directionAt(Number(x) + 45, Number(y) + 24)).toBe("right");
+  });
+
+  it("has no wheel on a stage with no size", () => {
+    expect(Nashville.dialAt(0, 600)).toBeNull();
+  });
+});
+
+describe("Nashville prints the keyboard legend", () => {
+  it("describes the keys on both sides of the wheel when there is room", () => {
+    const m = Nashville.markup(900, 600, perf());
+    expect(m).toContain("KEYBOARD · PLAY");
+    expect(m).toContain(">Q W E<");
+    expect(m).toContain("KEYBOARD · SHAPE");
+    expect(m).toContain("next inversion");
+  });
+
+  it("leaves it out rather than print it over the wheel on a narrow stage", () => {
+    expect(Nashville.markup(480, 600, perf())).not.toContain("KEYBOARD");
+  });
+});
+
 describe("Tonnetz renders from its frame alone", () => {
   const cursor = { col: 0, row: 0, orient: "up" } as const;
 
@@ -120,6 +177,8 @@ describe("every view answers where its keyboard is", () => {
     sheetScroll: 0,
     selection: null,
     marks: [],
+    rollWindow: null,
+    echoes: [],
   };
   const at = { score, t: 0.5, live: idle };
   const VIEWS: Record<string, ViewModule> = {
@@ -139,6 +198,11 @@ describe("every view answers where its keyboard is", () => {
     expect(r.h).toBeGreaterThan(0);
     expect(r.y).toBeGreaterThanOrEqual(0);
     expect(r.y + r.h).toBeLessThanOrEqual(600);
+  });
+
+  it.each(Object.keys(VIEWS))("%s names its dial or an explicit null", (name) => {
+    const dial = VIEWS[name].dial(stubSvg, at);
+    expect(dial !== null).toBe(name === "Nashville");
   });
 
   it.each(Object.keys(VIEWS))("%s names its tape or an explicit null", (name) => {

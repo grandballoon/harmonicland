@@ -1,0 +1,15 @@
+{
+  "name": "harmonicland-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler d1 migrations apply harmonicland --local && wrangler dev",
+    "deploy": "wrangler d1 migrations apply harmonicland --remote && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

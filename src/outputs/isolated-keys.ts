@@ -132,7 +132,7 @@ export function markup(W: number, H: number, { score, t, live }: Frame): string 
   return `<defs>${glowFilter(GLOW_ID)}</defs>` +
     `<g transform="translate(${r.x},${r.y})">` +
     PianoRoll.markup(r.w, r.h, score, t, {
-      glowId: GLOW_ID, held: live.held, fall: false, span: r.span,
+      glowId: GLOW_ID, held: live.held, echoes: live.echoes, fall: false, span: r.span,
       keyStyles: keyStyles(score, t, live.held, focus, live.practice),
     }) +
     `</g>`;
@@ -156,4 +156,4 @@ export const IsolatedKeys: ViewModule & {
   keyStyles: typeof keyStyles;
   focusOf: typeof focusOf;
   placement: typeof placement;
-} = { render, keyboardRegion, tape: () => null, scroller: () => null, markup, keyStyles, focusOf, placement };
+} = { render, keyboardRegion, tape: () => null, scroller: () => null, dial: () => null, markup, keyStyles, focusOf, placement };

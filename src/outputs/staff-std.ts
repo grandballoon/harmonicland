@@ -163,6 +163,7 @@ export const StaffStd: ViewModule & {
   keyboardRegion: () => null,
   tape: () => null,
   scroller: () => null,
+  dial: () => null,
   markup,
   staves,
   notehead,

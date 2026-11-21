@@ -41,9 +41,18 @@ describe("the section chips", () => {
     chips.setList(add(add([], { from: 0, to: 3 }), { from: 4, to: 7 }));
     buttons()[1].click();
     expect(picked.map((s) => s.id)).toEqual(["4-7"]);
-    chips.setSelection({ from: 4, to: 7 });
+    chips.setSelection({ from: 4, to: 7 }, "both");
     expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
-    chips.setSelection({ from: 4, to: 6 });
+    chips.setSelection({ from: 4, to: 6 }, "both");
+    expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
+  });
+
+  it("light a one-hand section only while its hand is chosen, and tag it", () => {
+    chips.setList(add(add([], { from: 0, to: 3 }), { from: 0, to: 3 }, "Run", "upper"));
+    expect(buttons().map((b) => b.textContent)).toEqual(["bars 1–4", "Run (R)"]);
+    chips.setSelection({ from: 0, to: 3 }, "upper");
+    expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+    chips.setSelection({ from: 0, to: 3 }, "lower");
     expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
   });
 

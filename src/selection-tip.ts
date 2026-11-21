@@ -17,12 +17,14 @@
 import { Sections, type Section } from "./sections";
 import type { Region } from "./view";
 import type { BarRange } from "./types";
+import type { HandFilter } from "./steps";
 
 export interface SelectionTip {
   /** Stand over `box`, the selection's panel in the stage's pixels, for
-   *  `selection` — `saved` when those bars are a section already. A null
-   *  box hides the tip: the panel is out of sight, or not drawn. */
-  show(box: Region | null, selection: BarRange | null, saved: Section | undefined): void;
+   *  `selection` played by `hand` — `saved` when those bars are that
+   *  hand's section already. A null box hides the tip: the panel is out
+   *  of sight, or not drawn. */
+  show(box: Region | null, selection: BarRange | null, saved: Section | undefined, hand?: HandFilter): void;
 }
 
 export interface SelectionTipActions {
@@ -94,12 +96,13 @@ export function mountSelectionTip(root: HTMLElement, { onSave, onRename, onIsola
   }
 
   return {
-    show(box, selection, saved) {
+    show(box, selection, saved, hand = "both") {
       // the name box stays up while its section is still the one selected
       if (naming && saved?.id !== naming.id) nameBox.blur();
       const mode = naming ? "name" : saved ? "keys" : selection ? "save" : "";
       offered = saved;
-      const key = box && mode ? `${mode},${box.x},${box.y},${box.w},${box.h},${Sections.describeBars(selection)}` : "";
+      const what = selection && Sections.labelOf({ id: "", range: selection, name: "", hand });
+      const key = box && mode ? `${mode},${box.x},${box.y},${box.w},${box.h},${what}` : "";
       if (key === shown) return;
       shown = key;
       if (!key || !box) {
@@ -110,8 +113,9 @@ export function mountSelectionTip(root: HTMLElement, { onSave, onRename, onIsola
       nameBox.hidden = mode !== "name";
       keysBtn.hidden = mode !== "keys";
       if (mode === "save") {
-        saveBtn.textContent = `Save ${Sections.describeBars(selection)}`;
-        saveBtn.title = "Save these bars as a section";
+        saveBtn.textContent = `Save ${what}`;
+        saveBtn.title = hand === "both" ? "Save these bars as a section"
+          : `Save these bars as a section for the ${Sections.handName(hand)}`;
       }
       root.hidden = false;
       place(box);

@@ -15,6 +15,7 @@ let store: SectionStore;
 let loaded: Section[];
 let isolated: Section[];
 let changes: (readonly Section[])[];
+let hands: string[];
 let panel: SectionsPanel;
 
 const q = <T extends Element>(sel: string): T => root.querySelector(sel) as T;
@@ -27,10 +28,12 @@ beforeEach(() => {
   loaded = [];
   isolated = [];
   changes = [];
+  hands = [];
   panel = mountSectionsPanel(root, store, {
     onLoad: (s) => loaded.push(s),
     onIsolate: (s) => isolated.push(s),
     onChange: (list) => changes.push(list),
+    onHand: (h) => hands.push(h),
   });
 });
 
@@ -164,7 +167,7 @@ describe("the sections panel", () => {
     store = { ...memorySectionStore(), refresh: () => new Promise((r) => (answer = r)) };
     document.body.innerHTML = new DOMParser().parseFromString(page, "text/html").getElementById("sections")!.outerHTML;
     root = document.getElementById("sections") as HTMLDetailsElement;
-    panel = mountSectionsPanel(root, store, { onLoad: () => {}, onIsolate: () => {}, onChange: (l) => changes.push(l) });
+    panel = mountSectionsPanel(root, store, { onLoad: () => {}, onIsolate: () => {}, onChange: (l) => changes.push(l), onHand: () => {} });
 
     panel.setScore("file:a", 8);
     const forA = answer;
@@ -177,5 +180,45 @@ describe("the sections panel", () => {
     await Promise.resolve();
     expect(rows().map((r) => r.querySelector<HTMLInputElement>(".section-name")!.value)).toEqual(["Fresh"]);
     expect(changes.at(-1)!.map((s) => s.name)).toEqual(["Fresh"]);
+  });
+
+  it("saves for the hand chosen, beside the same bars for another hand", () => {
+    panel.setScore("demo", 8);
+    panel.setSelection({ from: 0, to: 3 });
+    q<HTMLButtonElement>(".section-save").click();
+    panel.setHand("upper");
+    expect(q<HTMLButtonElement>(".section-save").disabled).toBe(false);
+    expect(q<HTMLButtonElement>(".section-save").textContent).toBe("Save bars 1–4 (R)");
+    expect(panel.save()?.id).toBe("0-3:R");
+    expect(store.load("demo").map((s) => [s.id, s.hand])).toEqual([["0-3", "both"], ["0-3:R", "upper"]]);
+    expect(rows()[1].querySelector(".section-hand-tag")!.textContent).toBe("R");
+    expect(rows()[1].classList.contains("current")).toBe(true);
+    expect(rows()[0].classList.contains("current")).toBe(false);
+  });
+
+  it("lights the hand chosen, and hands a pressed one out", () => {
+    panel.setHand("lower");
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>(".section-hand button")];
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true"]);
+    buttons[1].click();
+    expect(hands).toEqual(["upper"]);
+  });
+
+  it("splits a section into sub-runs beneath it, keeping it whole", () => {
+    store.save("demo", add([], { from: 0, to: 7 }, "Verse", "lower"));
+    panel.setScore("demo", 8);
+    q<HTMLInputElement>(".section-chunk").value = "2";
+    q<HTMLInputElement>(".section-chunk").dispatchEvent(new Event("input"));
+    rows()[0].querySelector<HTMLButtonElement>(".section-split-one")!.click();
+    expect(store.load("demo").map((s) => s.id)).toEqual(["0-7:L", "0-1:L", "2-3:L", "4-5:L", "6-7:L"]);
+    expect(store.load("demo")[0].name).toBe("Verse");
+    expect(rows().map((r) => r.style.getPropertyValue("--depth"))).toEqual(["0", "1", "1", "1", "1"]);
+    // the parts are already there: splitting again adds nothing
+    expect(rows()[0].querySelector<HTMLButtonElement>(".section-split-one")!.disabled).toBe(true);
+    // a part of two bars splits into bars
+    q<HTMLInputElement>(".section-chunk").value = "1";
+    q<HTMLInputElement>(".section-chunk").dispatchEvent(new Event("input"));
+    rows()[1].querySelector<HTMLButtonElement>(".section-split-one")!.click();
+    expect(rows().map((r) => r.style.getPropertyValue("--depth"))).toEqual(["0", "1", "2", "2", "1", "1", "1"]);
   });
 });

@@ -503,7 +503,7 @@ function applyBars(): void {
   loopBtn.setAttribute("aria-pressed", String(enabled && looping));
   sectionsPanel.setSelection(selection);
   // while a chain runs, its section's chip stays lit under its links
-  sectionChips.setSelection(chain ? chain.base : selection);
+  sectionChips.setSelection(chain ? chain.base : selection, hand());
   chainBar.show(chain && { at: chain.at, count: chain.links.length });
   scrubTrack.style.setProperty("--loop-a", String(d > 0 ? span.start / d : 0));
   scrubTrack.style.setProperty("--loop-b", String(d > 0 ? span.end / d : 1));
@@ -642,7 +642,7 @@ let chain: {
 } | null = null;
 
 const chainName = (r: BarRange | null): string => {
-  const s = Sections.find(sections, r);
+  const s = Sections.findAny(sections, r, hand());
   return s ? sectionName(s) : describeBars(r);
 };
 
@@ -704,7 +704,8 @@ const chainBar = mountChainBar($("chain"), { onStart: startChain, onStop: stopCh
 // (outputs/range-marks.ts, decision 4); a click on a tinted section selects
 // it (see pickBar), and the tip over it opens it on the keys alone.
 const sectionName = (s: Section): string =>
-  s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range);
+  (s.name ? `${s.name} (${describeBars(s.range)})` : describeBars(s.range))
+  + (s.hand === "both" ? "" : ` · ${Sections.handName(s.hand)}`);
 /** The loaded score's sections, as the panel last handed them out. */
 let sections: readonly Section[] = [];
 let showMarks = true;
@@ -723,8 +724,10 @@ function enterSelection(): void {
   if (t < start || t >= end) clock.seek(start);
 }
 
+/** Loading a section chooses its hand (sections.ts, decision 2). */
 function loadSection(s: Section): void {
   AudioOut.ensure();
+  chooseHand(s.hand);
   selectBars(s.range);
   enterSelection();
   $("status").textContent = view === Practice
@@ -771,6 +774,7 @@ void cloudStore?.flush();
 const sectionsPanel = mountSectionsPanel($<HTMLDetailsElement>("sections"), sectionStore, {
   onLoad: loadSection,
   onIsolate: isolate,
+  onHand: (h) => chooseHand(h),
   onChange(list) {
     sections = list;
     syncMarks();
@@ -794,6 +798,7 @@ const isolated = (): boolean => view === IsolatedKeys;
 /** Loop the section's bars on the keyboard they are played on. */
 function isolate(s: Section): void {
   AudioOut.ensure();
+  chooseHand(s.hand);
   // taken on the way in only: a chip moving the keys to another section
   // keeps the view they were popped up from
   if (!isolated()) {
@@ -920,16 +925,24 @@ const playOther = $<HTMLInputElement>("play-other");
 // off unless you ask for them, so the checkbox that is ON by default has to
 // be the one that means "hide".
 const hideArrows = $<HTMLInputElement>("hide-arrows");
-// The hand is one setting with two controls: the tray's select, and the
-// isolated keyboard's buttons in the header (the tray is hidden there).
-// Either sets both, and the lesson — or, with none running, the setting
-// the isolated keys read from the practice snapshot.
+// The hand is one setting with three controls: the tray's practice select,
+// the Sections panel's hand picker (the hand new sections are saved for),
+// and the isolated keyboard's buttons in the header (the tray is hidden
+// there). Any sets all, and the lesson — or, with none running, the
+// setting the isolated keys read from the practice snapshot. Loading a
+// section chooses its hand.
 const keysHand = $("keys-hand");
 function chooseHand(h: HandFilter): void {
   practiceHand.value = h;
   PracticeState.setHand(h);
   for (const b of keysHand.querySelectorAll<HTMLButtonElement>("button"))
     b.setAttribute("aria-pressed", String(b.dataset.hand === h));
+  sectionsPanel.setHand(h);
+  sectionChips.setSelection(chain ? chain.base : selection, h);
+}
+/** The hand chosen, wherever it was chosen. */
+function hand(): HandFilter {
+  return practiceHand.value as HandFilter;
 }
 practiceHand.addEventListener("change", () => chooseHand(practiceHand.value as HandFilter));
 for (const b of keysHand.querySelectorAll<HTMLButtonElement>("button"))
@@ -1043,7 +1056,7 @@ function pickBar(e: MouseEvent): void {
   // a grip standing on a mark's edge is the grip's, clicked or dragged
   const onGrip = scrolling.gripAt(e.clientX - r.left, e.clientY - r.top) !== null;
   const mark = onGrip ? null : scrolling.markAt(e.clientX - r.left, e.clientY - r.top);
-  const marked = Sections.find(sections, mark);
+  const marked = Sections.findAny(sections, mark, hand());
   if (marked) return loadSection(marked);
   const bar = scrolling.barAt(e.clientX - r.left, e.clientY - r.top);
   if (bar === null) return;
@@ -1176,7 +1189,7 @@ const selectionTip = mountSelectionTip($("selection-tip"), {
 function showSelectionTip(sc: Scroller | null): void {
   const box = sc && !gripping ? sc.rangeBox() : null;
   selectionTip.show(box && { ...box, x: box.x + sc!.region.x, y: box.y + sc!.region.y },
-    selection, Sections.find(sections, selection));
+    selection, Sections.find(sections, selection, hand()), hand());
 }
 
 /** What the scroller last followed, or null to follow afresh. */

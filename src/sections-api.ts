@@ -2,16 +2,16 @@
    SECTIONS_API — the client of the sections server (api/). Two calls,
    one per verb, each carrying the account's credential (identity.ts):
 
-     GET /v1/sections/:scoreKey  -> { sections: [{ range, name }] }
-     PUT /v1/sections/:scoreKey  <- { sections: [{ range, name }] }
+     GET /v1/sections/:scoreKey  -> { sections: [{ range, name, hand? }] }
+     PUT /v1/sections/:scoreKey  <- { sections: [{ range, name, hand? }] }
 
    A request that fails — no network, a server error, a timeout — rejects,
    and the cloud store (section-store.ts) keeps the edit for later. What
    comes back is untrusted, so it goes through the same `parse` as
    anything read from storage.
    ==================================================================== */
-import { parse } from "./sections";
-import { toJSON, type RemoteSections } from "./section-store";
+import { parse, toJSON } from "./sections";
+import type { RemoteSections } from "./section-store";
 
 /** Long enough for a cold start, short enough not to hold a save hostage. */
 const TIMEOUT_MS = 8000;

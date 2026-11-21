@@ -23,6 +23,13 @@
    save and rename here, by the same rules as the Save button and a row's
    name box.
 
+   New sections are saved for the hand chosen in the panel's hand picker,
+   which is the app's one hand setting (main.ts, chooseHand): picking it
+   here goes out through onHand, and a change made elsewhere comes back
+   in through setHand. A row's "Split" adds that section's runs of the
+   chunk size beside it, for its hand, and leaves it whole (sections.ts,
+   decision 4); rows are indented by how many sections hold them.
+
    The store answers at once from this browser, and may later hand back a
    newer list from the server (section-store.ts, decision 1); the panel
    shows the first and swaps in the second.
@@ -30,6 +37,7 @@
 import { Sections, type Section } from "./sections";
 import type { SectionStore } from "./section-store";
 import type { BarRange } from "./types";
+import type { HandFilter } from "./steps";
 
 export interface SectionsPanel {
   /** A new score: its key for storage (null when none is loaded) and how
@@ -43,6 +51,8 @@ export interface SectionsPanel {
   save(): Section | null;
   /** Name section `id`, as typing in its row does. */
   rename(id: string, name: string): void;
+  /** The hand new sections are saved for — the app's hand setting. */
+  setHand(h: HandFilter): void;
 }
 
 /** What a row hands back. Each is given the section as it now stands. */
@@ -54,10 +64,12 @@ export interface SectionActions {
   /** The list changed — a score loaded, or a section saved, split,
    *  renamed, moved or deleted. */
   onChange(list: readonly Section[]): void;
+  /** The hand picker was pressed. */
+  onHand(h: HandFilter): void;
 }
 
 export function mountSectionsPanel(
-  root: HTMLDetailsElement, store: SectionStore, { onLoad, onIsolate, onChange }: SectionActions,
+  root: HTMLDetailsElement, store: SectionStore, { onLoad, onIsolate, onChange, onHand }: SectionActions,
 ): SectionsPanel {
   const q = <T extends HTMLElement>(sel: string): T => root.querySelector(sel) as T;
   const count = q<HTMLSpanElement>(".sections-count");
@@ -66,11 +78,13 @@ export function mountSectionsPanel(
   const splitBtn = q<HTMLButtonElement>(".section-split");
   const listEl = q<HTMLUListElement>(".sections-list");
   const empty = q<HTMLParagraphElement>(".sections-empty");
+  const handButtons = [...root.querySelectorAll<HTMLButtonElement>(".section-hand button")];
 
   let key: string | null = null;
   let bars = 0;
   let selection: BarRange | null = null;
   let list: readonly Section[] = [];
+  let hand: HandFilter = "both";
   /** Which setScore a refresh answers, so a late one for an earlier score
    *  is dropped. */
   let loads = 0;
@@ -88,7 +102,8 @@ export function mountSectionsPanel(
    *  commits on blur, and a rebuild then would pull the row out from under
    *  the click that caused the blur. */
   function render(): void {
-    listEl.replaceChildren(...list.map(row));
+    const depth = Sections.depths(list);
+    listEl.replaceChildren(...list.map((s, i) => row(s, depth[i])));
     count.textContent = list.length ? String(list.length) : "";
     empty.textContent = key === null
       ? "Load a score to save its sections."
@@ -99,15 +114,23 @@ export function mountSectionsPanel(
     mark();
   }
 
-  function row(s: Section): HTMLLIElement {
+  function row(s: Section, depth: number): HTMLLIElement {
     const li = document.createElement("li");
     li.className = "section-row";
     li.dataset.id = s.id;
+    li.dataset.hand = s.hand;
+    li.style.setProperty("--depth", String(depth));
 
     const load = document.createElement("button");
     load.className = "section-load";
     load.textContent = Sections.describeBars(s.range);
-    load.title = "Loop these bars, or practise them";
+    if (s.hand !== "both") {
+      const tag = document.createElement("span");
+      tag.className = "section-hand-tag";
+      tag.textContent = Sections.handTag(s.hand);
+      load.append(tag);
+    }
+    load.title = s.hand === "both" ? "Loop these bars, or practise them" : `Loop these bars, or practise them — ${Sections.handName(s.hand)}`;
     // the latest name, which a rename may have changed since this row was built
     const latest = (): Section => list.find((x) => x.id === s.id) ?? s;
     load.addEventListener("click", () => onLoad(latest()));
@@ -117,7 +140,7 @@ export function mountSectionsPanel(
     name.type = "text";
     name.value = s.name;
     name.placeholder = "name…";
-    name.setAttribute("aria-label", `Name for ${Sections.describeBars(s.range)}`);
+    name.setAttribute("aria-label", `Name for ${Sections.labelOf({ ...s, name: "" })}`);
     name.addEventListener("change", () => commit(Sections.rename(list, s.id, name.value)));
     name.addEventListener("keydown", (e) => {
       if (e.key === "Enter") name.blur();
@@ -144,6 +167,16 @@ export function mountSectionsPanel(
       render();
     });
 
+    const part = document.createElement("button");
+    part.className = "section-split-one";
+    part.textContent = "Split";
+    part.addEventListener("click", () => {
+      const next = Sections.split(list, s.id, chunkSize());
+      if (next === list) return;
+      commit(next);
+      render();
+    });
+
     const del = document.createElement("button");
     del.className = "section-remove";
     del.textContent = "✕";
@@ -154,14 +187,16 @@ export function mountSectionsPanel(
       render();
     });
 
-    li.append(load, name, keys, use, del);
+    li.append(load, name, keys, use, part, del);
     return li;
   }
 
   /** The Save button, each row's Use selection, and the highlighted row
    *  follow the selection, without a rebuild. */
   function mark(): void {
-    const current = Sections.find(list, selection);
+    const current = Sections.find(list, selection, hand);
+    for (const b of handButtons) b.setAttribute("aria-pressed", String(b.dataset.hand === hand));
+    const size = chunkSize();
     for (const li of listEl.querySelectorAll<HTMLLIElement>(".section-row")) {
       const s = list.find((x) => x.id === li.dataset.id);
       if (!s) continue;
@@ -176,19 +211,33 @@ export function mountSectionsPanel(
         : current ? `${current.name || "Another section"} already has ${Sections.describeBars(selection)}`
         : `Move ${Sections.labelOf(s)} to ${Sections.describeBars(selection)}, keeping its name`;
       use.setAttribute("aria-label", `Move ${Sections.labelOf(s)} to the selected bars`);
+      const part = li.querySelector<HTMLButtonElement>(".section-split-one")!;
+      part.disabled = !Number.isFinite(size) || !Sections.canSplit(list, s.id, size);
+      part.title = part.disabled
+        ? `${Sections.labelOf(s)} is already split into runs of ${size} bar${size === 1 ? "" : "s"}, or is no longer than one`
+        : `Add ${Sections.labelOf(s)}'s runs of ${size} bar${size === 1 ? "" : "s"} beneath it, keeping it whole`;
+      part.setAttribute("aria-label", `Split ${Sections.labelOf(s)} into runs of ${size} bars`);
     }
     saveBtn.disabled = key === null || selection === null || current !== undefined;
-    saveBtn.textContent = selection === null
-      ? "Save selected bars"
-      : current ? `${Sections.describeBars(selection)} saved` : `Save ${Sections.describeBars(selection)}`;
+    const what = selection && Sections.labelOf({ id: "", range: selection, name: "", hand });
+    saveBtn.textContent = what === null ? "Save selected bars" : current ? `${what} saved` : `Save ${what}`;
   }
 
+  /** The chunk box, or NaN when it holds no whole number of bars. */
+  const chunkSize = (): number => {
+    const n = parseInt(chunkBox.value, 10);
+    return n >= 1 ? n : NaN;
+  };
+
   function save(): Section | null {
-    if (key === null || selection === null || Sections.find(list, selection)) return null;
-    commit(Sections.add(list, selection));
+    if (key === null || selection === null || Sections.find(list, selection, hand)) return null;
+    commit(Sections.add(list, selection, "", hand));
     render();
-    return Sections.find(list, selection)!;
+    return Sections.find(list, selection, hand)!;
   }
+
+  for (const b of handButtons) b.addEventListener("click", () => onHand(b.dataset.hand as HandFilter));
+  chunkBox.addEventListener("input", mark);
 
   saveBtn.addEventListener("click", () => {
     const s = save();
@@ -196,9 +245,9 @@ export function mountSectionsPanel(
   });
 
   splitBtn.addEventListener("click", () => {
-    const size = parseInt(chunkBox.value, 10);
-    if (!Number.isFinite(size) || size < 1 || bars === 0) return;
-    commit(Sections.addAll(list, Sections.chunk(bars, size)));
+    const size = chunkSize();
+    if (!Number.isFinite(size) || bars === 0) return;
+    commit(Sections.addAll(list, Sections.chunk(bars, size), hand));
     render();
   });
 
@@ -227,6 +276,10 @@ export function mountSectionsPanel(
       mark();
     },
     save,
+    setHand(h) {
+      hand = h;
+      mark();
+    },
     rename(id, name) {
       commit(Sections.rename(list, id, name));
       const box = nameBox(id);

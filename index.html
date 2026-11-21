@@ -223,7 +223,11 @@
   .sections-actions .toggle { gap: 6px; }
   .sections-actions input[type=number] { width: 3.6em; }
   .sections-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--grid-oct) transparent; }
-  .section-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
+  /* a section held by another sits indented under it (sections.ts, decision 4) */
+  .section-row { display: flex; align-items: center; gap: 6px; padding: 5px 0 5px calc(var(--depth, 0) * 14px); }
+  .section-hand-tag { margin-left: auto; padding-left: 8px; font-size: 11px; font-weight: 600; }
+  .section-row[data-hand="upper"] .section-hand-tag { color: var(--hand-r); }
+  .section-row[data-hand="lower"] .section-hand-tag { color: var(--hand-l); }
   .section-row + .section-row { border-top: 1px solid var(--grid); }
   .section-load { min-width: 8.5em; padding: 5px 10px; justify-content: flex-start; }
   .section-row.current .section-load { color: var(--loop); border-color: var(--loop); }
@@ -235,7 +239,8 @@
   .section-name::placeholder { color: var(--ink-dim); }
   .section-name:hover { border-color: var(--line-acc); }
   .section-name:focus { outline: none; border-color: var(--note); background: var(--control); }
-  .section-keys, .section-use { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
+  .section-keys, .section-use, .section-split-one { padding: 5px 9px; color: var(--ink-dim); white-space: nowrap; }
+  .section-split-one:not(:disabled):hover { color: var(--ink); }
   .section-keys:hover { color: var(--note-lit); border-color: var(--note-lit); }
   .section-use:not(:disabled):hover { color: var(--loop); border-color: var(--loop); }
   .section-remove { padding: 5px 9px; color: var(--ink-dim); }
@@ -377,6 +382,9 @@
   .section-bar button { flex: 0 0 auto; min-height: 26px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
   .section-chip { color: var(--ink-dim); }
   .section-chip[aria-pressed="true"] { color: var(--loop); border-color: var(--loop); }
+  /* a one-hand section's chip carries its hand's colour on its leading edge */
+  .section-chip[data-hand="upper"] { border-left: 3px solid var(--hand-r); }
+  .section-chip[data-hand="lower"] { border-left: 3px solid var(--hand-l); }
   .marks-toggle { color: var(--ink-dim); }
   .marks-toggle::before {
     content: ""; width: 8px; height: 8px;
@@ -729,11 +737,19 @@
       <details id="sections" class="dropdown">
         <summary title="Save the selected bars, split the score into chunks, and load them back">Sections<span class="sections-count"></span></summary>
         <div class="dropdown-panel sections-panel">
+          <!-- New sections are saved for the hand picked here: the app's one
+               hand setting, the same as the practice hand. A row's Split
+               cuts that section into runs of the chunk size, beside it. -->
           <div class="sections-actions">
+            <span class="hand-pick section-hand" role="group" aria-label="Hand for new sections">
+              <button data-hand="both" title="Save new sections for both hands">Both</button>
+              <button data-hand="upper" title="Save new sections for the right hand alone">R</button>
+              <button data-hand="lower" title="Save new sections for the left hand alone">L</button>
+            </span>
             <button class="section-save" disabled>Save selected bars</button>
-            <span class="toggle">or split every
-              <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per chunk">
-              bars <button class="section-split">Split</button>
+            <span class="toggle">runs of
+              <input type="number" class="section-chunk" min="1" step="1" value="4" aria-label="Bars per run">
+              bars <button class="section-split" title="Cut the whole piece into runs of this many bars">Split piece</button>
             </span>
           </div>
           <ul class="sections-list"></ul>

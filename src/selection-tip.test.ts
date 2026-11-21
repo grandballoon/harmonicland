@@ -10,7 +10,7 @@ const page = readFileSync(join(__dirname, "..", "index.html"), "utf8");
 
 const BOX = { x: 100, y: 200, w: 80, h: 60 };
 const RANGE = { from: 2, to: 3 };
-const SECTION: Section = { id: "2-3", name: "", range: RANGE };
+const SECTION: Section = { id: "2-3", name: "", range: RANGE, hand: "both" };
 
 let root: HTMLElement;
 let tip: SelectionTip;

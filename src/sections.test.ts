@@ -1,13 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { add, addAll, chunk, describeBars, find, keyForBytes, labelOf, parse, remove, rename, retarget } from "./sections";
+import {
+  add, addAll, canSplit, chunk, depths, describeBars, find, findAny, holds, keyForBytes, labelOf, parse, remove,
+  rename, retarget, split, subdivide, toJSON,
+} from "./sections";
 
 /* sections.ts is a list of named bar ranges and the rules for editing it.
    Bars from 0 here; only describeBars speaks bar numbers. */
 
 describe("saving sections", () => {
-  it("keeps the list in score order, whatever order they were saved in", () => {
-    const list = add(add(add([], { from: 8, to: 11 }), { from: 0, to: 3 }), { from: 0, to: 1 });
-    expect(list.map((s) => s.id)).toEqual(["0-1", "0-3", "8-11"]);
+  it("keeps the list in outline order, whatever order they were saved in", () => {
+    const list = add(add(add([], { from: 8, to: 11 }), { from: 0, to: 1 }), { from: 0, to: 3 });
+    // by start; the longer, which holds the shorter, first
+    expect(list.map((s) => s.id)).toEqual(["0-3", "0-1", "8-11"]);
   });
 
   it("saves a range once: the same bars again leave the list as it was", () => {
@@ -47,7 +51,8 @@ describe("describing bars", () => {
 describe("sections that begin or end inside a bar", () => {
   it("are their own sections, apart from the whole bars around them", () => {
     const list = add(add(add([], { from: 2, to: 7 }), { from: 2, fromBeat: 1, to: 7 }), { from: 2, to: 7, toBeat: 2 });
-    expect(list.map((s) => s.id)).toEqual(["2-7@2", "2-7", "2@1-7"]);
+    // outline order: bars 3–8 whole holds the run that stops inside bar 8
+    expect(list.map((s) => s.id)).toEqual(["2-7", "2-7@2", "2@1-7"]);
     expect(find(list, { from: 2, fromBeat: 1, to: 7 })?.id).toBe("2@1-7");
   });
 
@@ -130,5 +135,72 @@ describe("a score's key", () => {
 
   it("differs when the content does, even by one byte", () => {
     expect(keyForBytes(bytes("MThd a"))).not.toBe(keyForBytes(bytes("MThd b")));
+  });
+});
+
+describe("a section's hand", () => {
+  it("saves the same bars once per hand, both hands first", () => {
+    let list = add([], { from: 0, to: 3 }, "", "lower");
+    list = add(list, { from: 0, to: 3 }, "", "upper");
+    list = add(list, { from: 0, to: 3 });
+    expect(list.map((s) => s.id)).toEqual(["0-3", "0-3:R", "0-3:L"]);
+    expect(add(list, { from: 0, to: 3 }, "again", "upper")).toBe(list);
+  });
+
+  it("is found by bars and hand, or by bars alone where no hand is known", () => {
+    const list = add([], { from: 0, to: 3 }, "", "lower");
+    expect(find(list, { from: 0, to: 3 })).toBeUndefined();
+    expect(find(list, { from: 0, to: 3 }, "lower")?.id).toBe("0-3:L");
+    expect(findAny(list, { from: 0, to: 3 }, "upper")?.id).toBe("0-3:L");
+    expect(findAny(add(list, { from: 0, to: 3 }, "", "upper"), { from: 0, to: 3 }, "upper")?.id).toBe("0-3:R");
+  });
+
+  it("wears its tag in its label, and keeps it through a move", () => {
+    let list = add([], { from: 0, to: 3 }, "Run", "upper");
+    expect(labelOf(list[0])).toBe("Run (R)");
+    list = retarget(list, "0-3:R", { from: 1, to: 3 });
+    expect(list.map((s) => [s.id, s.name, s.hand])).toEqual([["1-3:R", "Run", "upper"]]);
+    // another hand's section of those bars does not block the move
+    expect(retarget(add(list, { from: 2, to: 3 }), "1-3:R", { from: 2, to: 3 }).map((s) => s.id)).toEqual(["2-3", "2-3:R"]);
+  });
+
+  it("is stored only when it is one hand's, and read back; an old entry is both hands", () => {
+    const list = add(add([], { from: 0, to: 0 }), { from: 1, to: 1 }, "x", "lower");
+    expect(toJSON(list)).toEqual([{ range: { from: 0, to: 0 }, name: "" }, { range: { from: 1, to: 1 }, name: "x", hand: "lower" }]);
+    expect(parse(toJSON(list))).toEqual(list);
+    expect(parse([{ range: { from: 0, to: 0 }, name: "", hand: "feet" }])[0].hand).toBe("both");
+  });
+});
+
+describe("sub-runs", () => {
+  it("cut a range into runs, keeping its trims at its ends", () => {
+    expect(subdivide({ from: 2, to: 8, fromBeat: 1, toBeat: 2 }, 3)).toEqual([
+      { from: 2, to: 4, fromBeat: 1 }, { from: 5, to: 7 }, { from: 8, to: 8, toBeat: 2 },
+    ]);
+    expect(subdivide({ from: 2, to: 3 }, 4)).toEqual([{ from: 2, to: 3 }]);
+  });
+
+  it("are added beside the section, for its hand, and leave it as it was", () => {
+    const list = add([], { from: 0, to: 3 }, "Theme", "upper");
+    const next = split(list, "0-3:R", 2);
+    expect(next.map((s) => s.id)).toEqual(["0-3:R", "0-1:R", "2-3:R"]);
+    expect(next[0]).toBe(list[0]);
+    expect(canSplit(next, "0-3:R", 2)).toBe(false); // nothing more to add
+    expect(canSplit(list, "0-3:R", 4)).toBe(false); // already one run of 4
+    expect(split(list, "gone", 2)).toBe(list);
+  });
+
+  it("sit under every section that holds them: same bars or wider, same hand or both", () => {
+    let list = add([], { from: 0, to: 7 });
+    list = add(list, { from: 0, to: 3 }, "", "upper");
+    list = add(list, { from: 0, to: 1 }, "", "upper");
+    list = add(list, { from: 0, to: 1 }, "", "lower");
+    list = add(list, { from: 8, to: 9 });
+    expect(list.map((s) => s.id)).toEqual(["0-7", "0-3:R", "0-1:R", "0-1:L", "8-9"]);
+    expect(depths(list)).toEqual([0, 1, 2, 1, 0]);
+    const [whole, right] = list;
+    expect(holds(whole, right)).toBe(true);
+    expect(holds(right, whole)).toBe(false);
+    expect(holds(right, list[3])).toBe(false); // the right hand holds no left-hand run
   });
 });

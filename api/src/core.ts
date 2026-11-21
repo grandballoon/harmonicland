@@ -6,8 +6,8 @@
 
    The API (the client is src/sections-api.ts):
 
-     GET /v1/sections/:scoreKey  -> 200 { sections: [{ range, name }] }
-     PUT /v1/sections/:scoreKey  <- { sections: [{ range, name }] } -> 204
+     GET /v1/sections/:scoreKey  -> 200 { sections: [{ range, name, hand? }] }
+     PUT /v1/sections/:scoreKey  <- { sections: [{ range, name, hand? }] } -> 204
 
    Every request carries `Authorization: Bearer <key>` — today an
    anonymous key minted in the browser (src/identity.ts). The server
@@ -20,7 +20,7 @@
    the server accepts exactly what the app would load, and stored as the
    JSON the app sends — one row per user per score.
    ==================================================================== */
-import { parse, type Section } from "../../src/sections";
+import { parse, toJSON, type Section } from "../../src/sections";
 
 /** What a key may look like. Keep in step with src/identity.ts, isKey. */
 const KEY = /^[A-Za-z0-9_-]{22,128}$/;
@@ -78,9 +78,9 @@ export function readBody(text: string): { sections: readonly Section[] } | { err
   return { sections: parse(raw) };
 }
 
-/** What is stored, and what a GET sends back: the range and the name. */
-export const serialize = (sections: readonly Section[]): string =>
-  JSON.stringify(sections.map(({ range, name }) => ({ range, name })));
+/** What is stored, and what a GET sends back: the app's own JSON for a
+ *  list of sections (src/sections.ts, toJSON). */
+export const serialize = (sections: readonly Section[]): string => JSON.stringify(toJSON(sections));
 
 /** A stored row back out as the body of a GET. A missing row is no
  *  sections; a row that no longer parses is too, rather than an error. */

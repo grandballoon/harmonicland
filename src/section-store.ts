@@ -30,7 +30,7 @@
    site data), so every access is guarded: a load that fails is an empty
    list, and a save that fails leaves the sections working for this visit.
    ==================================================================== */
-import { parse, type Section } from "./sections";
+import { parse, toJSON, type Section } from "./sections";
 
 export interface SectionStore {
   /** What this browser knows now — immediately, never the network. */
@@ -50,11 +50,6 @@ export interface RemoteSections {
 /** Whether the server has every edit: yes, a push is under way, or it
  *  could not be reached (edits are kept here, and sent later). */
 export type SyncStatus = "synced" | "saving" | "offline";
-
-/** What goes over the wire and into storage: the range and the name. The
- *  id is the range's, and is rebuilt on the way back in (sections.ts). */
-export const toJSON = (sections: readonly Section[]): { range: Section["range"]; name: string }[] =>
-  sections.map(({ range, name }) => ({ range, name }));
 
 export const sameSections = (a: readonly Section[], b: readonly Section[]): boolean =>
   JSON.stringify(toJSON(a)) === JSON.stringify(toJSON(b));

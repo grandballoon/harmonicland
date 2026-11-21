@@ -169,7 +169,9 @@ A trim is stored in beats of its bar (`BarRange.fromBeat` / `toBeat`), and `Core
 
 **Saved sections.** A score can be broken into named runs of bars and kept (`sections.ts`).
 A section is bars, not seconds, so the same one loops in the falling-notes views and confines a lesson in practice mode with no tempo to convert.
-It deliberately does not remember a hand: the hand is chosen per sitting, and loading a section leaves it as it was.
+A section has a hand — both, the right alone, or the left alone — so a run worked out for one hand is kept as its own; the same bars may be saved once per hand (ids `3-8`, `3-8:R`, `3-8:L`).
+New sections are saved for the hand picked in the Sections panel, which is the app's one hand setting (`chooseHand` in `main.ts`), and loading a section chooses its hand.
+A row's "Split" adds that section's runs of the chunk size beside it, for its hand, and leaves the section whole; the list is in outline order and rows are indented by how many sections hold them (`Sections.depths`).
 Loading one is just `selectBars(range)`, the same path a dragged flag takes.
 To change a saved section's span, select the bars you want (loading the section first is handy but not required) and press that row's "Use selection" in the Sections panel, which moves the section (name and all) onto the selection.
 A row's "Keys" isolates the section: it loads the section and switches the stage to `IsolatedKeys`, which draws nothing but the keys those bars play, enlarged to fill the window, with three greyed white keys either side for context.
